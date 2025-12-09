@@ -1,0 +1,12 @@
+# Requirements for Legacy GPUs (e.g., GTX 1080 - Pascal)
+# Usage: pip install -r requirements-legacy-gpu.txt
+
+# Use CUDA 12.1 builds for Pascal support (dropped in later PyTorch nightly/MAIN)
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchaudio==2.5.1+cu121
+
+# Install the rest of the project in editable mode
+-e .

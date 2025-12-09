@@ -1,0 +1,26 @@
+{
+  "database": {
+    "admin_user": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "db_name": "vulcanlab_test",
+    "app_user": "vulcanlab_app_user_test"
+  },
+  "llm": {
+    "provider": "gemini",
+    "models": {
+      "openai": {
+        "light": "gpt-4o-mini",
+        "full": "gpt-4o"
+      },
+      "gemini": {
+        "light": "gemini-2.0-flash-exp",
+        "full": "gemini-2.5-pro-preview"
+      }
+    }
+  },
+  "paths": {
+    "input_dir": "/app/data/input",
+    "output_dir": "/app/data/output"
+  }
+}

@@ -1,0 +1,150 @@
+# ============================================================================
+# Stage 1: Base - PostgreSQL with system dependencies
+# ============================================================================
+FROM pgvector/pgvector:pg16 AS base
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build tools for AGE extension
+    build-essential \
+    git \
+    ca-certificates \
+    libreadline-dev \
+    zlib1g-dev \
+    flex \
+    bison \
+    postgresql-server-dev-16 \
+    # Python 3.11
+    python3.11 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    # Node.js prerequisite
+    curl \
+    # Process manager (will be used in T02)
+    supervisor \
+    # Utilities
+    wget \
+    # OpenCV/OpenGL dependencies for docling
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build and install Apache AGE extension
+RUN git clone --depth 1 --branch PG16/v1.5.0-rc0 https://github.com/apache/age.git /tmp/age && \
+    cd /tmp/age && \
+    make install && \
+    rm -rf /tmp/age
+
+# Install Node.js 20.x LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Clean up build dependencies to reduce image size
+RUN apt-get purge -y --auto-remove \
+    build-essential \
+    git \
+    postgresql-server-dev-16 \
+    flex \
+    bison && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# Stage 2: Python Dependencies
+# ============================================================================
+FROM base AS python-deps
+
+WORKDIR /app
+
+# Copy Python requirements
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+
+# Create virtual environment and install Python packages
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install the package and its dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e .
+
+# Download spaCy model (during build, not runtime)
+RUN python -m spacy download en_core_web_sm
+
+# ============================================================================
+# Stage 3: Frontend Build
+# ============================================================================
+FROM python-deps AS frontend-build
+
+WORKDIR /app/vulcanlab_ui
+
+# Copy frontend package files first (better layer caching)
+COPY vulcanlab_ui/package.json vulcanlab_ui/package-lock.json ./
+
+# Install Node.js dependencies
+RUN npm ci --omit=dev --ignore-scripts
+
+# Copy frontend source code
+COPY vulcanlab_ui/ ./
+
+# Build Next.js in standalone mode
+RUN npm run build
+
+# ============================================================================
+# Stage 4: Final Application Image
+# ============================================================================
+FROM python-deps AS final
+
+# Copy backend source code
+COPY src/ /app/src/
+
+# Copy application scripts
+COPY scripts/ /app/scripts/
+RUN chmod +x /app/scripts/healthcheck.py /app/scripts/quick-health.sh
+
+# Copy Docker-specific configuration
+COPY vulcanlab.config.docker.json /app/vulcanlab.config.json
+
+# Copy built frontend from build stage (standalone mode)
+COPY --from=frontend-build /app/vulcanlab_ui/.next/standalone /app/vulcanlab_ui/
+COPY --from=frontend-build /app/vulcanlab_ui/.next/static /app/vulcanlab_ui/.next/static
+COPY --from=frontend-build /app/vulcanlab_ui/public /app/vulcanlab_ui/public
+
+# Create necessary directories (before copying files into them)
+RUN mkdir -p \
+    /app/data/input \
+    /app/data/output \
+    /var/log/supervisor \
+    /var/lib/postgresql/data \
+    /docker-entrypoint-initdb.d && \
+    chown -R postgres:postgres /var/lib/postgresql/data
+
+# Copy database initialization scripts
+COPY docker/init-db.sh /docker-entrypoint-initdb.d/01-init-db.sh
+COPY docker/enable-extensions.sql /docker-entrypoint-initdb.d/02-enable-extensions.sql
+
+# Copy supervisord configuration
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy and set permissions for entrypoint script
+COPY docker/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /docker-entrypoint-initdb.d/01-init-db.sh
+
+# Expose only the frontend port (internal services use localhost)
+EXPOSE 3000
+
+# Set environment variables
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app/src \
+    NODE_ENV=production \
+    NEXT_PUBLIC_API_URL=http://localhost:8000 \
+    VULCANLAB_CONFIG=/app/vulcanlab.config.json
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

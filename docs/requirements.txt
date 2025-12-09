@@ -1,0 +1,4 @@
+mkdocs>=1.5
+mkdocstrings[python]
+mkdocs-gen-files
+mkdocs-literate-nav

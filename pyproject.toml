@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vulcanlab"
+version = "0.1.0"
+description = "VulcanLab - A Retrieval-Augmented Generation system"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Document conversion
+    "docling",
+    "docling-hierarchical-pdf",
+    "opencv-python-headless",
+    "ebooklib",
+    "beautifulsoup4",
+    "lxml",
+    "markdownify",
+    "pymupdf",
+
+    # Database
+    "psycopg[binary]>=3.1.8,<3.2",
+    "sqlalchemy",
+    "pgvector",
+
+    # Configuration
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+
+    # LLM/AI
+    "pydantic-ai",
+    "langchain-core",
+    "langchain-openai",
+    "langchain-google-genai",
+
+    # NLP
+    "spacy",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+
+    # Reranking (torch includes CUDA support for GPU acceleration)
+    "transformers",
+    "torch",
+
+    # Numerical
+    "numpy",
+
+    # Testing
+    "pytest",
+
+    # Utilities
+    "pyperclip",
+
+    # API
+    "fastapi[standard]",
+    "uvicorn[standard]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-markdown-docs",
+    "pytest-html",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"

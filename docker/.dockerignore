@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Node
+node_modules/
+.next/
+.npm/
+.eslintcache
+
+# Data directories (mounted as volumes)
+data/
+output/
+raw/
+input/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Development
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation and tests
+documentation/
+docs/
+tests/
+test/
+*.md
+!README.md
+
+# OS
+.DS_Store
+Thumbs.db
