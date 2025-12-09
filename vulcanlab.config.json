@@ -3,8 +3,8 @@
     "admin_user": "postgres",
     "host": "127.0.0.1",
     "port": 5432,
-    "db_name": "psych_rag_test_remove",
-    "app_user": "psych_rag_app_user_test_remove"
+    "db_name": "vulcan_test_db",
+    "app_user": "vulcan_test_db_user"
   },
   "llm": {
     "provider": "gemini",
