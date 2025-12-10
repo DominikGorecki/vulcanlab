@@ -19,8 +19,12 @@ from pathlib import Path
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
-from vulcanlab.utils.file_utils import compute_file_hash
+from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
 from vulcanlab.sanitization.extract_titles import HashMismatchError
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def extract_all_headings_from_sanitized(sanitized_path: Path) -> list[dict]:
@@ -161,9 +165,8 @@ def get_vec_suggestions_table_data(
             )
 
         # Get sanitized file info
-        sanitized_info = work.files["sanitized"]
-        sanitized_path = Path(sanitized_info["path"])
-        sanitized_stored_hash = sanitized_info["hash"]
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
+        sanitized_stored_hash = work.files["sanitized"]["hash"]
 
         # Validate sanitized file exists
         if not sanitized_path.exists():
@@ -190,19 +193,11 @@ def get_vec_suggestions_table_data(
         
         # First, try to get path from database metadata
         if "vec_suggestions" in work.files:
-            vec_sugg_info = work.files["vec_suggestions"]
-            vec_sugg_path = Path(vec_sugg_info["path"])
-            # Resolve to absolute path in case it's relative
-            if not vec_sugg_path.is_absolute():
-                vec_sugg_path = vec_sugg_path.resolve()
+            vec_sugg_path = resolver.resolve_work_path(work, "vec_suggestions")
         else:
             # If not in database, try to auto-detect based on sanitized file path
             # Pattern: <file>.sanitized.md -> <file>.sanitized.vec_sugg.md
             vec_sugg_path = sanitized_path.parent / f"{sanitized_path.stem}.vec_sugg.md"
-
-        # Resolve path to ensure it's absolute
-        if vec_sugg_path:
-            vec_sugg_path = vec_sugg_path.resolve()
 
         if vec_sugg_path and vec_sugg_path.exists():
             # Validate hash if we have stored hash (unless force=True)
@@ -257,10 +252,9 @@ def get_vec_suggestions_table_data(
         
         # If vec_suggestions is in database but we didn't set vec_sugg_path, set it now
         if "vec_suggestions" in work.files and "vec_sugg_path" not in result:
-            vec_sugg_info = work.files["vec_suggestions"]
-            if isinstance(vec_sugg_info, dict) and "path" in vec_sugg_info:
-                result["vec_sugg_path"] = str(Path(vec_sugg_info["path"]).resolve())
-                result["vec_sugg_from_db"] = True
+            vec_sugg_path_resolved = resolver.resolve_work_path(work, "vec_suggestions")
+            result["vec_sugg_path"] = str(vec_sugg_path_resolved)
+            result["vec_sugg_from_db"] = True
         
         return result
 

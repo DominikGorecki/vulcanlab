@@ -38,7 +38,11 @@ from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
 from vulcanlab.data.template_loader import load_template
 from vulcanlab.sanitization.extract_titles import extract_titles_to_file, extract_titles_from_work, HashMismatchError
-from vulcanlab.utils.file_utils import compute_file_hash, set_file_readonly, set_file_writable, is_file_readonly
+from vulcanlab.utils.file_utils import compute_file_hash, set_file_readonly, set_file_writable, is_file_readonly, get_path_resolver
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def _build_prompt(titles_content: str, bib_info: BibliographicInfo | None) -> str:
@@ -417,9 +421,8 @@ def build_prompt_for_vec_suggestions(
             )
 
         # Get sanitized file info
-        sanitized_info = work.files["sanitized"]
-        sanitized_path = Path(sanitized_info["path"])
-        sanitized_stored_hash = sanitized_info["hash"]
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
+        sanitized_stored_hash = work.files["sanitized"]["hash"]
 
         if verbose:
             print(f"Analyzing sanitized markdown: {sanitized_path}")
@@ -444,9 +447,8 @@ def build_prompt_for_vec_suggestions(
         titles_path = None
         if "sanitized_titles" in work.files:
             # Titles exist in database, use them
-            titles_info = work.files["sanitized_titles"]
-            titles_path = Path(titles_info["path"])
-            titles_stored_hash = titles_info["hash"]
+            titles_path = resolver.resolve_work_path(work, "sanitized_titles")
+            titles_stored_hash = work.files["sanitized_titles"]["hash"]
 
             if verbose:
                 print(f"Using existing titles file: {titles_path}")
@@ -577,8 +579,7 @@ def save_vec_suggestions_from_response(
             raise ValueError(f"Work with ID {work_id} not found in database")
 
         # Get sanitized path for output file naming
-        sanitized_info = work.files["sanitized"]
-        sanitized_path = Path(sanitized_info["path"])
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
 
         # Parse response and apply hierarchy rules
         decisions = _parse_llm_response(response_text)
@@ -630,7 +631,7 @@ def save_vec_suggestions_from_response(
         # Need to create a new dict to trigger SQLAlchemy's change detection for JSON columns
         updated_files = dict(work.files) if work.files else {}
         updated_files["vec_suggestions"] = {
-            "path": str(output_path.resolve()),
+            "path": output_path.name,
             "hash": suggestions_hash
         }
         work.files = updated_files
@@ -684,9 +685,8 @@ def suggest_chunks_from_work(
             )
 
         # Get sanitized file info
-        sanitized_info = work.files["sanitized"]
-        sanitized_path = Path(sanitized_info["path"])
-        sanitized_stored_hash = sanitized_info["hash"]
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
+        sanitized_stored_hash = work.files["sanitized"]["hash"]
 
         if verbose:
             print(f"Analyzing sanitized markdown: {sanitized_path}")
@@ -711,9 +711,8 @@ def suggest_chunks_from_work(
         titles_path = None
         if "sanitized_titles" in work.files:
             # Titles exist in database, use them
-            titles_info = work.files["sanitized_titles"]
-            titles_path = Path(titles_info["path"])
-            titles_stored_hash = titles_info["hash"]
+            titles_path = resolver.resolve_work_path(work, "sanitized_titles")
+            titles_stored_hash = work.files["sanitized_titles"]["hash"]
 
             if verbose:
                 print(f"Using existing titles file: {titles_path}")
@@ -869,7 +868,7 @@ def suggest_chunks_from_work(
         # Need to create a new dict to trigger SQLAlchemy's change detection for JSON columns
         updated_files = dict(work.files) if work.files else {}
         updated_files["vec_suggestions"] = {
-            "path": str(output_path.resolve()),
+            "path": output_path.name,
             "hash": suggestions_hash
         }
         work.files = updated_files

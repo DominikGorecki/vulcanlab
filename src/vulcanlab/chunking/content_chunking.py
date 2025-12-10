@@ -29,7 +29,11 @@ import spacy
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Work
 from vulcanlab.sanitization.extract_titles import HashMismatchError
-from vulcanlab.utils.file_utils import compute_file_hash
+from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 # Load spaCy model for sentence tokenization
@@ -671,9 +675,8 @@ def chunk_content(work_id: int, verbose: bool = False, min_chunk_words: int = MI
                 f"Run: venv\\Scripts\\python -m vulcanlab.sanitization.apply_title_changes_cli {work_id}"
             )
 
-        sanitized_info = work.files["sanitized"]
-        sanitized_path = Path(sanitized_info["path"])
-        sanitized_stored_hash = sanitized_info["hash"]
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
+        sanitized_stored_hash = work.files["sanitized"]["hash"]
 
         if verbose:
             print(f"Processing work {work_id}: {work.title}")
