@@ -26,8 +26,12 @@ from vulcanlab.sanitization import (
     verify_title_changes_integrity,
     HashMismatchError,
 )
-from vulcanlab.utils.file_utils import compute_file_hash, set_file_writable, set_file_readonly
+from vulcanlab.utils.file_utils import compute_file_hash, set_file_writable, set_file_readonly, get_path_resolver
 from vulcanlab.config import load_config
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 from vulcanlab_api.schemas.sanitization import (
     # Legacy schemas removed
     # New work-based schemas
@@ -82,18 +86,17 @@ def _check_file_status(work: Work, file_key: str) -> FileStatusInfo:
             error=None
         )
     
-    file_info = work.files[file_key]
-    file_path = Path(file_info["path"])
-    stored_hash = file_info["hash"]
-    
+    file_path = resolver.resolve_work_path(work, file_key)
+    stored_hash = work.files[file_key]["hash"]
+
     # Check if file exists on disk
     if not file_path.exists():
         return FileStatusInfo(
             exists=True,
-            path=str(file_path),
+            path=file_path.name,
             hash=stored_hash,
             hash_match=False,
-            error=f"File not found on disk: {file_path}"
+            error=f"File not found on disk: {file_path.name}"
         )
     
     # Compute current hash and compare
@@ -103,7 +106,7 @@ def _check_file_status(work: Work, file_key: str) -> FileStatusInfo:
         
         return FileStatusInfo(
             exists=True,
-            path=str(file_path),
+            path=file_path.name,
             hash=stored_hash,
             hash_match=hash_match,
             error=None if hash_match else f"Hash mismatch: stored={stored_hash[:16]}..., current={current_hash[:16]}..."
@@ -111,7 +114,7 @@ def _check_file_status(work: Work, file_key: str) -> FileStatusInfo:
     except Exception as e:
         return FileStatusInfo(
             exists=True,
-            path=str(file_path),
+            path=file_path.name,
             hash=stored_hash,
             hash_match=False,
             error=f"Error computing hash: {str(e)}"
@@ -675,7 +678,7 @@ async def update_title_changes_content(
         # Update work.files with new hash
         updated_files = dict(work.files) if work.files else {}
         updated_files["title_changes"] = {
-            "path": str(title_changes_path.resolve()),
+            "path": title_changes_path.name,
             "hash": new_hash
         }
         work.files = updated_files
@@ -818,7 +821,7 @@ async def update_titles_content(
         # Must create a new dict to trigger SQLAlchemy's change detection for JSON columns
         updated_files = dict(work.files) if work.files else {}
         updated_files["titles"] = {
-            "path": str(titles_path.resolve()),
+            "path": titles_path.name,
             "hash": new_hash
         }
         work.files = updated_files
@@ -905,7 +908,7 @@ async def add_sanitized_markdown(
         # Create files metadata
         files_metadata = {
             "sanitized": {
-                "path": str(sanitized_path.resolve()),
+                "path": sanitized_path.name,
                 "hash": content_hash
             }
         }
@@ -913,7 +916,7 @@ async def add_sanitized_markdown(
         # Create the work entry
         work = Work(
             title=request.title,
-            markdown_path=str(sanitized_path.resolve()),
+            markdown_path=sanitized_path.name,
             authors=request.authors,
             year=request.year,
             publisher=request.publisher,
@@ -1074,7 +1077,7 @@ async def update_title_changes_table(
 
             # Determine source file from work.files
             if "original_markdown" in work.files:
-                markdown_path = Path(work.files["original_markdown"]["path"])
+                markdown_path = resolver.resolve_work_path(work, "original_markdown")
                 source_file = f"./{markdown_path.name}"
             else:
                 raise HTTPException(
@@ -1095,7 +1098,7 @@ async def update_title_changes_table(
             title_changes_key = "title_changes"
             if title_changes_key in work.files:
                 # Update existing file
-                title_changes_path = Path(work.files[title_changes_key]["path"])
+                title_changes_path = resolver.resolve_work_path(work, title_changes_key)
             else:
                 # Create new file
                 output_dir = markdown_path.parent
@@ -1117,7 +1120,7 @@ async def update_title_changes_table(
             # Update work.files metadata
             updated_files = dict(work.files) if work.files else {}
             updated_files[title_changes_key] = {
-                "path": str(title_changes_path.resolve()),
+                "path": title_changes_path.name,
                 "hash": new_hash
             }
             work.files = updated_files

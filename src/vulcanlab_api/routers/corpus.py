@@ -19,6 +19,11 @@ from sqlalchemy import func
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
 from vulcanlab.data.models.chunk import Chunk
+from vulcanlab.utils.file_utils import get_path_resolver
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 from vulcanlab_api.schemas.corpus import (
     ChunkVectorStats,
     CorpusStatsResponse,
@@ -296,12 +301,12 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
                 detail=f"Work {work_id} does not have a sanitized file"
             )
 
-        sanitized_path = Path(work.files["sanitized"]["path"])
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
 
         if not sanitized_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Sanitized file not found on disk: {sanitized_path}"
+                detail=f"Sanitized file not found on disk: {sanitized_path.name}"
             )
 
         # Read file content

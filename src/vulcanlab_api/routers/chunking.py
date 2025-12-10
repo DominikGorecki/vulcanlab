@@ -26,7 +26,11 @@ from vulcanlab.data.models.work import Work
 from vulcanlab.sanitization import extract_titles_from_work, HashMismatchError
 from vulcanlab.chunking.chunk_headings import chunk_headings
 from vulcanlab.chunking.content_chunking import chunk_content
-from vulcanlab.utils.file_utils import compute_file_hash, set_file_writable, set_file_readonly
+from vulcanlab.utils.file_utils import compute_file_hash, set_file_writable, set_file_readonly, get_path_resolver
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 from vulcanlab_api.schemas.chunking import (
     WorkListResponse,
     WorkListItem,
@@ -57,25 +61,24 @@ def _get_file_status(work: Work, file_key: str) -> FileStatusInfo:
     """Helper to get file status information."""
     if not work.files or file_key not in work.files:
         return FileStatusInfo(exists=False, path=None, hash=None, hash_match=None)
-    
-    file_info = work.files[file_key]
-    file_path = Path(file_info["path"])
-    stored_hash = file_info["hash"]
-    
+
+    file_path = resolver.resolve_work_path(work, file_key)
+    stored_hash = work.files[file_key]["hash"]
+
     if not file_path.exists():
         return FileStatusInfo(
             exists=False,
-            path=str(file_path),
+            path=file_path.name,
             hash=stored_hash,
             hash_match=False
         )
-    
+
     current_hash = compute_file_hash(file_path)
     hash_match = current_hash == stored_hash
-    
+
     return FileStatusInfo(
         exists=True,
-        path=str(file_path),
+        path=file_path.name,
         hash=stored_hash,
         hash_match=hash_match
     )
@@ -179,8 +182,7 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
                 detail=f"Work {work_id} does not have sanitized file"
             )
         
-        file_info = work.files["sanitized"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized")
         
         if not file_path.exists():
             raise HTTPException(
@@ -224,8 +226,7 @@ async def update_sanitized_content(
                 detail=f"Work {work_id} does not have sanitized file"
             )
         
-        file_info = work.files["sanitized"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized")
         
         if not file_path.exists():
             raise HTTPException(
@@ -249,7 +250,7 @@ async def update_sanitized_content(
             # Update work.files with new hash (recreate dict to trigger SQLAlchemy change detection)
             updated_files = dict(work.files)
             updated_files["sanitized"] = {
-                "path": str(file_path.resolve()),
+                "path": file_path.name,
                 "hash": new_hash
             }
             work.files = updated_files
@@ -338,8 +339,7 @@ async def get_san_titles_content(work_id: int) -> SanTitlesContentResponse:
                 detail=f"Work {work_id} does not have sanitized_titles file"
             )
         
-        file_info = work.files["sanitized_titles"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized_titles")
         
         if not file_path.exists():
             raise HTTPException(
@@ -383,8 +383,7 @@ async def update_san_titles_content(
                 detail=f"Work {work_id} does not have sanitized_titles file"
             )
         
-        file_info = work.files["sanitized_titles"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized_titles")
         
         if not file_path.exists():
             raise HTTPException(
@@ -408,7 +407,7 @@ async def update_san_titles_content(
             # Update work.files with new hash (recreate dict to trigger SQLAlchemy change detection)
             updated_files = dict(work.files)
             updated_files["sanitized_titles"] = {
-                "path": str(file_path.resolve()),
+                "path": file_path.name,
                 "hash": new_hash
             }
             work.files = updated_files
@@ -811,7 +810,7 @@ async def update_vec_suggestions_table(
             # Create new dict to trigger SQLAlchemy change detection
             updated_files = dict(work.files) if work.files else {}
             updated_files["vec_suggestions"] = {
-                "path": str(vec_sugg_path.resolve()),
+                "path": vec_sugg_path.name,
                 "hash": new_hash
             }
             work.files = updated_files
