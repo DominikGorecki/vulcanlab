@@ -680,12 +680,12 @@ async def get_vec_suggestions_table(work_id: int) -> VecSuggestionsTableResponse
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail=f"Invalid vec_suggestions metadata structure in work {work_id}"
                     )
-                
-                vec_sugg_path = Path(vec_sugg_info["path"])
-                # Resolve to absolute path in case it's relative
-                if not vec_sugg_path.is_absolute():
-                    vec_sugg_path = vec_sugg_path.resolve()
-                
+
+                vec_sugg_path = resolver.resolve_work_path(work, "vec_suggestions")
+
+                # Debug logging
+                print(f"[DEBUG] get_vec_suggestions_table: work_id={work_id}, vec_sugg_path={vec_sugg_path}, exists={vec_sugg_path.exists()}")
+
                 # Verify file actually exists on disk
                 if not vec_sugg_path.exists():
                     # File is in database but doesn't exist on disk - try auto-detection
@@ -784,7 +784,10 @@ async def update_vec_suggestions_table(
                 )
 
             vec_sugg_info = work.files["vec_suggestions"]
-            vec_sugg_path = Path(vec_sugg_info["path"])
+            vec_sugg_path = resolver.resolve_work_path(work, "vec_suggestions")
+
+        # Debug logging
+        print(f"[DEBUG] update_vec_suggestions_table: work_id={work_id}, vec_sugg_path={vec_sugg_path}, exists={vec_sugg_path.exists()}")
 
         # Reconstruct markdown from table data
         rows_dict = [row.model_dump() for row in request.rows]

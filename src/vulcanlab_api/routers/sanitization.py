@@ -580,14 +580,17 @@ async def get_title_changes_content(work_id: int) -> TitleChangesContentResponse
             )
         
         title_changes_info = work.files["title_changes"]
-        title_changes_path = Path(title_changes_info["path"])
-        
+        title_changes_path = resolver.resolve_work_path(work, "title_changes")
+
+        # Debug logging
+        print(f"[DEBUG] get_title_changes_content: work_id={work_id}, filename={title_changes_info['path']}, resolved_path={title_changes_path}, exists={title_changes_path.exists()}")
+
         if not title_changes_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Title changes file not found on disk: {title_changes_path}"
             )
-        
+
         # Read file content
         try:
             content = title_changes_path.read_text(encoding="utf-8")
@@ -639,14 +642,17 @@ async def update_title_changes_content(
             )
         
         title_changes_info = work.files["title_changes"]
-        title_changes_path = Path(title_changes_info["path"])
-        
+        title_changes_path = resolver.resolve_work_path(work, "title_changes")
+
+        # Debug logging
+        print(f"[DEBUG] update_title_changes_content: work_id={work_id}, filename={title_changes_info['path']}, resolved_path={title_changes_path}, exists={title_changes_path.exists()}")
+
         if not title_changes_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Title changes file not found on disk: {title_changes_path}"
             )
-        
+
         # Make file writable
         try:
             set_file_writable(title_changes_path)
@@ -702,28 +708,31 @@ async def update_title_changes_content(
 async def get_titles_content(work_id: int) -> TitlesContentResponse:
     """
     Get the content of a work's titles file.
-    
+
     Retrieves the raw markdown content from the titles file referenced
     in work.files["titles"].
     """
     with get_session() as session:
         work = session.query(Work).filter(Work.id == work_id).first()
-        
+
         if not work:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Work with ID {work_id} not found"
             )
-        
+
         if not work.files or "titles" not in work.files:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Work {work_id} does not have a titles file"
             )
-        
+
         titles_info = work.files["titles"]
-        titles_path = Path(titles_info["path"])
-        
+        titles_path = resolver.resolve_work_path(work, "titles")
+
+        # Debug logging
+        print(f"[DEBUG] get_titles_content: work_id={work_id}, filename={titles_info['path']}, resolved_path={titles_path}, exists={titles_path.exists()}")
+
         if not titles_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -781,14 +790,17 @@ async def update_titles_content(
             )
         
         titles_info = work.files["titles"]
-        titles_path = Path(titles_info["path"])
-        
+        titles_path = resolver.resolve_work_path(work, "titles")
+
+        # Debug logging
+        print(f"[DEBUG] update_titles_content: work_id={work_id}, filename={titles_info['path']}, resolved_path={titles_path}, exists={titles_path.exists()}")
+
         if not titles_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Titles file not found on disk: {titles_path}"
             )
-        
+
         # Make file writable
         try:
             set_file_writable(titles_path)
@@ -995,7 +1007,7 @@ async def get_title_changes_table(work_id: int) -> HeadingTableResponse:
             title_changes_key = "title_changes"
             if title_changes_key in work.files:
                 title_changes_info = work.files[title_changes_key]
-                filename = Path(title_changes_info["path"]).name
+                filename = title_changes_info["path"]  # Already just a filename after migration 015
                 file_hash = title_changes_info["hash"]
             else:
                 # File doesn't exist yet - use placeholder values

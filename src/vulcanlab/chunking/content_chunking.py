@@ -676,7 +676,7 @@ def chunk_content(work_id: int, verbose: bool = False, min_chunk_words: int = MI
             )
 
         sanitized_path = resolver.resolve_work_path(work, "sanitized")
-        sanitized_stored_hash = work.files["sanitized"]["hash"]
+        sanitized_stored_hash = work.files["sanitized"].get("hash")
 
         if verbose:
             print(f"Processing work {work_id}: {work.title}")

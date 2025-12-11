@@ -155,7 +155,7 @@ def chunk_headings(work_id: int, verbose: bool = False) -> int:
             )
 
         sanitized_path = resolver.resolve_work_path(work, "sanitized")
-        sanitized_stored_hash = work.files["sanitized"]["hash"]
+        sanitized_stored_hash = work.files["sanitized"].get("hash")
 
         # Step 3: Lookup vec_suggestions file from files JSON
         if "vec_suggestions" not in work.files:
@@ -165,7 +165,7 @@ def chunk_headings(work_id: int, verbose: bool = False) -> int:
             )
 
         suggestions_path = resolver.resolve_work_path(work, "vec_suggestions")
-        suggestions_stored_hash = work.files["vec_suggestions"]["hash"]
+        suggestions_stored_hash = work.files["vec_suggestions"].get("hash")
 
         if verbose:
             print(f"Processing work {work_id}: {work.title}")

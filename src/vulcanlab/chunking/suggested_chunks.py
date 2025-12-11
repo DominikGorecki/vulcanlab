@@ -422,7 +422,7 @@ def build_prompt_for_vec_suggestions(
 
         # Get sanitized file info
         sanitized_path = resolver.resolve_work_path(work, "sanitized")
-        sanitized_stored_hash = work.files["sanitized"]["hash"]
+        sanitized_stored_hash = work.files["sanitized"].get("hash")
 
         if verbose:
             print(f"Analyzing sanitized markdown: {sanitized_path}")
@@ -448,7 +448,7 @@ def build_prompt_for_vec_suggestions(
         if "sanitized_titles" in work.files:
             # Titles exist in database, use them
             titles_path = resolver.resolve_work_path(work, "sanitized_titles")
-            titles_stored_hash = work.files["sanitized_titles"]["hash"]
+            titles_stored_hash = work.files["sanitized_titles"].get("hash")
 
             if verbose:
                 print(f"Using existing titles file: {titles_path}")
@@ -686,7 +686,7 @@ def suggest_chunks_from_work(
 
         # Get sanitized file info
         sanitized_path = resolver.resolve_work_path(work, "sanitized")
-        sanitized_stored_hash = work.files["sanitized"]["hash"]
+        sanitized_stored_hash = work.files["sanitized"].get("hash")
 
         if verbose:
             print(f"Analyzing sanitized markdown: {sanitized_path}")
@@ -712,7 +712,7 @@ def suggest_chunks_from_work(
         if "sanitized_titles" in work.files:
             # Titles exist in database, use them
             titles_path = resolver.resolve_work_path(work, "sanitized_titles")
-            titles_stored_hash = work.files["sanitized_titles"]["hash"]
+            titles_stored_hash = work.files["sanitized_titles"].get("hash")
 
             if verbose:
                 print(f"Using existing titles file: {titles_path}")

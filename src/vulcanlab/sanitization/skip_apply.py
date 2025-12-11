@@ -26,8 +26,11 @@ from typing import Optional
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
-from vulcanlab.utils.file_utils import compute_file_hash, set_file_readonly
+from vulcanlab.utils.file_utils import compute_file_hash, set_file_readonly, get_path_resolver
 from vulcanlab.sanitization.extract_titles import HashMismatchError
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def skip_apply_from_work(
@@ -88,7 +91,7 @@ def skip_apply_from_work(
         
         # Get file info
         source_info = work.files[source_key]
-        source_path = Path(source_info["path"])
+        source_path = resolver.resolve_work_path(work, source_key)
         source_stored_hash = source_info["hash"]
         
         if verbose:

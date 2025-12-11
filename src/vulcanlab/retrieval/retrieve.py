@@ -275,10 +275,11 @@ def _enrich_content(
     if len(chunk.content) >= min_length:
         return chunk.content
 
-    if not work.markdown_path:
+    # Check if work has sanitized markdown file
+    if not work.files or "sanitized" not in work.files:
         return chunk.content
 
-    markdown_path = resolver.resolve_work_path(work)
+    markdown_path = resolver.resolve_work_path(work, "sanitized")
     if not markdown_path.exists():
         return chunk.content
 
