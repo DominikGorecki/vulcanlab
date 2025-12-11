@@ -76,7 +76,7 @@ def test_enable_extensions_sql_has_age():
 
 def test_entrypoint_has_initdb_logic():
     """Verify docker-entrypoint.sh includes database initialization logic."""
-    with open("docker-entrypoint.sh") as f:
+    with open("docker/docker-entrypoint.sh") as f:
         content = f.read()
         assert "initdb" in content
         assert "/docker-entrypoint-initdb.d/" in content
@@ -84,7 +84,7 @@ def test_entrypoint_has_initdb_logic():
 
 def test_entrypoint_starts_temp_postgres():
     """Verify entrypoint starts temporary PostgreSQL for initialization."""
-    with open("docker-entrypoint.sh") as f:
+    with open("docker/docker-entrypoint.sh") as f:
         content = f.read()
         assert "pg_ctl" in content
         assert "start" in content
@@ -92,20 +92,20 @@ def test_entrypoint_starts_temp_postgres():
 
 def test_entrypoint_configures_pg_hba():
     """Verify entrypoint configures pg_hba.conf."""
-    with open("docker-entrypoint.sh") as f:
+    with open("docker/docker-entrypoint.sh") as f:
         content = f.read()
         assert "pg_hba.conf" in content
         assert "md5" in content
 
 def test_entrypoint_checks_app_password():
     """Verify entrypoint checks for POSTGRES_APP_PASSWORD."""
-    with open("docker-entrypoint.sh") as f:
+    with open("docker/docker-entrypoint.sh") as f:
         content = f.read()
         assert "POSTGRES_APP_PASSWORD" in content
 
 def test_dockerfile_copies_init_scripts():
     """Verify Dockerfile copies init scripts to /docker-entrypoint-initdb.d/."""
-    with open("Dockerfile.allinone") as f:
+    with open("docker/Dockerfile.allinone") as f:
         content = f.read()
         assert "/docker-entrypoint-initdb.d/" in content
         assert "init-db.sh" in content
@@ -113,13 +113,13 @@ def test_dockerfile_copies_init_scripts():
 
 def test_dockerfile_creates_initdb_directory():
     """Verify Dockerfile creates /docker-entrypoint-initdb.d/ directory."""
-    with open("Dockerfile.allinone") as f:
+    with open("docker/Dockerfile.allinone") as f:
         content = f.read()
         assert "mkdir -p" in content
         assert "/docker-entrypoint-initdb.d" in content
 
 def test_env_example_has_app_password():
     """Verify .env.docker.example includes POSTGRES_APP_PASSWORD."""
-    with open(".env.docker.example") as f:
+    with open("docker/.env.docker.example") as f:
         content = f.read()
         assert "POSTGRES_APP_PASSWORD" in content
