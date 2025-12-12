@@ -2,20 +2,21 @@
 Chunking Router - Chunking operations for works with sanitized files.
 
 Endpoints:
-    GET  /chunking/works                                      - List works with sanitized files
-    GET  /chunking/work/{work_id}                            - Get work detail
-    GET  /chunking/work/{work_id}/sanitized/content          - Get sanitized content
-    PUT  /chunking/work/{work_id}/sanitized/content          - Update sanitized content
-    POST /chunking/work/{work_id}/extract-sanitized-titles   - Extract sanitized titles
-    GET  /chunking/work/{work_id}/san-titles/content         - Get sanitized titles content
-    PUT  /chunking/work/{work_id}/san-titles/content         - Update sanitized titles content
-    GET  /chunking/work/{work_id}/vec-suggestions/table      - Get vec suggestions as table data
-    PUT  /chunking/work/{work_id}/vec-suggestions/table      - Update vec suggestions from table data
-    GET  /chunking/work/{work_id}/vec-suggestions/prompt     - Get LLM prompt for vec suggestions
-    POST /chunking/work/{work_id}/vec-suggestions/manual     - Save manual vec suggestions response
-    POST /chunking/work/{work_id}/vec-suggestions/run        - Run vec suggestions with LLM
-    POST /chunking/work/{work_id}/apply-heading-chunks       - Apply heading chunking
-    POST /chunking/work/{work_id}/apply-content-chunks       - Apply content chunking
+    GET  /chunking/works                                              - List works with sanitized files
+    GET  /chunking/work/{work_id}                                     - Get work detail
+    GET  /chunking/work/{work_id}/sanitized/content                   - Get sanitized content
+    PUT  /chunking/work/{work_id}/sanitized/content                   - Update sanitized content
+    POST /chunking/work/{work_id}/extract-sanitized-titles            - Extract sanitized titles
+    GET  /chunking/work/{work_id}/san-titles/content                  - Get sanitized titles content
+    PUT  /chunking/work/{work_id}/san-titles/content                  - Update sanitized titles content
+    GET  /chunking/work/{work_id}/vec-suggestions/table               - Get vec suggestions as table data
+    PUT  /chunking/work/{work_id}/vec-suggestions/table               - Update vec suggestions from table data
+    GET  /chunking/work/{work_id}/vec-suggestions/prompt              - Get LLM prompt for vec suggestions
+    POST /chunking/work/{work_id}/vec-suggestions/manual              - Save manual vec suggestions response
+    POST /chunking/work/{work_id}/vec-suggestions/run                 - Run vec suggestions with LLM
+    POST /chunking/work/{work_id}/vec-suggestions/manual-all-vectorize - Generate all-VECTORIZE suggestions
+    POST /chunking/work/{work_id}/apply-heading-chunks                - Apply heading chunking
+    POST /chunking/work/{work_id}/apply-content-chunks                - Apply content chunking
 """
 
 from pathlib import Path
@@ -47,6 +48,8 @@ from vulcanlab_api.schemas.chunking import (
     ManualVecSuggestionsResponse,
     RunVecSuggestionsRequest,
     RunVecSuggestionsResponse,
+    ManualAllVectorizeRequest,
+    ManualAllVectorizeResponse,
     ApplyHeadingChunksResponse,
     ApplyContentChunksResponse,
     VecSuggestionRow,
@@ -603,7 +606,7 @@ async def run_vec_suggestions(
 ) -> RunVecSuggestionsResponse:
     """Run vec suggestions with LLM."""
     from vulcanlab.chunking import suggest_chunks_from_work
-    
+
     try:
         output_path = suggest_chunks_from_work(
             work_id=work_id,
@@ -611,7 +614,7 @@ async def run_vec_suggestions(
             force=request.force,
             verbose=True
         )
-        
+
         return RunVecSuggestionsResponse(
             success=True,
             message=f"Successfully generated vec suggestions to {output_path.name}",
@@ -636,6 +639,53 @@ async def run_vec_suggestions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to run vec suggestions: {e}"
+        )
+
+
+@router.post(
+    "/work/{work_id}/vec-suggestions/manual-all-vectorize",
+    response_model=ManualAllVectorizeResponse,
+    summary="Generate vec suggestions with all VECTORIZE",
+    description="Generates vec suggestions file marking all headings as VECTORIZE (no LLM needed).",
+)
+async def manual_all_vectorize(
+    work_id: int,
+    request: ManualAllVectorizeRequest
+) -> ManualAllVectorizeResponse:
+    """Generate vec suggestions with all headings marked as VECTORIZE."""
+    from vulcanlab.chunking.suggested_chunks import generate_all_vectorize_suggestions
+
+    try:
+        output_path = generate_all_vectorize_suggestions(
+            work_id=work_id,
+            force=request.force,
+            verbose=True
+        )
+
+        return ManualAllVectorizeResponse(
+            success=True,
+            message=f"Successfully generated all-VECTORIZE suggestions to {output_path.name}",
+            output_path=str(output_path)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HashMismatchError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Hash mismatch: {e}"
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate all-vectorize suggestions: {e}"
         )
 
 

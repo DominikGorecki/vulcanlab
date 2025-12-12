@@ -133,6 +133,18 @@ class RunVecSuggestionsResponse(BaseModel):
     output_path: str = Field(..., description="Path to the created vec_suggestions file")
 
 
+class ManualAllVectorizeRequest(BaseModel):
+    """Request to manually generate vec suggestions with all VECTORIZE."""
+    force: bool = Field(False, description="Force generation even if file already exists")
+
+
+class ManualAllVectorizeResponse(BaseModel):
+    """Response after manually generating all-VECTORIZE vec suggestions."""
+    success: bool = Field(..., description="Whether generation was successful")
+    message: str = Field(..., description="Status message")
+    output_path: str = Field(..., description="Path to the created vec_suggestions file")
+
+
 # Interactive Vec Suggestions Table Schemas
 
 class VecSuggestionRow(BaseModel):

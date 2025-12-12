@@ -645,6 +645,111 @@ def save_vec_suggestions_from_response(
     return output_path
 
 
+def generate_all_vectorize_suggestions(
+    work_id: int,
+    force: bool = False,
+    verbose: bool = False
+) -> Path:
+    """Generate vec suggestions file with all headings marked as VECTORIZE.
+
+    This function creates a vec_suggestions file without using an LLM,
+    marking all headings as VECTORIZE by default.
+
+    Args:
+        work_id: Database ID of the work.
+        force: If True, skip hash validation and overwrite existing file.
+        verbose: If True, print progress messages.
+
+    Returns:
+        Path to the created vectorization suggestions file.
+
+    Raises:
+        ValueError: If work_id not found or sanitized file not in database.
+        HashMismatchError: If file hash doesn't match stored hash (unless force=True).
+        FileNotFoundError: If files referenced in database don't exist on disk.
+    """
+    # Get prompt data (which validates everything and gets titles_list)
+    prompt_data = build_prompt_for_vec_suggestions(work_id, force, verbose)
+    titles_list = prompt_data["titles_list"]
+
+    with get_session() as session:
+        work = session.query(Work).filter(Work.id == work_id).first()
+
+        if not work:
+            raise ValueError(f"Work with ID {work_id} not found in database")
+
+        # Get sanitized path for output file naming
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
+
+        # Determine output path: <file>.sanitized.md -> <file>.sanitized.vec_sugg.md
+        output_path = sanitized_path.parent / f"{sanitized_path.stem}.vec_sugg.md"
+
+        # Check if output file exists
+        if output_path.exists() and not force:
+            raise ValueError(
+                f"Vec suggestions file already exists: {output_path.name}. "
+                f"Use force=True to overwrite."
+            )
+
+        if verbose:
+            print(f"Generating all-VECTORIZE suggestions for {len(titles_list)} headings...")
+
+        # Build output content with all VECTORIZE
+        output_lines = ["# CHANGES TO HEADINGS", "```"]
+
+        for title in titles_list:
+            match = re.match(r'(\d+):', title)
+            if match:
+                line_num = int(match.group(1))
+                output_lines.append(f"{line_num}: VECTORIZE")
+
+        output_lines.append("```")
+        output_content = "\n".join(output_lines)
+
+        # Check if output file exists and is read-only
+        if output_path.exists():
+            if verbose:
+                print(f"Output file already exists: {output_path}")
+
+            # If it's read-only, we need to make it writable to overwrite
+            if is_file_readonly(output_path):
+                if verbose:
+                    print(f"File is read-only, making it writable for overwrite")
+                set_file_writable(output_path)
+
+        # Write output file
+        output_path.write_text(output_content, encoding='utf-8')
+
+        if verbose:
+            print(f"Suggestions written: {output_path}")
+
+        # Set file to read-only
+        set_file_readonly(output_path)
+
+        if verbose:
+            print(f"File set to read-only")
+
+        # Compute hash of suggestions file
+        suggestions_hash = compute_file_hash(output_path)
+
+        # Update work's files metadata
+        # Need to create a new dict to trigger SQLAlchemy's change detection for JSON columns
+        updated_files = dict(work.files) if work.files else {}
+        updated_files["vec_suggestions"] = {
+            "path": output_path.name,
+            "hash": suggestions_hash
+        }
+        work.files = updated_files
+
+        session.commit()
+        session.refresh(work)
+
+        if verbose:
+            print(f"Updated work {work_id} with 'vec_suggestions' file metadata")
+
+    return output_path
+
+
 def suggest_chunks_from_work(
     work_id: int,
     use_full_model: bool = False,
