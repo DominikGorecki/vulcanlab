@@ -1,3 +1,5 @@
+COMPLETE
+
 # T01: Database Schema & Migrations for Simple Conversion
 
 ## Context
