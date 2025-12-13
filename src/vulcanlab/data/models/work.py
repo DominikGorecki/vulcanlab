@@ -46,6 +46,11 @@ class Work(Base):
         processing_status: JSON object tracking processing operation statuses.
                           Structure: {"heading_chunks": "completed"|"pending"|"failed",
                                      "content_chunks": "completed"|"pending"|"failed"}
+                          For simple conversion:
+                          {"simple_conversion_step": "parsing"|"sanitizing"|"chunking"|"complete"|"failed",
+                           "simple_conversion_classification": "small"|"large",
+                           "simple_conversion_mode": "automatic"|"manual",
+                           "simple_conversion_error": "error message"|null}
         content_hash: SHA-256 hash of source content for deduplication.
         created_at: Timestamp when record was created.
         updated_at: Timestamp when record was last updated.
