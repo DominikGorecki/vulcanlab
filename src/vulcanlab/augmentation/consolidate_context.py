@@ -17,9 +17,13 @@ import json
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Query, Work
-from vulcanlab.utils.file_utils import compute_file_hash
+from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
 from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name
 from vulcanlab.config.app_config import load_config
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 
@@ -350,9 +354,8 @@ def consolidate_context(
         # Verify content hashes
         for work_id, work in works_map.items():
             if work.files and "sanitized" in work.files:
-                sanitized_info = work.files["sanitized"]
-                md_path = Path(sanitized_info["path"])
-                stored_hash = sanitized_info.get("hash")
+                md_path = resolver.resolve_work_path(work, "sanitized")
+                stored_hash = work.files["sanitized"].get("hash")
 
                 if md_path.exists() and stored_hash:
                     current_hash = compute_file_hash(md_path)
@@ -436,8 +439,7 @@ def consolidate_context(
                     new_items.extend(group_items)
                     continue
 
-                sanitized_info = work.files["sanitized"]
-                md_path = Path(sanitized_info["path"])
+                md_path = resolver.resolve_work_path(work, "sanitized")
                 if not md_path.exists():
                     new_items.extend(group_items)
                     continue

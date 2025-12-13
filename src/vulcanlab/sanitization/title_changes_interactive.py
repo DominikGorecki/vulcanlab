@@ -20,9 +20,12 @@ from typing import Optional
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
-from vulcanlab.utils.file_utils import compute_file_hash
+from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
 from vulcanlab.sanitization.apply_title_changes import parse_title_changes
 from vulcanlab.sanitization.extract_titles import HashMismatchError
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def extract_all_headings(markdown_path: Path) -> list[dict]:
@@ -156,7 +159,7 @@ def get_title_changes_table_data(
 
         # Get source markdown file info
         markdown_info = work.files[source_key]
-        markdown_path = Path(markdown_info["path"])
+        markdown_path = resolver.resolve_work_path(work, source_key)
         markdown_stored_hash = markdown_info["hash"]
 
         # Validate markdown file exists
@@ -185,7 +188,7 @@ def get_title_changes_table_data(
 
         if title_changes_key in work.files:
             title_changes_info = work.files[title_changes_key]
-            title_changes_path = Path(title_changes_info["path"])
+            title_changes_path = resolver.resolve_work_path(work, title_changes_key)
 
             if title_changes_path.exists():
                 # Validate hash (unless force=True)

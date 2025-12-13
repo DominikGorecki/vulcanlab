@@ -26,6 +26,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Query
@@ -52,6 +55,31 @@ class ParsedExpansion:
     hyde_answer: str
     intent: str
     entities: list[str]
+
+
+class ExpansionResponseSchema(BaseModel):
+    """Pydantic schema for LLM query expansion response.
+
+    Used with with_structured_output() to ensure valid JSON from LLMs.
+    """
+
+    queries: list[str] = Field(
+        description="Alternative phrasings of the query for multi-query expansion"
+    )
+    hyde_answer: str = Field(
+        description="Hypothetical answer paragraph that would appear in a psychology textbook"
+    )
+    intent: Literal[
+        "DEFINITION",
+        "MECHANISM",
+        "COMPARISON",
+        "APPLICATION",
+        "STUDY_DETAIL",
+        "CRITIQUE"
+    ] = Field(description="Query intent classification")
+    entities: list[str] = Field(
+        description="Key entities like researcher names, theories, or constructs"
+    )
 
 
 def generate_expansion_prompt(query: str, n: int = 3) -> str:
@@ -252,15 +280,23 @@ def expand_query(
     langchain_stack = create_langchain_chat(tier=ModelTier.FULL)
     chat = langchain_stack.chat
 
+    # Use structured output to ensure valid JSON response
+    # This works for both Gemini and OpenAI
+    structured_chat = chat.with_structured_output(ExpansionResponseSchema)
+
     # Call the LLM
     if verbose:
         print("Calling LLM...")
 
-    response = chat.invoke(prompt)
-    response_text = response.content
+    response: ExpansionResponseSchema = structured_chat.invoke(prompt)
 
-    # Parse the response
-    parsed = parse_expansion_response(response_text)
+    # Convert Pydantic model to ParsedExpansion
+    parsed = ParsedExpansion(
+        expanded_queries=response.queries,
+        hyde_answer=response.hyde_answer,
+        intent=response.intent,
+        entities=response.entities
+    )
 
     if verbose:
         print(f"Generated {len(parsed.expanded_queries)} alternative queries")

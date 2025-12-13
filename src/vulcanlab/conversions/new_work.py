@@ -124,10 +124,10 @@ def create_new_work(
         for ext in extensions:
             file_path = markdown_path.parent / f"{stem}{ext}"
             if file_path.exists() and file_path.is_file():
-                # Compute hash and store absolute path
+                # Compute hash using full path, but store only filename
                 file_hash = compute_file_hash(file_path)
                 files_metadata[field_name] = {
-                    "path": str(file_path.resolve()),
+                    "path": file_path.name,
                     "hash": file_hash
                 }
                 break  # Use first match for this field
@@ -164,7 +164,7 @@ def create_new_work(
     # Create the work
     work = Work(
         title=title,
-        markdown_path=str(markdown_path),
+        markdown_path=markdown_path.name,
         authors=authors,
         year=year,
         publisher=publisher,

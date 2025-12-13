@@ -11,6 +11,7 @@ import {
   Loader2Icon,
   PlayCircle,
   Check,
+  FileText,
 } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +38,7 @@ export default function GenVecSuggestionsPage() {
   // Loading states
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [manualGenerating, setManualGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Error states
@@ -138,6 +140,41 @@ export default function GenVecSuggestionsPage() {
     }
   };
 
+  const handleManualGenerate = async () => {
+    setManualGenerating(true);
+    setOperationError(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/chunk/work/${workId}/vec-suggestions/manual-all-vectorize`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            force: false,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to generate manual suggestions");
+      }
+
+      const data = await response.json();
+      setOperationSuccess(data.message || "All-VECTORIZE suggestions generated successfully");
+
+      // Redirect to vec-suggestions page
+      setTimeout(() => {
+        router.push(`/chunk/${workId}/vec-suggestions`);
+      }, 1500);
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : "Failed to generate manual suggestions");
+    } finally {
+      setManualGenerating(false);
+    }
+  };
+
   const handleRunPrompt = async () => {
     setRunning(true);
     setOperationError(null);
@@ -162,7 +199,7 @@ export default function GenVecSuggestionsPage() {
 
       const data = await response.json();
       setOperationSuccess(data.message || "Vec suggestions generated successfully");
-      
+
       // Redirect to vec-suggestions page
       setTimeout(() => {
         router.push(`/chunk/${workId}/vec-suggestions`);
@@ -263,14 +300,14 @@ export default function GenVecSuggestionsPage() {
       <div className="border-t bg-card p-4">
         <div className="flex items-center justify-between max-w-full">
           <p className="text-sm text-muted-foreground flex-1 mr-4">
-            You can either manually run this prompt in your favorite LLM (like ChatGPT, Claude, etc.) 
+            You can copy the prompt to run manually, generate all headings as VECTORIZE,
             or run it automatically using our API with the FULL model.
           </p>
           <div className="flex gap-3 flex-shrink-0">
             <Button
               onClick={handleCopyPrompt}
               variant="outline"
-              disabled={running}
+              disabled={running || manualGenerating}
               className="gap-2"
             >
               {copySuccess ? (
@@ -287,8 +324,27 @@ export default function GenVecSuggestionsPage() {
             </Button>
 
             <Button
+              onClick={handleManualGenerate}
+              variant="outline"
+              disabled={running || manualGenerating}
+              className="gap-2"
+            >
+              {manualGenerating ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4" />
+                  Manual
+                </>
+              )}
+            </Button>
+
+            <Button
               onClick={() => setRunDialogOpen(true)}
-              disabled={running}
+              disabled={running || manualGenerating}
               className="gap-2"
             >
               {running ? (
