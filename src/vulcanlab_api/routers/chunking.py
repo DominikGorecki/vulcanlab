@@ -2,20 +2,21 @@
 Chunking Router - Chunking operations for works with sanitized files.
 
 Endpoints:
-    GET  /chunking/works                                      - List works with sanitized files
-    GET  /chunking/work/{work_id}                            - Get work detail
-    GET  /chunking/work/{work_id}/sanitized/content          - Get sanitized content
-    PUT  /chunking/work/{work_id}/sanitized/content          - Update sanitized content
-    POST /chunking/work/{work_id}/extract-sanitized-titles   - Extract sanitized titles
-    GET  /chunking/work/{work_id}/san-titles/content         - Get sanitized titles content
-    PUT  /chunking/work/{work_id}/san-titles/content         - Update sanitized titles content
-    GET  /chunking/work/{work_id}/vec-suggestions/table      - Get vec suggestions as table data
-    PUT  /chunking/work/{work_id}/vec-suggestions/table      - Update vec suggestions from table data
-    GET  /chunking/work/{work_id}/vec-suggestions/prompt     - Get LLM prompt for vec suggestions
-    POST /chunking/work/{work_id}/vec-suggestions/manual     - Save manual vec suggestions response
-    POST /chunking/work/{work_id}/vec-suggestions/run        - Run vec suggestions with LLM
-    POST /chunking/work/{work_id}/apply-heading-chunks       - Apply heading chunking
-    POST /chunking/work/{work_id}/apply-content-chunks       - Apply content chunking
+    GET  /chunking/works                                              - List works with sanitized files
+    GET  /chunking/work/{work_id}                                     - Get work detail
+    GET  /chunking/work/{work_id}/sanitized/content                   - Get sanitized content
+    PUT  /chunking/work/{work_id}/sanitized/content                   - Update sanitized content
+    POST /chunking/work/{work_id}/extract-sanitized-titles            - Extract sanitized titles
+    GET  /chunking/work/{work_id}/san-titles/content                  - Get sanitized titles content
+    PUT  /chunking/work/{work_id}/san-titles/content                  - Update sanitized titles content
+    GET  /chunking/work/{work_id}/vec-suggestions/table               - Get vec suggestions as table data
+    PUT  /chunking/work/{work_id}/vec-suggestions/table               - Update vec suggestions from table data
+    GET  /chunking/work/{work_id}/vec-suggestions/prompt              - Get LLM prompt for vec suggestions
+    POST /chunking/work/{work_id}/vec-suggestions/manual              - Save manual vec suggestions response
+    POST /chunking/work/{work_id}/vec-suggestions/run                 - Run vec suggestions with LLM
+    POST /chunking/work/{work_id}/vec-suggestions/manual-all-vectorize - Generate all-VECTORIZE suggestions
+    POST /chunking/work/{work_id}/apply-heading-chunks                - Apply heading chunking
+    POST /chunking/work/{work_id}/apply-content-chunks                - Apply content chunking
 """
 
 from pathlib import Path
@@ -26,7 +27,11 @@ from vulcanlab.data.models.work import Work
 from vulcanlab.sanitization import extract_titles_from_work, HashMismatchError
 from vulcanlab.chunking.chunk_headings import chunk_headings
 from vulcanlab.chunking.content_chunking import chunk_content
-from vulcanlab.utils.file_utils import compute_file_hash, set_file_writable, set_file_readonly
+from vulcanlab.utils.file_utils import compute_file_hash, set_file_writable, set_file_readonly, get_path_resolver
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 from vulcanlab_api.schemas.chunking import (
     WorkListResponse,
     WorkListItem,
@@ -43,6 +48,8 @@ from vulcanlab_api.schemas.chunking import (
     ManualVecSuggestionsResponse,
     RunVecSuggestionsRequest,
     RunVecSuggestionsResponse,
+    ManualAllVectorizeRequest,
+    ManualAllVectorizeResponse,
     ApplyHeadingChunksResponse,
     ApplyContentChunksResponse,
     VecSuggestionRow,
@@ -57,25 +64,24 @@ def _get_file_status(work: Work, file_key: str) -> FileStatusInfo:
     """Helper to get file status information."""
     if not work.files or file_key not in work.files:
         return FileStatusInfo(exists=False, path=None, hash=None, hash_match=None)
-    
-    file_info = work.files[file_key]
-    file_path = Path(file_info["path"])
-    stored_hash = file_info["hash"]
-    
+
+    file_path = resolver.resolve_work_path(work, file_key)
+    stored_hash = work.files[file_key]["hash"]
+
     if not file_path.exists():
         return FileStatusInfo(
             exists=False,
-            path=str(file_path),
+            path=file_path.name,
             hash=stored_hash,
             hash_match=False
         )
-    
+
     current_hash = compute_file_hash(file_path)
     hash_match = current_hash == stored_hash
-    
+
     return FileStatusInfo(
         exists=True,
-        path=str(file_path),
+        path=file_path.name,
         hash=stored_hash,
         hash_match=hash_match
     )
@@ -179,8 +185,7 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
                 detail=f"Work {work_id} does not have sanitized file"
             )
         
-        file_info = work.files["sanitized"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized")
         
         if not file_path.exists():
             raise HTTPException(
@@ -224,8 +229,7 @@ async def update_sanitized_content(
                 detail=f"Work {work_id} does not have sanitized file"
             )
         
-        file_info = work.files["sanitized"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized")
         
         if not file_path.exists():
             raise HTTPException(
@@ -249,7 +253,7 @@ async def update_sanitized_content(
             # Update work.files with new hash (recreate dict to trigger SQLAlchemy change detection)
             updated_files = dict(work.files)
             updated_files["sanitized"] = {
-                "path": str(file_path.resolve()),
+                "path": file_path.name,
                 "hash": new_hash
             }
             work.files = updated_files
@@ -338,8 +342,7 @@ async def get_san_titles_content(work_id: int) -> SanTitlesContentResponse:
                 detail=f"Work {work_id} does not have sanitized_titles file"
             )
         
-        file_info = work.files["sanitized_titles"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized_titles")
         
         if not file_path.exists():
             raise HTTPException(
@@ -383,8 +386,7 @@ async def update_san_titles_content(
                 detail=f"Work {work_id} does not have sanitized_titles file"
             )
         
-        file_info = work.files["sanitized_titles"]
-        file_path = Path(file_info["path"])
+        file_path = resolver.resolve_work_path(work, "sanitized_titles")
         
         if not file_path.exists():
             raise HTTPException(
@@ -408,7 +410,7 @@ async def update_san_titles_content(
             # Update work.files with new hash (recreate dict to trigger SQLAlchemy change detection)
             updated_files = dict(work.files)
             updated_files["sanitized_titles"] = {
-                "path": str(file_path.resolve()),
+                "path": file_path.name,
                 "hash": new_hash
             }
             work.files = updated_files
@@ -604,7 +606,7 @@ async def run_vec_suggestions(
 ) -> RunVecSuggestionsResponse:
     """Run vec suggestions with LLM."""
     from vulcanlab.chunking import suggest_chunks_from_work
-    
+
     try:
         output_path = suggest_chunks_from_work(
             work_id=work_id,
@@ -612,7 +614,7 @@ async def run_vec_suggestions(
             force=request.force,
             verbose=True
         )
-        
+
         return RunVecSuggestionsResponse(
             success=True,
             message=f"Successfully generated vec suggestions to {output_path.name}",
@@ -637,6 +639,53 @@ async def run_vec_suggestions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to run vec suggestions: {e}"
+        )
+
+
+@router.post(
+    "/work/{work_id}/vec-suggestions/manual-all-vectorize",
+    response_model=ManualAllVectorizeResponse,
+    summary="Generate vec suggestions with all VECTORIZE",
+    description="Generates vec suggestions file marking all headings as VECTORIZE (no LLM needed).",
+)
+async def manual_all_vectorize(
+    work_id: int,
+    request: ManualAllVectorizeRequest
+) -> ManualAllVectorizeResponse:
+    """Generate vec suggestions with all headings marked as VECTORIZE."""
+    from vulcanlab.chunking.suggested_chunks import generate_all_vectorize_suggestions
+
+    try:
+        output_path = generate_all_vectorize_suggestions(
+            work_id=work_id,
+            force=request.force,
+            verbose=True
+        )
+
+        return ManualAllVectorizeResponse(
+            success=True,
+            message=f"Successfully generated all-VECTORIZE suggestions to {output_path.name}",
+            output_path=str(output_path)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HashMismatchError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Hash mismatch: {e}"
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate all-vectorize suggestions: {e}"
         )
 
 
@@ -681,12 +730,12 @@ async def get_vec_suggestions_table(work_id: int) -> VecSuggestionsTableResponse
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail=f"Invalid vec_suggestions metadata structure in work {work_id}"
                     )
-                
-                vec_sugg_path = Path(vec_sugg_info["path"])
-                # Resolve to absolute path in case it's relative
-                if not vec_sugg_path.is_absolute():
-                    vec_sugg_path = vec_sugg_path.resolve()
-                
+
+                vec_sugg_path = resolver.resolve_work_path(work, "vec_suggestions")
+
+                # Debug logging
+                print(f"[DEBUG] get_vec_suggestions_table: work_id={work_id}, vec_sugg_path={vec_sugg_path}, exists={vec_sugg_path.exists()}")
+
                 # Verify file actually exists on disk
                 if not vec_sugg_path.exists():
                     # File is in database but doesn't exist on disk - try auto-detection
@@ -785,7 +834,10 @@ async def update_vec_suggestions_table(
                 )
 
             vec_sugg_info = work.files["vec_suggestions"]
-            vec_sugg_path = Path(vec_sugg_info["path"])
+            vec_sugg_path = resolver.resolve_work_path(work, "vec_suggestions")
+
+        # Debug logging
+        print(f"[DEBUG] update_vec_suggestions_table: work_id={work_id}, vec_sugg_path={vec_sugg_path}, exists={vec_sugg_path.exists()}")
 
         # Reconstruct markdown from table data
         rows_dict = [row.model_dump() for row in request.rows]
@@ -811,7 +863,7 @@ async def update_vec_suggestions_table(
             # Create new dict to trigger SQLAlchemy change detection
             updated_files = dict(work.files) if work.files else {}
             updated_files["vec_suggestions"] = {
-                "path": str(vec_sugg_path.resolve()),
+                "path": vec_sugg_path.name,
                 "hash": new_hash
             }
             work.files = updated_files

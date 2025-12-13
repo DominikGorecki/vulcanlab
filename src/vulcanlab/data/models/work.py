@@ -6,6 +6,7 @@ about psychology literature.
 """
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import String, Text, Integer, DateTime, func, JSON
@@ -89,6 +90,48 @@ class Work(Base):
 
     # Relationships
     chunks = relationship("Chunk", back_populates="work", passive_deletes=True)
+
+    def set_markdown_path(self, value: str) -> None:
+        """
+        Set markdown_path, automatically extracting filename from full path.
+
+        Args:
+            value: Full path or filename
+
+        Examples:
+            work.set_markdown_path("/full/path/file.md")  # Stores "file.md"
+            work.set_markdown_path("file.md")             # Stores "file.md"
+        """
+        if value:
+            self.markdown_path = Path(value).name
+        else:
+            self.markdown_path = value
+
+    def set_file_path(self, file_key: str, value: str, file_hash: str = None) -> None:
+        """
+        Set a path in the files JSON field, automatically extracting filename.
+
+        Args:
+            file_key: Key in files dict (e.g., "sanitized", "original_file")
+            value: Full path or filename
+            file_hash: Optional hash to update alongside path
+
+        Examples:
+            work.set_file_path("sanitized", "/full/path/file.md", "abc123...")
+            work.set_file_path("original_file", "input.pdf")
+        """
+        if not self.files:
+            self.files = {}
+
+        filename = Path(value).name if value else value
+
+        if file_key not in self.files:
+            self.files[file_key] = {}
+
+        self.files[file_key]["path"] = filename
+
+        if file_hash is not None:
+            self.files[file_key]["hash"] = file_hash
 
     def __repr__(self) -> str:
         return f"<Work(id={self.id}, title='{self.title[:50]}...')>"

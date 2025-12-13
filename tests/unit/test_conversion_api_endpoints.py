@@ -1,10 +1,11 @@
 """
 Unit tests for conversion API endpoints (file-content, suggestion, select-file).
+
+These tests use mocks exclusively and do NOT interact with a real database.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
-import shutil
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -25,142 +26,128 @@ class TestGetFileContent:
     """Tests for get_file_content endpoint."""
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    @patch("vulcanlab_api.routers.conversion.load_config")
-    @patch("vulcanlab_api.routers.conversion.extract_titles")
-    @patch("pathlib.Path.exists")
-    async def test_get_style_file_success(
-        self, mock_exists, mock_extract_titles, mock_load_config, mock_get_session
-    ):
+    async def test_get_style_file_success(self):
         """Test successful retrieval of style.md file."""
-        # Mock database
+        # Create a proper context manager mock for get_session
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_io_file = MagicMock()
         mock_io_file.id = 1
         mock_io_file.filename = "test.pdf"
+
+        # Setup query chain
         mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
-        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
 
         # Mock config
         mock_config = MagicMock()
         mock_config.paths.output_dir = "/output"
-        mock_load_config.return_value = mock_config
 
-        # Mock file operations
-        mock_exists.return_value = True
-        # extract_titles returns a list of titles (without line numbers for this test)
-        mock_extract_titles.return_value = ["# Test Content"]
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm), \
+             patch("vulcanlab_api.routers.conversion.load_config", return_value=mock_config), \
+             patch("vulcanlab_api.routers.conversion.extract_titles", return_value=["# Test Content"]), \
+             patch("pathlib.Path.exists", return_value=True):
 
-        response = await get_file_content(1, "style")
+            response = await get_file_content(1, "style")
 
-        assert response.content == "# Test Content"
-        assert response.filename == "test.style.md"
+            assert response.content == "# Test Content"
+            assert response.filename == "test.style.md"
+
+            # Verify database was not actually queried
+            mock_session.query.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    async def test_get_file_invalid_type(self, mock_get_session):
+    async def test_get_file_invalid_type(self):
         """Test that invalid file type raises 400 error."""
         with pytest.raises(HTTPException) as exc_info:
             await get_file_content(1, "invalid")
-        
+
         assert exc_info.value.status_code == 400
         assert "Invalid file_type" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    async def test_get_file_not_found_in_db(self, mock_get_session):
+    async def test_get_file_not_found_in_db(self):
         """Test that missing file in database raises 404 error."""
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_session.query.return_value.filter.return_value.first.return_value = None
-        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
 
-        with pytest.raises(HTTPException) as exc_info:
-            await get_file_content(999, "style")
-        
-        assert exc_info.value.status_code == 404
-        assert "not found in database" in exc_info.value.detail
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm):
+            with pytest.raises(HTTPException) as exc_info:
+                await get_file_content(999, "style")
+
+            assert exc_info.value.status_code == 404
+            assert "not found in database" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    @patch("vulcanlab_api.routers.conversion.load_config")
-    @patch("pathlib.Path.exists")
-    async def test_get_file_not_found_on_disk(
-        self, mock_exists, mock_load_config, mock_get_session
-    ):
+    async def test_get_file_not_found_on_disk(self):
         """Test that missing file on disk raises 404 error."""
-        # Mock database
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_io_file = MagicMock()
         mock_io_file.id = 1
         mock_io_file.filename = "test.pdf"
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
-        mock_get_session.return_value.__enter__.return_value = mock_session
 
-        # Mock config
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
         mock_config = MagicMock()
         mock_config.paths.output_dir = "/output"
-        mock_load_config.return_value = mock_config
 
-        # File doesn't exist
-        mock_exists.return_value = False
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm), \
+             patch("vulcanlab_api.routers.conversion.load_config", return_value=mock_config), \
+             patch("pathlib.Path.exists", return_value=False):
 
-        with pytest.raises(HTTPException) as exc_info:
-            await get_file_content(1, "style")
-        
-        assert exc_info.value.status_code == 404
-        assert "File not found" in exc_info.value.detail
+            with pytest.raises(HTTPException) as exc_info:
+                await get_file_content(1, "style")
+
+            assert exc_info.value.status_code == 404
+            assert "File not found" in exc_info.value.detail
 
 
 class TestUpdateFileContent:
     """Tests for update_file_content endpoint."""
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    @patch("vulcanlab_api.routers.conversion.load_config")
-    @patch("vulcanlab_api.routers.conversion.extract_titles")
-    @patch("vulcanlab.sanitization.apply_title_edits.Path.read_text")
-    @patch("pathlib.Path.write_text")
-    @patch("pathlib.Path.exists")
-    async def test_update_file_success(
-        self, mock_exists, mock_write_text, mock_read_text, mock_extract_titles, mock_load_config, mock_get_session
-    ):
+    async def test_update_file_success(self):
         """Test successful file update."""
-        # Mock database
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_io_file = MagicMock()
         mock_io_file.id = 1
         mock_io_file.filename = "test.pdf"
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
-        mock_get_session.return_value.__enter__.return_value = mock_session
 
-        # Mock config
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
         mock_config = MagicMock()
         mock_config.paths.output_dir = "/output"
-        mock_load_config.return_value = mock_config
 
-        # File exists
-        mock_exists.return_value = True
-        # Mock read_text for apply_title_edits (it reads the file to apply edits)
-        mock_read_text.return_value = "# Original Content"
-        # Mock extract_titles to return the updated content
-        mock_extract_titles.return_value = ["# Updated Content"]
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm), \
+             patch("vulcanlab_api.routers.conversion.load_config", return_value=mock_config), \
+             patch("vulcanlab_api.routers.conversion.extract_titles", return_value=["# Updated Content"]), \
+             patch("vulcanlab_api.routers.conversion.apply_title_edits"), \
+             patch("pathlib.Path.exists", return_value=True):
 
-        request = FileContentUpdateRequest(content="# Updated Content")
-        response = await update_file_content(1, "hier", request)
+            request = FileContentUpdateRequest(content="# Updated Content")
+            response = await update_file_content(1, "hier", request)
 
-        assert response.content == "# Updated Content"
-        assert response.filename == "test.hier.md"
-        # apply_title_edits should have been called (it writes internally)
+            assert response.content == "# Updated Content"
+            assert response.filename == "test.hier.md"
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    async def test_update_file_invalid_type(self, mock_get_session):
+    async def test_update_file_invalid_type(self):
         """Test that invalid file type raises 400 error."""
         request = FileContentUpdateRequest(content="# Content")
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await update_file_content(1, "wrong", request)
-        
+
         assert exc_info.value.status_code == 400
 
 
@@ -168,41 +155,20 @@ class TestGetFileSuggestion:
     """Tests for get_file_suggestion endpoint."""
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    @patch("vulcanlab_api.routers.conversion.load_config")
-    @patch("vulcanlab_api.routers.conversion.extract_headings")
-    @patch("vulcanlab_api.routers.conversion.compute_final_score")
-    @patch("pathlib.Path.read_text")
-    @patch("pathlib.Path.exists")
-    async def test_get_suggestion_hier_wins(
-        self,
-        mock_exists,
-        mock_read_text,
-        mock_compute_final_score,
-        mock_extract_headings,
-        mock_load_config,
-        mock_get_session,
-    ):
+    async def test_get_suggestion_hier_wins(self):
         """Test suggestion when hier file wins."""
-        # Mock database
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_io_file = MagicMock()
         mock_io_file.id = 1
         mock_io_file.filename = "test.pdf"
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
-        mock_get_session.return_value.__enter__.return_value = mock_session
 
-        # Mock config
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
         mock_config = MagicMock()
         mock_config.paths.output_dir = "/output"
-        mock_load_config.return_value = mock_config
-
-        # Both files exist
-        mock_exists.return_value = True
-        mock_read_text.return_value = "# Content\n\n## Section"
-
-        # Mock headings
-        mock_extract_headings.return_value = []
 
         # Mock metrics - hier has better score
         mock_style_metrics = MagicMock()
@@ -235,120 +201,111 @@ class TestGetFileSuggestion:
         mock_hier_metrics.penalty_total = 0.0
         mock_hier_metrics.final_score = 0.85
 
-        mock_compute_final_score.side_effect = [mock_style_metrics, mock_hier_metrics]
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm), \
+             patch("vulcanlab_api.routers.conversion.load_config", return_value=mock_config), \
+             patch("vulcanlab_api.routers.conversion.extract_headings", return_value=[]), \
+             patch("vulcanlab_api.routers.conversion.compute_final_score", side_effect=[mock_style_metrics, mock_hier_metrics]), \
+             patch("pathlib.Path.read_text", return_value="# Content\n\n## Section"), \
+             patch("pathlib.Path.exists", return_value=True):
 
-        response = await get_file_suggestion(1)
+            response = await get_file_suggestion(1)
 
-        assert response.winner == "hier"
-        assert response.score_difference > 0
-        assert response.hier_metrics.final_score > response.style_metrics.final_score
+            assert response.winner == "hier"
+            assert response.score_difference > 0
+            assert response.hier_metrics.final_score > response.style_metrics.final_score
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    @patch("vulcanlab_api.routers.conversion.load_config")
-    @patch("pathlib.Path.exists")
-    async def test_get_suggestion_file_not_found(
-        self, mock_exists, mock_load_config, mock_get_session
-    ):
+    async def test_get_suggestion_file_not_found(self):
         """Test suggestion when files don't exist."""
-        # Mock database
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_io_file = MagicMock()
         mock_io_file.id = 1
         mock_io_file.filename = "test.pdf"
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
-        mock_get_session.return_value.__enter__.return_value = mock_session
 
-        # Mock config
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
         mock_config = MagicMock()
         mock_config.paths.output_dir = "/output"
-        mock_load_config.return_value = mock_config
 
-        # Files don't exist
-        mock_exists.return_value = False
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm), \
+             patch("vulcanlab_api.routers.conversion.load_config", return_value=mock_config), \
+             patch("pathlib.Path.exists", return_value=False):
 
-        with pytest.raises(HTTPException) as exc_info:
-            await get_file_suggestion(1)
-        
-        assert exc_info.value.status_code == 404
+            with pytest.raises(HTTPException) as exc_info:
+                await get_file_suggestion(1)
+
+            assert exc_info.value.status_code == 404
 
 
 class TestSelectFile:
     """Tests for select_file endpoint."""
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    @patch("vulcanlab_api.routers.conversion.load_config")
-    @patch("shutil.copy2")
-    @patch("pathlib.Path.exists")
-    async def test_select_file_success(
-        self, mock_exists, mock_copy2, mock_load_config, mock_get_session
-    ):
+    async def test_select_file_success(self):
         """Test successful file selection."""
-        # Mock database
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_io_file = MagicMock()
         mock_io_file.id = 1
         mock_io_file.filename = "test.pdf"
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
-        mock_get_session.return_value.__enter__.return_value = mock_session
 
-        # Mock config
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
         mock_config = MagicMock()
         mock_config.paths.output_dir = "/output"
-        mock_load_config.return_value = mock_config
 
-        # Source exists, target doesn't
-        mock_exists.side_effect = [True, False]
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm), \
+             patch("vulcanlab_api.routers.conversion.load_config", return_value=mock_config), \
+             patch("shutil.copy2") as mock_copy2, \
+             patch("pathlib.Path.exists", side_effect=[True, False]):
 
-        request = FileSelectionRequest(file_type="hier")
-        response = await select_file(1, request)
+            request = FileSelectionRequest(file_type="hier")
+            response = await select_file(1, request)
 
-        assert response.success is True
-        assert "hier.md" in response.message
-        assert response.output_file == "test.md"
-        mock_copy2.assert_called_once()
+            assert response.success is True
+            assert "hier.md" in response.message
+            assert response.output_file == "test.md"
+            mock_copy2.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    async def test_select_file_invalid_type(self, mock_get_session):
+    async def test_select_file_invalid_type(self):
         """Test that invalid file type raises 400 error."""
         request = FileSelectionRequest(file_type="invalid")
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await select_file(1, request)
-        
+
         assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
-    @patch("vulcanlab_api.routers.conversion.get_session")
-    @patch("vulcanlab_api.routers.conversion.load_config")
-    @patch("pathlib.Path.exists")
-    async def test_select_file_target_exists(
-        self, mock_exists, mock_load_config, mock_get_session
-    ):
+    async def test_select_file_target_exists(self):
         """Test that existing target file raises 400 error."""
-        # Mock database
+        mock_session_cm = MagicMock()
         mock_session = MagicMock()
         mock_io_file = MagicMock()
         mock_io_file.id = 1
         mock_io_file.filename = "test.pdf"
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
-        mock_get_session.return_value.__enter__.return_value = mock_session
 
-        # Mock config
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_io_file
+        mock_session_cm.__enter__.return_value = mock_session
+        mock_session_cm.__exit__.return_value = None
+
         mock_config = MagicMock()
         mock_config.paths.output_dir = "/output"
-        mock_load_config.return_value = mock_config
 
-        # Both source and target exist
-        mock_exists.return_value = True
+        with patch("vulcanlab_api.routers.conversion.get_session", return_value=mock_session_cm), \
+             patch("vulcanlab_api.routers.conversion.load_config", return_value=mock_config), \
+             patch("pathlib.Path.exists", return_value=True):
 
-        request = FileSelectionRequest(file_type="style")
-        
-        with pytest.raises(HTTPException) as exc_info:
-            await select_file(1, request)
-        
-        assert exc_info.value.status_code == 400
-        assert "already exists" in exc_info.value.detail
+            request = FileSelectionRequest(file_type="style")
 
+            with pytest.raises(HTTPException) as exc_info:
+                await select_file(1, request)
+
+            assert exc_info.value.status_code == 400
+            assert "already exists" in exc_info.value.detail

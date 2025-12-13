@@ -23,7 +23,11 @@ from pathlib import Path
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Work
 from vulcanlab.sanitization.extract_titles import HashMismatchError
-from vulcanlab.utils.file_utils import compute_file_hash
+from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def _parse_suggestions(suggestions_path: Path) -> dict[int, str]:
@@ -150,9 +154,8 @@ def chunk_headings(work_id: int, verbose: bool = False) -> int:
                 f"Run: venv\\Scripts\\python -m vulcanlab.sanitization.apply_title_changes_cli {work_id}"
             )
 
-        sanitized_info = work.files["sanitized"]
-        sanitized_path = Path(sanitized_info["path"])
-        sanitized_stored_hash = sanitized_info["hash"]
+        sanitized_path = resolver.resolve_work_path(work, "sanitized")
+        sanitized_stored_hash = work.files["sanitized"].get("hash")
 
         # Step 3: Lookup vec_suggestions file from files JSON
         if "vec_suggestions" not in work.files:
@@ -161,9 +164,8 @@ def chunk_headings(work_id: int, verbose: bool = False) -> int:
                 f"Run: venv\\Scripts\\python -m vulcanlab.chunking.suggested_chunks_cli {work_id}"
             )
 
-        vec_suggestions_info = work.files["vec_suggestions"]
-        suggestions_path = Path(vec_suggestions_info["path"])
-        suggestions_stored_hash = vec_suggestions_info["hash"]
+        suggestions_path = resolver.resolve_work_path(work, "vec_suggestions")
+        suggestions_stored_hash = work.files["vec_suggestions"].get("hash")
 
         if verbose:
             print(f"Processing work {work_id}: {work.title}")

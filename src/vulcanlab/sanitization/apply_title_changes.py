@@ -26,8 +26,11 @@ from typing import Optional
 
 from vulcanlab.data.database import get_session, SessionLocal
 from vulcanlab.data.models.work import Work
-from vulcanlab.utils.file_utils import compute_file_hash, set_file_readonly, set_file_writable, is_file_readonly
+from vulcanlab.utils.file_utils import compute_file_hash, set_file_readonly, set_file_writable, is_file_readonly, get_path_resolver
 from vulcanlab.sanitization.extract_titles import HashMismatchError
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def parse_title_changes(changes_file: str | Path) -> tuple[str, list[dict]]:
@@ -111,7 +114,7 @@ def preview_title_changes(
         if not work.markdown_path:
             raise ValueError(f"Work {work_id} has no markdown_path")
 
-        markdown_path = Path(work.markdown_path)
+        markdown_path = resolver.resolve_work_path(work)
 
     if not markdown_path.exists():
         raise FileNotFoundError(f"Markdown file not found: {markdown_path}")
@@ -186,7 +189,7 @@ def apply_title_changes(
         if not work.markdown_path:
             raise ValueError(f"Work {work_id} has no markdown_path")
 
-        markdown_path = Path(work.markdown_path)
+        markdown_path = resolver.resolve_work_path(work)
 
     if not markdown_path.exists():
         raise FileNotFoundError(f"Markdown file not found: {markdown_path}")
@@ -309,12 +312,16 @@ def apply_title_changes_from_work(
 
         # Get file info
         markdown_info = work.files[markdown_key]
-        markdown_path = Path(markdown_info["path"])
+        markdown_path = resolver.resolve_work_path(work, markdown_key)
         markdown_stored_hash = markdown_info["hash"]
 
         title_changes_info = work.files[title_changes_key]
-        title_changes_path = Path(title_changes_info["path"])
+        title_changes_path = resolver.resolve_work_path(work, title_changes_key)
         title_changes_stored_hash = title_changes_info["hash"]
+
+        # Debug logging
+        print(f"[DEBUG] apply_title_changes_from_work: work_id={work_id}, markdown_key={markdown_key}, markdown_path={markdown_path}, exists={markdown_path.exists()}")
+        print(f"[DEBUG] apply_title_changes_from_work: work_id={work_id}, title_changes_key={title_changes_key}, title_changes_path={title_changes_path}, exists={title_changes_path.exists()}")
 
         if verbose:
             print(f"Markdown file: {markdown_path}")

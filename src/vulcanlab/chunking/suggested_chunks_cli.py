@@ -34,6 +34,11 @@ from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
 from vulcanlab.chunking.suggested_chunks import suggest_chunks_from_work
 from vulcanlab.sanitization.extract_titles import HashMismatchError
+from vulcanlab.utils.file_utils import get_path_resolver
+
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def main() -> int:
@@ -102,7 +107,7 @@ then updates the database with the new vec_suggestions file metadata.
                 return 1
 
             # Check if output file already exists and prompt for overwrite
-            sanitized_path = Path(work.files["sanitized"]["path"])
+            sanitized_path = resolver.resolve_work_path(work, "sanitized")
             output_path = sanitized_path.parent / f"{sanitized_path.stem}.vec_sugg.md"
 
             if output_path.exists() and not args.force:

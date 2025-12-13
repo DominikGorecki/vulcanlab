@@ -30,8 +30,11 @@ from vulcanlab.data.database import SessionLocal, get_session
 from vulcanlab.data.models import Work
 from vulcanlab.data.template_loader import load_template
 from vulcanlab.utils import compute_file_hash
-from vulcanlab.utils.file_utils import set_file_writable, set_file_readonly
+from vulcanlab.utils.file_utils import set_file_writable, set_file_readonly, get_path_resolver
 from .extract_titles import HashMismatchError
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 # Directory for LLM logs
 LLM_LOGS_DIR = Path("logs")
@@ -499,11 +502,11 @@ def build_prompt_for_work(
         
         # Get file info
         markdown_info = work.files[source_key]
-        markdown_path = Path(markdown_info["path"])
+        markdown_path = resolver.resolve_work_path(work, source_key)
         markdown_stored_hash = markdown_info["hash"]
-        
+
         titles_info = work.files[titles_key]
-        titles_path = Path(titles_info["path"])
+        titles_path = resolver.resolve_work_path(work, titles_key)
         titles_stored_hash = titles_info["hash"]
         
         # Validate both files exist on disk
@@ -618,8 +621,8 @@ def save_title_changes_from_response(
             )
         
         markdown_info = work.files[source_key]
-        markdown_path = Path(markdown_info["path"])
-        
+        markdown_path = resolver.resolve_work_path(work, source_key)
+
         if not markdown_path.exists():
             raise FileNotFoundError(
                 f"Markdown file not found on disk: {markdown_path}"
@@ -750,11 +753,11 @@ def suggest_heading_changes_from_work(
 
         # Get file info
         markdown_info = work.files[source_key]
-        markdown_path = Path(markdown_info["path"])
+        markdown_path = resolver.resolve_work_path(work, source_key)
         markdown_stored_hash = markdown_info["hash"]
 
         titles_info = work.files[titles_key]
-        titles_path = Path(titles_info["path"])
+        titles_path = resolver.resolve_work_path(work, titles_key)
         titles_stored_hash = titles_info["hash"]
 
         if verbose:
