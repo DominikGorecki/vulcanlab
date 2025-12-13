@@ -33,8 +33,12 @@ from pathlib import Path
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
+from vulcanlab.utils.file_utils import get_path_resolver
 from .apply_title_changes import apply_title_changes_from_work
 from .extract_titles import HashMismatchError
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def main() -> int:
@@ -159,10 +163,10 @@ then updates the database with the new sanitized file metadata.
 
             # Determine output path
             if source_key == "original_markdown":
-                markdown_path = Path(work.files["original_markdown"]["path"])
+                markdown_path = resolver.resolve_work_path(work, "original_markdown")
                 output_path = markdown_path.parent / f"{markdown_path.stem}.sanitized.md"
             else:  # sanitized
-                output_path = Path(work.files["sanitized"]["path"])
+                output_path = resolver.resolve_work_path(work, "sanitized")
 
             if output_path.exists() and not args.force:
                 print(f"\nWarning: Sanitized file already exists: {output_path}", file=sys.stderr)

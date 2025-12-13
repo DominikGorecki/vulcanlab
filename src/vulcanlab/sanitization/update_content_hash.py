@@ -21,6 +21,10 @@ from pathlib import Path
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Work
 from vulcanlab.utils import compute_file_hash, set_file_readonly
+from vulcanlab.utils.file_utils import get_path_resolver
+
+# Initialize path resolver
+resolver = get_path_resolver()
 
 
 def _parse_headings_from_file(file_path: Path) -> dict[int, str]:
@@ -126,15 +130,20 @@ def verify_title_changes_integrity(work_id: int, source_key: str = "original_mar
         
         # Get file paths
         markdown_info = work.files[source_key]
-        markdown_path = Path(markdown_info["path"])
-        
+        markdown_path = resolver.resolve_work_path(work, source_key)
+
         titles_info = work.files[titles_key]
-        titles_path = Path(titles_info["path"])
+        titles_path = resolver.resolve_work_path(work, titles_key)
         titles_stored_hash = titles_info["hash"]
-        
+
         title_changes_info = work.files[title_changes_key]
-        title_changes_path = Path(title_changes_info["path"])
+        title_changes_path = resolver.resolve_work_path(work, title_changes_key)
         
+        # Debug logging
+        print(f"[DEBUG] verify_title_changes_integrity: work_id={work_id}, source_key={source_key}, markdown_path={markdown_path}, exists={markdown_path.exists()}")
+        print(f"[DEBUG] verify_title_changes_integrity: work_id={work_id}, titles_key={titles_key}, titles_path={titles_path}, exists={titles_path.exists()}")
+        print(f"[DEBUG] verify_title_changes_integrity: work_id={work_id}, title_changes_key={title_changes_key}, title_changes_path={title_changes_path}, exists={title_changes_path.exists()}")
+
         if verbose:
             print(f"Markdown: {markdown_path}")
             print(f"Titles: {titles_path}")
@@ -287,7 +296,7 @@ def update_content_hash(work_id: int, verbose: bool = False) -> bool:
         if not work.markdown_path:
             raise ValueError(f"Work {work_id} has no markdown_path")
 
-        markdown_path = Path(work.markdown_path)
+        markdown_path = resolver.resolve_work_path(work)
         if not markdown_path.exists():
             raise ValueError(f"Markdown file not found: {markdown_path}")
 

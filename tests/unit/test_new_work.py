@@ -338,8 +338,8 @@ class TestCreateNewWork:
             assert "sanitized" in result.files
             assert "vec_suggestions" in result.files
 
-            # Verify file paths are absolute
-            assert Path(result.files["original_file"]["path"]).is_absolute()
+            # Verify file paths are filenames only (not absolute paths)
+            assert result.files["original_file"]["path"] == "test.epub"
             assert "hash" in result.files["original_file"]
 
     @patch('vulcanlab.conversions.new_work.parse_toc_titles')
@@ -474,7 +474,7 @@ class TestCreateNewWork:
     def test_create_new_work_path_resolution(
         self, mock_get_session, mock_compute_hash
     ):
-        """Test that markdown path is resolved to absolute path."""
+        """Test that markdown path is stored as filename only."""
         # Setup session
         mock_session = MagicMock()
         mock_session.query.return_value.filter.return_value.first.return_value = None
@@ -498,8 +498,8 @@ class TestCreateNewWork:
                     markdown_path=relative_path
                 )
 
-            # Verify markdown_path is stored as absolute
-            assert Path(result.markdown_path).is_absolute()
+            # Verify markdown_path is stored as filename only (not absolute)
+            assert result.markdown_path == "test.md"
 
     @patch('vulcanlab.conversions.new_work.compute_file_hash')
     @patch('vulcanlab.conversions.new_work.get_session')
@@ -535,5 +535,178 @@ class TestCreateNewWork:
 
             # Should use PDF (first in priority list)
             assert "original_file" in result.files
-            assert result.files["original_file"]["path"] == str(pdf_path.absolute())
+            assert result.files["original_file"]["path"] == "test.pdf"
+
+    @patch('vulcanlab.conversions.new_work.compute_file_hash')
+    @patch('vulcanlab.conversions.new_work.get_session')
+    def test_create_new_work_stores_filename_only_markdown_path(
+        self, mock_get_session, mock_compute_hash
+    ):
+        """Test that markdown_path is stored as filename only, not full path."""
+        # Setup session
+        mock_session = MagicMock()
+        mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_session.add = MagicMock()
+        mock_session.commit = MagicMock()
+        mock_session.refresh = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Setup file hash
+        mock_compute_hash.return_value = "test_hash"
+
+        with TemporaryDirectory() as tmpdir:
+            md_path = Path(tmpdir) / "test.md"
+            md_path.write_text("# Test Book", encoding='utf-8')
+
+            result = create_new_work(
+                title="Test Book",
+                markdown_path=md_path
+            )
+
+            # Verify markdown_path contains filename only
+            assert result.markdown_path == "test.md"
+            assert not Path(result.markdown_path).is_absolute()
+
+    @patch('vulcanlab.conversions.new_work.compute_file_hash')
+    @patch('vulcanlab.conversions.new_work.get_session')
+    def test_create_new_work_stores_filename_only_in_files_metadata(
+        self, mock_get_session, mock_compute_hash
+    ):
+        """Test that files metadata stores filenames only, not full paths."""
+        # Setup session
+        mock_session = MagicMock()
+        mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_session.add = MagicMock()
+        mock_session.commit = MagicMock()
+        mock_session.refresh = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Setup file hash computation
+        hash_counter = 0
+        def hash_side_effect(path):
+            nonlocal hash_counter
+            hash_counter += 1
+            return f"hash_{hash_counter}"
+
+        mock_compute_hash.side_effect = hash_side_effect
+
+        with TemporaryDirectory() as tmpdir:
+            md_path = Path(tmpdir) / "test.md"
+            md_path.write_text("# Test Book", encoding='utf-8')
+
+            # Create related files
+            pdf_path = Path(tmpdir) / "test.pdf"
+            pdf_path.write_text("PDF content", encoding='utf-8')
+            sanitized_path = Path(tmpdir) / "test.sanitized.md"
+            sanitized_path.write_text("Sanitized content", encoding='utf-8')
+
+            result = create_new_work(
+                title="Test Book",
+                markdown_path=md_path
+            )
+
+            # Verify all file paths are filenames only
+            assert result.files is not None
+            assert "original_file" in result.files
+            assert result.files["original_file"]["path"] == "test.pdf"
+            assert not Path(result.files["original_file"]["path"]).is_absolute()
+
+            assert "sanitized" in result.files
+            assert result.files["sanitized"]["path"] == "test.sanitized.md"
+            assert not Path(result.files["sanitized"]["path"]).is_absolute()
+
+    @patch('vulcanlab.conversions.new_work.compute_file_hash')
+    @patch('vulcanlab.conversions.new_work.get_session')
+    def test_create_new_work_preserves_hashes(
+        self, mock_get_session, mock_compute_hash
+    ):
+        """Test that file hashes are still computed and stored correctly."""
+        # Setup session
+        mock_session = MagicMock()
+        mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_session.add = MagicMock()
+        mock_session.commit = MagicMock()
+        mock_session.refresh = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Setup file hash computation with unique hashes
+        hash_counter = 0
+        def hash_side_effect(path):
+            nonlocal hash_counter
+            hash_counter += 1
+            return f"hash_{hash_counter}"
+
+        mock_compute_hash.side_effect = hash_side_effect
+
+        with TemporaryDirectory() as tmpdir:
+            md_path = Path(tmpdir) / "test.md"
+            md_path.write_text("# Test Book", encoding='utf-8')
+
+            # Create related files
+            pdf_path = Path(tmpdir) / "test.pdf"
+            pdf_path.write_text("PDF content", encoding='utf-8')
+            sanitized_path = Path(tmpdir) / "test.sanitized.md"
+            sanitized_path.write_text("Sanitized content", encoding='utf-8')
+
+            result = create_new_work(
+                title="Test Book",
+                markdown_path=md_path
+            )
+
+            # Verify hashes are present and non-empty for all discovered files
+            assert result.content_hash is not None
+            assert result.content_hash.startswith("hash_")
+
+            assert "original_file" in result.files
+            assert result.files["original_file"]["hash"] is not None
+            assert result.files["original_file"]["hash"].startswith("hash_")
+
+            assert "sanitized" in result.files
+            assert result.files["sanitized"]["hash"] is not None
+            assert result.files["sanitized"]["hash"].startswith("hash_")
+
+            # Verify hash computation was called multiple times (once per file)
+            assert mock_compute_hash.call_count >= 3
+
+    @patch('vulcanlab.conversions.new_work.compute_file_hash')
+    @patch('vulcanlab.conversions.new_work.get_session')
+    def test_file_discovery_still_works_with_absolute_paths(
+        self, mock_get_session, mock_compute_hash
+    ):
+        """Test that file discovery works correctly when given absolute paths."""
+        # Setup session
+        mock_session = MagicMock()
+        mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_session.add = MagicMock()
+        mock_session.commit = MagicMock()
+        mock_session.refresh = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Setup file hash
+        mock_compute_hash.return_value = "test_hash"
+
+        with TemporaryDirectory() as tmpdir:
+            md_path = Path(tmpdir) / "test.md"
+            md_path.write_text("# Test Book", encoding='utf-8')
+
+            # Create files
+            pdf_path = Path(tmpdir) / "test.pdf"
+            pdf_path.write_text("PDF content", encoding='utf-8')
+            hier_path = Path(tmpdir) / "test.hier.md"
+            hier_path.write_text("Hier content", encoding='utf-8')
+
+            # Call with absolute path
+            result = create_new_work(
+                title="Test Book",
+                markdown_path=md_path.resolve()
+            )
+
+            # Verify files were discovered correctly
+            assert result.files is not None
+            assert "original_file" in result.files
+            assert "hier_markdown" in result.files
+
+            # Verify stored paths are filenames only
+            assert result.files["original_file"]["path"] == "test.pdf"
+            assert result.files["hier_markdown"]["path"] == "test.hier.md"
 
