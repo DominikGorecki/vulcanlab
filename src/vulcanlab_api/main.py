@@ -34,6 +34,7 @@ from vulcanlab_api.routers import (
     rag_config,
     sanitization,
     settings,
+    simple_conversion,
     templates,
     vectorization,
 )
@@ -130,6 +131,7 @@ app.include_router(vectorization.router, prefix="/vec", tags=["Vectorization"])
 app.include_router(corpus.router, prefix="/corpus", tags=["Corpus"])
 app.include_router(rag.router, prefix="/rag", tags=["RAG"])
 app.include_router(rag_config.router, prefix="/api/rag-config", tags=["RAG Config"])
+app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix
 
 
 @app.get("/", include_in_schema=False)
