@@ -1,6 +1,6 @@
 # T07: Simple Conversion API Endpoints
 
-**Status**: PENDING
+**Status**: COMPLETE
 **Priority**: High
 **Type**: Backend + API
 **Depends On**: T01-T06 (All backend modules)
@@ -12,16 +12,16 @@ Implement REST API endpoints to support the simple conversion pipeline frontend 
 
 ## Acceptance Criteria
 
-- [ ] POST `/api/simple-conversion/start` - Create Work and start conversion
-- [ ] GET `/api/simple-conversion/status/{work_id}` - Get current pipeline status
-- [ ] POST `/api/simple-conversion/execute-auto/{work_id}` - Run full automatic pipeline
-- [ ] GET `/api/simple-conversion/manual-prompt/{work_id}` - Get prompt for manual LLM step
-- [ ] POST `/api/simple-conversion/manual-submit/{work_id}` - Submit manual LLM result
-- [ ] GET `/api/simple-conversion/results/{work_id}` - Get final chunks/results
-- [ ] All endpoints return proper HTTP status codes
-- [ ] All endpoints include error handling
-- [ ] Pydantic models for request/response validation
-- [ ] All unit tests pass and use mocks (no database access)
+- [x] POST `/api/simple-conversion/start` - Create Work and start conversion
+- [x] GET `/api/simple-conversion/status/{work_id}` - Get current pipeline status
+- [x] POST `/api/simple-conversion/execute-auto/{work_id}` - Run full automatic pipeline
+- [x] GET `/api/simple-conversion/manual-prompt/{work_id}` - Get prompt for manual LLM step
+- [x] POST `/api/simple-conversion/manual-submit/{work_id}` - Submit manual LLM result
+- [x] GET `/api/simple-conversion/results/{work_id}` - Get final chunks/results
+- [x] All endpoints return proper HTTP status codes
+- [x] All endpoints include error handling
+- [x] Pydantic models for request/response validation
+- [x] All unit tests pass and use mocks (no database access)
 - [ ] Manual test plan with curl/Postman completed successfully
 
 ## Technical Implementation

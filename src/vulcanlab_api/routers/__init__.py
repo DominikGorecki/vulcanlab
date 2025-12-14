@@ -20,6 +20,7 @@ from vulcanlab_api.routers import (
     rag,
     sanitization,
     settings,
+    simple_conversion,
     vectorization,
 )
 
@@ -32,6 +33,7 @@ __all__ = [
     "vectorization",
     "corpus",
     "rag",
+    "simple_conversion",
 ]
 
 
