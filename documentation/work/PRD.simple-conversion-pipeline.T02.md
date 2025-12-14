@@ -241,7 +241,7 @@ app.include_router(conversion_settings_router)
 
 ### 4. Frontend: Settings Page UI
 
-**File**: `psychrag_ui/src/components/settings/ConversionSettings.tsx` (NEW)
+**File**: `vulcanlab_ui/src/components/settings/ConversionSettings.tsx` (NEW)
 
 ```typescript
 /**
@@ -375,7 +375,7 @@ export const ConversionSettings: React.FC = () => {
 };
 ```
 
-**File**: `psychrag_ui/src/components/settings/Settings.tsx` (MODIFIED)
+**File**: `vulcanlab_ui/src/components/settings/Settings.tsx` (MODIFIED)
 
 Add ConversionSettings component to existing settings page:
 
@@ -396,7 +396,7 @@ import { ConversionSettings } from './ConversionSettings';
 
 ### 5. Frontend: CSS Styling
 
-**File**: `psychrag_ui/src/components/settings/ConversionSettings.css` (NEW)
+**File**: `vulcanlab_ui/src/components/settings/ConversionSettings.css` (NEW)
 
 ```css
 .conversion-settings {
@@ -676,7 +676,7 @@ def test_update_conversion_settings_save_error(mock_set):
 
 ### Frontend Tests
 
-**File**: `psychrag_ui/src/components/settings/__tests__/ConversionSettings.test.tsx` (NEW)
+**File**: `vulcanlab_ui/src/components/settings/__tests__/ConversionSettings.test.tsx` (NEW)
 
 ```typescript
 import React from 'react';

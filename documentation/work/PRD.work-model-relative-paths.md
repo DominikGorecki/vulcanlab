@@ -15,7 +15,7 @@ Refactor the Work model's path storage from absolute paths to relative filenames
 
 **Current Situation:**
 - The Work model stores absolute paths in `markdown_path` and within the `files` JSON field (e.g., `files["sanitized"]["path"]`)
-- These absolute paths are hardcoded to specific environments (e.g., `D:\psychRAG_data\output\file.pdf` or `/home/user/vulcanData/output/file.pdf`)
+- These absolute paths are hardcoded to specific environments (e.g., `D:\vulcanlab_data\output\file.pdf` or `/home/user/vulcanData/output/file.pdf`)
 - The `source_path` field exists but is deprecated
 
 **Pain Points:**
@@ -103,7 +103,7 @@ All locations that currently use `Path(work.markdown_path)` or `Path(work.files[
 - FR4.2: If SQL regex is too complex, use Python script `015_convert_paths_to_filenames.py`
 - FR4.3: Python script must:
   - Use SQLAlchemy session management following existing patterns
-  - Extract filename from absolute paths (e.g., `"D:\psychRAG_data\output\file.pdf"` → `"file.pdf"`)
+  - Extract filename from absolute paths (e.g., `"D:\vulcanlab_data\output\file.pdf"` → `"file.pdf"`)
   - Handle both Windows (`\`) and Linux (`/`) path separators
   - Update `markdown_path` field
   - Update all `path` keys within `files` JSON field for all file types

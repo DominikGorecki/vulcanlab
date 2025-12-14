@@ -31,7 +31,7 @@ Implement the manual mode workflow page that displays an LLM prompt for the user
 
 ### 1. Main Component
 
-**File**: `psychrag_ui/src/components/simple-conversion/ManualWorkflow.tsx` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/ManualWorkflow.tsx` (NEW)
 
 ```typescript
 /**
@@ -405,7 +405,7 @@ export const ManualWorkflow: React.FC = () => {
 
 ### 2. CSS Styling
 
-**File**: `psychrag_ui/src/components/simple-conversion/ManualWorkflow.css` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/ManualWorkflow.css` (NEW)
 
 ```css
 .manual-workflow {
@@ -764,7 +764,7 @@ export const ManualWorkflow: React.FC = () => {
 
 ### 3. Routing Setup
 
-**File**: `psychrag_ui/src/App.tsx` (MODIFIED)
+**File**: `vulcanlab_ui/src/App.tsx` (MODIFIED)
 
 Add route for manual workflow:
 
@@ -777,7 +777,7 @@ import { ManualWorkflow } from './components/simple-conversion/ManualWorkflow';
 
 ## Unit Tests
 
-**File**: `psychrag_ui/src/components/simple-conversion/__tests__/ManualWorkflow.test.tsx` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/__tests__/ManualWorkflow.test.tsx` (NEW)
 
 ```typescript
 import React from 'react';

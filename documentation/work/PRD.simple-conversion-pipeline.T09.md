@@ -28,7 +28,7 @@ Implement the main Simple Conversion page with a form to collect file path and m
 
 ### 1. Main Component
 
-**File**: `psychrag_ui/src/components/simple-conversion/SimpleConversionPage.tsx` (REPLACE placeholder from T08)
+**File**: `vulcanlab_ui/src/components/simple-conversion/SimpleConversionPage.tsx` (REPLACE placeholder from T08)
 
 ```typescript
 /**
@@ -308,7 +308,7 @@ export const SimpleConversionPage: React.FC = () => {
 
 ### 2. CSS Styling
 
-**File**: `psychrag_ui/src/components/simple-conversion/SimpleConversionPage.css` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/SimpleConversionPage.css` (NEW)
 
 ```css
 .simple-conversion-page {
@@ -491,7 +491,7 @@ export const SimpleConversionPage: React.FC = () => {
 
 ## Unit Tests
 
-**File**: `psychrag_ui/src/components/simple-conversion/__tests__/SimpleConversionPage.test.tsx` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/__tests__/SimpleConversionPage.test.tsx` (NEW)
 
 ```typescript
 import React from 'react';

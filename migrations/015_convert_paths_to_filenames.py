@@ -27,7 +27,7 @@ def extract_filename(path: str) -> str:
         Filename only (e.g., "file.pdf")
 
     Examples:
-        extract_filename("D:\\psychRAG_data\\output\\file.pdf") -> "file.pdf"
+        extract_filename("D:\\vulcanlab_data\\output\\file.pdf") -> "file.pdf"
         extract_filename("/home/user/vulcanData/output/file.pdf") -> "file.pdf"
         extract_filename("file.pdf") -> "file.pdf"  # Already a filename
     """
