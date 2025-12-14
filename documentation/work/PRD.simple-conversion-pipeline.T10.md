@@ -30,7 +30,7 @@ Implement the automatic mode workflow page that executes the full conversion pip
 
 ### 1. Main Component
 
-**File**: `psychrag_ui/src/components/simple-conversion/AutomaticWorkflow.tsx` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/AutomaticWorkflow.tsx` (NEW)
 
 ```typescript
 /**
@@ -323,7 +323,7 @@ export const AutomaticWorkflow: React.FC = () => {
 
 ### 2. CSS Styling
 
-**File**: `psychrag_ui/src/components/simple-conversion/AutomaticWorkflow.css` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/AutomaticWorkflow.css` (NEW)
 
 ```css
 .automatic-workflow {
@@ -612,7 +612,7 @@ export const AutomaticWorkflow: React.FC = () => {
 
 ### 3. Routing Setup
 
-**File**: `psychrag_ui/src/App.tsx` (MODIFIED)
+**File**: `vulcanlab_ui/src/App.tsx` (MODIFIED)
 
 Add route for automatic workflow:
 
@@ -625,7 +625,7 @@ import { AutomaticWorkflow } from './components/simple-conversion/AutomaticWorkf
 
 ## Unit Tests
 
-**File**: `psychrag_ui/src/components/simple-conversion/__tests__/AutomaticWorkflow.test.tsx` (NEW)
+**File**: `vulcanlab_ui/src/components/simple-conversion/__tests__/AutomaticWorkflow.test.tsx` (NEW)
 
 ```typescript
 import React from 'react';

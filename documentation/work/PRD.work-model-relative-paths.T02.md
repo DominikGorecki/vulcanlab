@@ -10,7 +10,7 @@ COMPLETE
 
 ## Outcome
 
-Migration script `015_convert_paths_to_filenames.py` is created and tested. When executed, it successfully converts all `markdown_path` fields and `files[*]["path"]` entries from absolute paths to filenames (e.g., `"D:\psychRAG_data\output\file.pdf"` → `"file.pdf"`). Migration is idempotent and handles both Windows and Linux path separators.
+Migration script `015_convert_paths_to_filenames.py` is created and tested. When executed, it successfully converts all `markdown_path` fields and `files[*]["path"]` entries from absolute paths to filenames (e.g., `"D:\vulcanlab_data\output\file.pdf"` → `"file.pdf"`). Migration is idempotent and handles both Windows and Linux path separators.
 
 ## Scope
 
@@ -59,7 +59,7 @@ def extract_filename(path: str) -> str:
         Filename only (e.g., "file.pdf")
 
     Examples:
-        extract_filename("D:\\psychRAG_data\\output\\file.pdf") -> "file.pdf"
+        extract_filename("D:\\vulcanlab_data\\output\\file.pdf") -> "file.pdf"
         extract_filename("/home/user/vulcanData/output/file.pdf") -> "file.pdf"
         extract_filename("file.pdf") -> "file.pdf"  # Already a filename
     """
@@ -242,7 +242,7 @@ Use pytest framework following existing repo patterns.
 ### Test cases for helper functions:
 
 1. **test_extract_filename_windows_path**
-   - Input: `"D:\\psychRAG_data\\output\\file.pdf"`
+   - Input: `"D:\\vulcanlab_data\\output\\file.pdf"`
    - Assert returns `"file.pdf"`
 
 2. **test_extract_filename_linux_path**

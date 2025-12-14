@@ -25,7 +25,7 @@ Add a "Simple Conversion" button to the existing Conversion page next to the "St
 
 ### 1. Update Conversion Page Component
 
-**File**: `psychrag_ui/src/components/conversion/ConversionPage.tsx` (MODIFIED)
+**File**: `vulcanlab_ui/src/components/conversion/ConversionPage.tsx` (MODIFIED)
 
 Locate the existing "Start Conversion" button and add the new button next to it:
 
@@ -102,7 +102,7 @@ export const ConversionPage: React.FC = () => {
 
 ### 2. Update CSS Styling
 
-**File**: `psychrag_ui/src/components/conversion/ConversionPage.css` (MODIFIED)
+**File**: `vulcanlab_ui/src/components/conversion/ConversionPage.css` (MODIFIED)
 
 Add or update styles to support the two-column conversion options layout:
 
@@ -189,7 +189,7 @@ Add or update styles to support the two-column conversion options layout:
 
 ### 3. Update Routing Configuration
 
-**File**: `psychrag_ui/src/App.tsx` (MODIFIED - if routing needs update)
+**File**: `vulcanlab_ui/src/App.tsx` (MODIFIED - if routing needs update)
 
 Ensure the route exists for `/simple-conversion`:
 
@@ -204,7 +204,7 @@ import { SimpleConversionPage } from './components/simple-conversion/SimpleConve
 
 ### 4. Placeholder Component (Temporary)
 
-**File**: `psychrag_ui/src/components/simple-conversion/SimpleConversionPage.tsx` (NEW - TEMPORARY)
+**File**: `vulcanlab_ui/src/components/simple-conversion/SimpleConversionPage.tsx` (NEW - TEMPORARY)
 
 Create a minimal placeholder for T08 testing:
 
