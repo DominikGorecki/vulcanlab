@@ -26,5 +26,8 @@
   "logging": {
     "enabled": true,
     "log_dir": "logs"
+  },
+  "conversion": {
+    "token_threshold": 15000
   }
 }
