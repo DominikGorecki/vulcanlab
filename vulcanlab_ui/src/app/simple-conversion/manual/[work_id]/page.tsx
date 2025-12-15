@@ -272,12 +272,16 @@ export default function ManualWorkflowPage() {
                 <CardHeader>
                   <CardTitle>Manual LLM Response</CardTitle>
                   <CardDescription>
-                    Paste the JSON response from your LLM below.
+                    {promptData?.classification === 'small'
+                      ? 'Paste the sanitized markdown response from your LLM below (NOT JSON - just the markdown text).'
+                      : 'Paste the JSON response from your LLM below.'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Textarea
-                    placeholder="Paste LLM response here (JSON format)..."
+                    placeholder={promptData?.classification === 'small'
+                      ? "Paste sanitized markdown here..."
+                      : "Paste LLM response here (JSON format)..."}
                     className="min-h-[200px] font-mono text-sm"
                     value={manualResponse}
                     onChange={(e) => setManualResponse(e.target.value)}
