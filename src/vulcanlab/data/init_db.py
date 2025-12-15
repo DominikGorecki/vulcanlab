@@ -29,6 +29,9 @@ from .models import Chunk, Query, Result, Work, RagConfig  # noqa: F401
 from .models.io_file import IOFile  # noqa: F401
 from .models.prompt_template import PromptTemplate  # noqa: F401
 from .models.prompt_meta import PromptMeta  # noqa: F401
+from .models.parsed_markdown import ParsedMarkdown  # noqa: F401
+from .models.sanitized_markdown import SanitizedMarkdown  # noqa: F401
+from .models.heading_modifications import HeadingModification  # noqa: F401
 
 # Import seeding functions
 from .seed_templates import seed_prompt_templates
@@ -354,6 +357,168 @@ def create_prompt_meta_table(verbose: bool = False) -> None:
         print("prompt_meta table created successfully")
 
 
+def seed_simple_conversion_templates(verbose: bool = False) -> None:
+    """
+    Seed prompt templates for simple conversion.
+
+    Creates two templates:
+    - simple_sanitize_small: Full document sanitization
+    - simple_sanitize_large: Condensed document analysis
+    """
+    if verbose:
+        print("Seeding simple conversion prompt templates...")
+
+    with engine.connect() as conn:
+        # Check if templates already exist
+        result = conn.execute(text("""
+            SELECT COUNT(*) FROM prompt_templates
+            WHERE function_tag IN ('simple_sanitize_small', 'simple_sanitize_large')
+        """))
+        count = result.scalar()
+
+        if count > 0:
+            if verbose:
+                print("Simple conversion templates already exist, skipping")
+            return
+
+        # Insert simple_sanitize_small template
+        conn.execute(text("""
+            INSERT INTO prompt_templates (function_tag, version, title, template_content, is_active, created_at, updated_at)
+            VALUES (
+                'simple_sanitize_small',
+                1,
+                'Simple Conversion - Small Document Sanitization',
+                'You are an expert document processor preparing academic and research documents for a Retrieval-Augmented Generation (RAG) system.
+
+Your task is to process the provided markdown document to ensure it has:
+1. **Proper document hierarchy**: Adjust title heading levels to create appropriate nesting based on context.
+2. **Clean, RAG-relevant content**: Remove all non-topical content and fix conversion artifacts.
+
+## Instructions
+
+### Hierarchy Adjustments
+- Review all headings (lines starting with #, ##, ###, etc.)
+- If a heading is NOT actually a title (e.g., page numbers, "References", "Table of Contents"), REMOVE the heading markers (delete the #''s entirely)
+- For actual titles, adjust heading levels (H1-H6) to create proper nesting based on semantic relationships
+- Ensure logical hierarchy: child sections should be one level deeper than their parent
+
+### Content Sanitization
+- **Fix conversion artifacts**: Replace poorly converted symbols/glyphs with correct text using surrounding context
+- **Remove meta-information**: Delete download sources, file metadata, copyright notices
+- **Remove non-topical sections**: Delete References, Acknowledgments, Table of Contents, page numbers, headers/footers
+- **Remove gibberish**: Delete any garbled text that resulted from poor OCR or conversion
+- **Preserve RAG-relevant content**: Keep all substantive text related to the document''s main topics
+
+### Output Format
+- Return ONLY the sanitized markdown
+- Do NOT add explanations, comments, or metadata
+- Do NOT wrap output in code blocks or additional formatting
+- Maintain markdown syntax (headings with #, lists, emphasis, etc.)
+
+---
+
+## Document to Process
+
+{markdown}
+
+---
+
+## Sanitized Output',
+                TRUE,
+                NOW(),
+                NOW()
+            )
+        """))
+
+        # Insert simple_sanitize_large template
+        conn.execute(text("""
+            INSERT INTO prompt_templates (function_tag, version, title, template_content, is_active, created_at, updated_at)
+            VALUES (
+                'simple_sanitize_large',
+                1,
+                'Simple Conversion - Large Document Analysis',
+                'You are an expert document processor analyzing a large document''s structure for a RAG system.
+
+You will receive a CONDENSED representation showing each heading with contextual sentences. Your task is to provide heading-level modifications.
+
+## Instructions
+
+For each heading, determine:
+
+1. **Action**: Choose one:
+   - `KEEP`: Heading is valid, keep as-is
+   - `CHANGE`: Heading should be modified (level change, text cleanup)
+   - `REMOVE`: Not a real heading (e.g., page numbers, "References")
+
+2. **Modified Heading**: If action=CHANGE, provide the corrected heading with proper markdown level markers (#, ##, ###)
+   - Adjust heading level for proper hierarchy
+   - Clean up formatting issues (extra spaces, weird characters)
+   - If action=REMOVE or action=KEEP, leave this blank
+
+3. **Vectorize**: Choose one:
+   - `VECTORIZE`: This section contains RAG-relevant content and should be indexed
+   - `SKIP`: This section is not relevant (meta-information, acknowledgments, etc.)
+
+## Output Format
+
+Provide your modifications as a structured list, one per heading:
+
+```
+LINE: {line_number}
+ACTION: {KEEP|CHANGE|REMOVE}
+MODIFIED: {new heading if ACTION=CHANGE, otherwise blank}
+VECTORIZE: {VECTORIZE|SKIP}
+---
+```
+
+## Example
+
+Input:
+```
+5: ## Introduction
+  This paper presents a novel approach to machine learning. We focus on neural networks.
+  ...
+  The rest of the paper is organized as follows.
+
+12: ### Page 3
+  Lorem ipsum dolor sit amet.
+```
+
+Output:
+```
+LINE: 5
+ACTION: KEEP
+MODIFIED:
+VECTORIZE: VECTORIZE
+---
+LINE: 12
+ACTION: REMOVE
+MODIFIED:
+VECTORIZE: SKIP
+---
+```
+
+---
+
+## Condensed Document
+
+{condensed_document}
+
+---
+
+## Your Modifications',
+                TRUE,
+                NOW(),
+                NOW()
+            )
+        """))
+
+        conn.commit()
+
+        if verbose:
+            print("Simple conversion templates seeded successfully")
+
+
 def create_default_rag_config(verbose: bool = False) -> None:
     """
     Create rag_config table and default preset if none exists.
@@ -524,6 +689,7 @@ def init_database(verbose: bool = False) -> None:
     create_fulltext_search(verbose=verbose)
     create_prompt_meta_table(verbose=verbose)
     seed_prompt_templates(verbose=verbose)
+    seed_simple_conversion_templates(verbose=verbose)
     create_default_rag_config(verbose=verbose)
 
     if verbose:

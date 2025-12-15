@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircleIcon, Loader2Icon, AlertCircle, XCircle, CheckCircle2 } from "lucide-react";
 import { TemplatesTabContent } from "@/components/settings/templates-tab";
 import { RagConfigTab } from "@/components/settings/rag-config-tab";
+import { ConversionTab } from "@/components/settings/conversion-tab";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -66,7 +67,7 @@ function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const defaultTab = tabParam && ["init", "models", "database", "paths", "templates", "rag"].includes(tabParam)
+  const defaultTab = tabParam && ["init", "models", "database", "paths", "conversion", "templates", "rag"].includes(tabParam)
     ? tabParam
     : "init";
 
@@ -341,6 +342,7 @@ function SettingsContent() {
           <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="database">Database</TabsTrigger>
           <TabsTrigger value="paths">Paths</TabsTrigger>
+          <TabsTrigger value="conversion">Conversion</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="rag">RAG Settings</TabsTrigger>
         </TabsList>
@@ -876,6 +878,11 @@ function SettingsContent() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Conversion Tab */}
+        <TabsContent value="conversion" className="mt-4">
+          <ConversionTab />
         </TabsContent>
 
         {/* Templates Tab */}

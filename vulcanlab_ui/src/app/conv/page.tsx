@@ -175,11 +175,65 @@ export default function ConversionPage() {
     );
   }
 
+  const handleSimpleConversion = () => {
+    router.push('/simple-conversion');
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Conversion</h2>
         <p className="text-muted-foreground">Convert documents to markdown format.</p>
+      </div>
+
+      {/* Conversion Workflow Options */}
+      <div className="grid gap-6 md:grid-cols-2 mb-6">
+        {/* Standard Conversion Option */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader>
+            <CardTitle>Standard Conversion</CardTitle>
+            <CardDescription>
+              Multi-step conversion process with full control over each stage: conversion, sanitization, and chunking.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Use this workflow for detailed control and inspection at each step of the conversion process.
+            </p>
+            <Button
+              onClick={() => {/* Existing workflow - stays on this page */}}
+              className="w-full"
+              disabled={converting}
+            >
+              Use Standard Conversion
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Simple Conversion Option */}
+        <Card className="hover:shadow-md transition-shadow border-green-500/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Simple Conversion
+              <span className="text-xs bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full font-normal">New</span>
+            </CardTitle>
+            <CardDescription>
+              Streamlined single-page workflow that automatically handles conversion, sanitization, and chunking.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Quick and easy workflow with automatic processing and minimal configuration required.
+            </p>
+            <Button
+              onClick={handleSimpleConversion}
+              className="w-full bg-green-600 hover:bg-green-700"
+              disabled={converting}
+            >
+              Use Simple Conversion
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
