@@ -13,6 +13,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 DEFAULT_TOKEN_THRESHOLD = 15000
+DEFAULT_ADVANCED_MODE_ENABLED = False
 
 def get_config_path() -> Path:
     """Get path to vulcanlab.config.json."""
@@ -103,3 +104,49 @@ def set_token_threshold(threshold: int) -> None:
     config['conversion']['token_threshold'] = threshold
     save_config(config)
     logger.info(f"Token threshold updated to {threshold}")
+
+
+def get_advanced_mode_enabled() -> bool:
+    """
+    Get the advanced mode enabled setting.
+
+    Returns:
+        Boolean indicating if advanced mode is enabled (defaults to False)
+    """
+    config = load_config()
+
+    # Navigate nested structure: conversion.advanced_mode_enabled
+    conversion = config.get('conversion', {})
+    enabled = conversion.get('advanced_mode_enabled', DEFAULT_ADVANCED_MODE_ENABLED)
+
+    if not isinstance(enabled, bool):
+        logger.warning(
+            f"Invalid advanced_mode_enabled value: {enabled}, using default {DEFAULT_ADVANCED_MODE_ENABLED}"
+        )
+        return DEFAULT_ADVANCED_MODE_ENABLED
+
+    return enabled
+
+
+def set_advanced_mode_enabled(enabled: bool) -> None:
+    """
+    Set the advanced mode enabled setting.
+
+    Args:
+        enabled: Boolean indicating if advanced mode should be enabled
+
+    Raises:
+        ValueError: If enabled is not a boolean
+    """
+    if not isinstance(enabled, bool):
+        raise ValueError("advanced_mode_enabled must be a boolean")
+
+    config = load_config()
+
+    # Ensure conversion section exists
+    if 'conversion' not in config:
+        config['conversion'] = {}
+
+    config['conversion']['advanced_mode_enabled'] = enabled
+    save_config(config)
+    logger.info(f"Advanced mode enabled updated to {enabled}")

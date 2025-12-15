@@ -285,6 +285,44 @@ def create_fulltext_search(verbose: bool = False) -> None:
         print("Full-text search infrastructure created successfully")
 
 
+def create_history_indexes(verbose: bool = False) -> None:
+    """
+    Create indexes for efficient history query operations.
+
+    This creates two indexes on the works table:
+    1. General timestamp index for sorting all works by created_at
+    2. Partial index for filtering simple conversion works with timestamp sorting
+
+    The partial index only includes works with simple_conversion_mode in their
+    processing_status JSON, making it more efficient for simple conversion queries.
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Creating history query indexes...")
+
+    with engine.connect() as conn:
+        # Create general timestamp index for sorting all works
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_works_created_at
+            ON works (created_at DESC)
+        """))
+
+        # Create partial index for simple conversion works
+        # Only indexes works where processing_status contains 'simple_conversion_mode' key
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_works_simple_conversion_created_at
+            ON works (created_at DESC)
+            WHERE (processing_status ? 'simple_conversion_mode')
+        """))
+
+        conn.commit()
+
+    if verbose:
+        print("History query indexes created successfully")
+
+
 def create_prompt_meta_table(verbose: bool = False) -> None:
     """
     Create prompt_meta table for storing prompt template metadata.
@@ -687,6 +725,7 @@ def init_database(verbose: bool = False) -> None:
     create_tables(verbose=verbose)
     create_vector_indexes(verbose=verbose)
     create_fulltext_search(verbose=verbose)
+    create_history_indexes(verbose=verbose)
     create_prompt_meta_table(verbose=verbose)
     seed_prompt_templates(verbose=verbose)
     seed_simple_conversion_templates(verbose=verbose)
