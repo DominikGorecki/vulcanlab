@@ -18,7 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2Icon, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2Icon, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -56,6 +57,28 @@ interface ResultsData {
   chunks: ChunkResult[];
 }
 
+interface HistoryWorkAPI {
+  work_id: number;
+  title: string;
+  author: string;
+  classification: 'small' | 'large' | null;
+  mode: 'automatic' | 'manual';
+  status: 'complete' | 'failed';
+  created_at: string;
+  error_message?: string | null;
+}
+
+interface HistoryWork {
+  work_id: number;
+  title: string;
+  author: string;
+  classification: 'small' | 'large';
+  mode: 'automatic' | 'manual';
+  status: 'success' | 'error';
+  created_at: string;
+  error_message?: string | null;
+}
+
 export default function SimpleConversionPage() {
   const router = useRouter();
 
@@ -83,9 +106,19 @@ export default function SimpleConversionPage() {
   const [autoResults, setAutoResults] = useState<ResultsData | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
 
+  // History state
+  const [historyWorks, setHistoryWorks] = useState<HistoryWork[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
   // Fetch input files on mount
   useEffect(() => {
     fetchInputFiles();
+  }, []);
+
+  // Fetch history on mount
+  useEffect(() => {
+    fetchHistory();
   }, []);
 
   const fetchInputFiles = async () => {
@@ -105,6 +138,35 @@ export default function SimpleConversionPage() {
       setFilesFetchError(message);
     } finally {
       setLoadingFiles(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      setHistoryError(null);
+
+      const response = await fetch(`${API_BASE_URL}/api/simple-conversion/history`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch history: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      // Filter out works with null classification (not yet classified/completed)
+      // and map API response format to frontend format
+      const completedWorks = (data.items || [])
+        .filter((work: HistoryWorkAPI) => work.classification !== null)
+        .map((work: HistoryWorkAPI): HistoryWork => ({
+          ...work,
+          classification: work.classification as 'small' | 'large',
+          status: work.status === 'complete' ? 'success' : 'error'
+        }));
+      setHistoryWorks(completedWorks);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load conversion history';
+      setHistoryError(message);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -606,6 +668,124 @@ export default function SimpleConversionPage() {
           </Card>
         </div>
       )}
+
+      {/* History Section - Always visible below the form */}
+      <div className="space-y-4">
+        <div className="border-t pt-6">
+          <h3 className="text-2xl font-bold tracking-tight mb-2">Past Conversions</h3>
+          <p className="text-muted-foreground text-sm mb-4">
+            View your previous simple conversion works
+          </p>
+
+          {/* Loading State */}
+          {loadingHistory && (
+            <div className="flex items-center justify-center h-32" data-testid="history-loading">
+              <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {/* Error State */}
+          {historyError && !loadingHistory && (
+            <Alert variant="destructive" data-testid="history-error">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{historyError}</AlertDescription>
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchHistory}
+                  data-testid="history-retry-button"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              </div>
+            </Alert>
+          )}
+
+          {/* Empty State */}
+          {!loadingHistory && !historyError && historyWorks.length === 0 && (
+            <div className="text-center py-12 border rounded-lg bg-muted/10" data-testid="history-empty">
+              <p className="text-muted-foreground">No past conversions yet</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Start a new conversion above to see it appear here
+              </p>
+            </div>
+          )}
+
+          {/* History Table */}
+          {!loadingHistory && !historyError && historyWorks.length > 0 && (
+            <div className="border rounded-lg" data-testid="history-list">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Author</TableHead>
+                    <TableHead>Classification</TableHead>
+                    <TableHead>Mode</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historyWorks.map((work) => {
+                    const formatDate = (dateString: string): string => {
+                      const date = new Date(dateString);
+                      return date.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      });
+                    };
+
+                    return (
+                      <TableRow
+                        key={work.work_id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => router.push(`/simple-conversion/history/${work.work_id}`)}
+                        data-testid={`history-row-${work.work_id}`}
+                      >
+                        <TableCell className="font-medium">{work.title}</TableCell>
+                        <TableCell>{work.author}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={work.classification === 'small' ? 'default' : 'secondary'}
+                            className={work.classification === 'small' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700 text-white'}
+                            data-testid="classification-badge"
+                          >
+                            {work.classification === 'small' ? 'Small' : 'Large'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" data-testid="mode-badge">
+                            {work.mode === 'automatic' ? 'Automatic' : 'Manual'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {work.status === 'success' ? (
+                            <div className="flex items-center gap-2 text-green-600">
+                              <CheckCircle2 className="h-4 w-4" data-testid="status-success" />
+                              <span>Success</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-red-600">
+                              <AlertCircle className="h-4 w-4" data-testid="status-error" />
+                              <span>Error</span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground" data-testid="created-date">
+                          {formatDate(work.created_at)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
