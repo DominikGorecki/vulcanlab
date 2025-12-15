@@ -28,6 +28,7 @@
     "log_dir": "logs"
   },
   "conversion": {
-    "token_threshold": 15000
+    "token_threshold": 15000,
+    "advanced_mode_enabled": false
   }
 }
