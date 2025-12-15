@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2Icon, CheckCircleIcon, AlertCircle } from "lucide-react";
+import { useConversionSettings } from "@/contexts/conversion-settings";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -16,6 +17,7 @@ interface ConversionSettingsData {
 }
 
 export function ConversionTab() {
+  const { updateAdvancedMode } = useConversionSettings();
   const [threshold, setThreshold] = useState<number>(15000);
   const [advancedMode, setAdvancedMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -114,6 +116,8 @@ export function ConversionTab() {
       }
 
       setAdvancedMode(checked);
+      // Update context to immediately reflect in navigation
+      updateAdvancedMode(checked);
       setToggleSaveSuccess(true);
       setTimeout(() => setToggleSaveSuccess(false), 2000);
     } catch (err: any) {
