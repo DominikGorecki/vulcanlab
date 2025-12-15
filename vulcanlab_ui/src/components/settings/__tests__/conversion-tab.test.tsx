@@ -6,10 +6,20 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ConversionTab } from '../conversion-tab';
+import { ConversionSettingsProvider } from '@/contexts/conversion-settings';
 
 // Mock fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
+
+// Helper to render ConversionTab with required providers
+function renderWithProviders(component: React.ReactElement) {
+  return render(
+    <ConversionSettingsProvider>
+      {component}
+    </ConversionSettingsProvider>
+  );
+}
 
 describe('ConversionTab', () => {
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -33,7 +43,7 @@ describe('ConversionTab', () => {
 
   describe('Initial Rendering', () => {
     it('renders with toggle in OFF position by default (before API response)', () => {
-      render(<ConversionTab />);
+      renderWithProviders(<ConversionTab />);
 
       // Should show loading state initially
       expect(screen.getByRole('status')).toBeInTheDocument();
@@ -41,16 +51,17 @@ describe('ConversionTab', () => {
 
     it('fetches conversion settings on mount', async () => {
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
+        // The context provider also fetches, so we expect 2 calls (context + component)
         expect(mockFetch).toHaveBeenCalledWith(`${API_BASE_URL}/api/conversion/settings`);
       });
     });
 
     it('displays toggle in ON position when API returns advanced_mode_enabled: true', async () => {
-      mockFetch.mockResolvedValueOnce({
+      mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
           token_threshold: 15000,
@@ -59,7 +70,7 @@ describe('ConversionTab', () => {
       });
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -69,7 +80,7 @@ describe('ConversionTab', () => {
     });
 
     it('displays toggle in OFF position when API returns advanced_mode_enabled: false', async () => {
-      mockFetch.mockResolvedValueOnce({
+      mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
           token_threshold: 15000,
@@ -78,7 +89,7 @@ describe('ConversionTab', () => {
       });
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -91,7 +102,7 @@ describe('ConversionTab', () => {
       // Make fetch hang to test loading state
       mockFetch.mockImplementation(() => new Promise(() => {}));
 
-      render(<ConversionTab />);
+      renderWithProviders(<ConversionTab />);
 
       expect(screen.getByRole('status')).toBeInTheDocument();
     });
@@ -118,7 +129,7 @@ describe('ConversionTab', () => {
       });
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       // Wait for initial load
@@ -162,7 +173,7 @@ describe('ConversionTab', () => {
       mockFetch.mockImplementationOnce(() => new Promise(() => {}));
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -200,7 +211,7 @@ describe('ConversionTab', () => {
       });
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -239,7 +250,7 @@ describe('ConversionTab', () => {
       });
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -262,7 +273,7 @@ describe('ConversionTab', () => {
   describe('Toggle Description', () => {
     it('displays correct description text', async () => {
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -276,7 +287,7 @@ describe('ConversionTab', () => {
   describe('Toggle Label', () => {
     it('displays correct label text', async () => {
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -297,7 +308,7 @@ describe('ConversionTab', () => {
       });
 
       const { rerender } = await act(async () => {
-        return render(<ConversionTab />);
+        return renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -306,7 +317,11 @@ describe('ConversionTab', () => {
 
       // Re-render component
       await act(async () => {
-        rerender(<ConversionTab />);
+        rerender(
+          <ConversionSettingsProvider>
+            <ConversionTab />
+          </ConversionSettingsProvider>
+        );
       });
 
       // State should still be ON after re-render (fetched from backend)
@@ -321,7 +336,7 @@ describe('ConversionTab', () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -343,7 +358,7 @@ describe('ConversionTab', () => {
       mockFetch.mockRejectedValueOnce(new Error('Network timeout'));
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
@@ -359,6 +374,48 @@ describe('ConversionTab', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/network timeout/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Context Integration', () => {
+    it('calls context updateAdvancedMode when toggle changes', async () => {
+      // Initial load
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      await act(async () => {
+        renderWithProviders(<ConversionTab />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('switch', { name: /advanced conversion/i })).not.toBeChecked();
+      });
+
+      // Mock the next fetch for toggle change
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: true,
+        }),
+      });
+
+      const toggle = screen.getByRole('switch', { name: /advanced conversion/i });
+
+      // Click toggle
+      await act(async () => {
+        fireEvent.click(toggle);
+      });
+
+      // Verify toggle is now checked (context was updated)
+      await waitFor(() => {
+        expect(toggle).toBeChecked();
       });
     });
   });
@@ -384,7 +441,7 @@ describe('ConversionTab', () => {
       });
 
       await act(async () => {
-        render(<ConversionTab />);
+        renderWithProviders(<ConversionTab />);
       });
 
       await waitFor(() => {
