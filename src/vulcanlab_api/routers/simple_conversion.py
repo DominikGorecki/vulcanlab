@@ -30,8 +30,7 @@ from vulcanlab.simple_conversion.parse_classify import parse_and_classify, count
 from vulcanlab.simple_conversion.sanitize_small import (
     sanitize_small_document,
     get_hardcoded_template_small,
-    parse_llm_response,
-    create_heading_modifications
+    parse_llm_response
 )
 from vulcanlab.simple_conversion.sanitize_large import (
     sanitize_large_document,
@@ -42,12 +41,21 @@ from vulcanlab.simple_conversion.sanitize_large import (
     extract_headings_with_context,
     create_condensed_markdown
 )
-from vulcanlab.simple_conversion.chunk_simple import create_chunks_from_sanitized
+from vulcanlab.simple_conversion.chunk_simple import (
+    create_heading_chunks_simple,
+    create_content_chunks_simple,
+    create_chunks_from_sanitized  # Keep for backward compatibility
+)
 from vulcanlab.data.template_loader import load_template
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+from pathlib import Path
+from vulcanlab.config import load_config
+
+# ... existing imports ...
 
 @router.post("/api/simple-conversion/start", response_model=StartConversionResponse, tags=["Simple Conversion"])
 async def start_conversion(
@@ -68,13 +76,24 @@ async def start_conversion(
         Work ID and initial status
     """
     try:
-        # TODO: Integrate with existing conversion module to convert PDF/EPUB
-        # For now, create Work record with processing_status
+        # Resolve file path
+        config = load_config()
+        input_dir = Path(config.paths.input_dir)
+        full_path = input_dir / request.file_path
+
+        if not full_path.exists():
+            # Try as absolute path just in case
+            full_path = Path(request.file_path)
+            if not full_path.exists():
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"File not found: {request.file_path}"
+                )
 
         # Create Work record
         work = Work(
             title=request.title,
-            author=request.author,
+            authors=request.author,
             year=request.year
         )
 
@@ -85,7 +104,7 @@ async def start_conversion(
         work.processing_status = {
             'simple_conversion_step': 'converting',
             'simple_conversion_mode': request.mode,
-            'file_path': request.file_path
+            'file_path': str(full_path)
         }
 
         # TODO: Trigger actual PDF/EPUB conversion
@@ -183,15 +202,23 @@ async def execute_automatic(
         else:
             sanitized = sanitize_large_document(work_id, session)
 
-        # Step 3: Chunk
-        logger.info(f"Automatic: Create chunks for work {work_id}")
-        chunks = create_chunks_from_sanitized(work_id, session)
+        # Step 3a: Create heading chunks
+        logger.info(f"Automatic: Create heading chunks for work {work_id}")
+        heading_chunks = create_heading_chunks_simple(work_id, session)
+        logger.info(f"Created {len(heading_chunks)} heading chunks")
+
+        # Step 3b: Create content chunks
+        logger.info(f"Automatic: Create content chunks for work {work_id}")
+        content_chunks = create_content_chunks_simple(work_id, session)
+        logger.info(f"Created {len(content_chunks)} content chunks")
+
+        chunks = heading_chunks + content_chunks
 
         # Update final status
         work.processing_status['simple_conversion_step'] = 'complete'
         session.commit()
 
-        logger.info(f"Automatic pipeline complete for work {work_id}: {len(chunks)} chunks")
+        logger.info(f"Automatic pipeline complete for work {work_id}: {len(chunks)} total chunks ({len(heading_chunks)} heading, {len(content_chunks)} content)")
 
         return ExecuteAutoResponse(
             work_id=work_id,
@@ -264,7 +291,7 @@ async def get_manual_prompt(
             condensed = create_condensed_markdown(headings)
 
             template = load_template('simple_sanitize_large', get_hardcoded_template_large)
-            prompt = template.format(condensed_markdown=condensed)
+            prompt = template.format(condensed_document=condensed)
             instructions = (
                 "This is a LARGE document, so you're seeing a condensed version with headings and context. "
                 "Copy the prompt below and paste it into your LLM interface. "
@@ -320,9 +347,8 @@ async def submit_manual_result(
 
         # Process based on classification
         if classification == 'small':
-            # Parse LLM response and create sanitized record
-            parsed_response = parse_llm_response(request.llm_response)
-            sanitized_content = parsed_response['sanitized_markdown']
+            # Parse LLM response (now returns literal markdown)
+            sanitized_content = parse_llm_response(request.llm_response)
 
             # Count tokens in sanitized content
             token_count = count_tokens(sanitized_content)
@@ -336,13 +362,6 @@ async def submit_manual_result(
 
             session.add(sanitized)
             session.flush()
-
-            # Create heading modifications
-            create_heading_modifications(
-                parsed_response['modifications'],
-                work_id,
-                session
-            )
 
         else:  # large
             modifications = parse_llm_response_large(request.llm_response)
@@ -382,12 +401,21 @@ async def submit_manual_result(
 
         # Now proceed to chunking
         logger.info(f"Manual result processed, creating chunks for work {work_id}")
-        chunks = create_chunks_from_sanitized(work_id, session)
+
+        # Step 1: Create heading chunks
+        heading_chunks = create_heading_chunks_simple(work_id, session)
+        logger.info(f"Created {len(heading_chunks)} heading chunks")
+
+        # Step 2: Create content chunks
+        content_chunks = create_content_chunks_simple(work_id, session)
+        logger.info(f"Created {len(content_chunks)} content chunks")
+
+        chunks = heading_chunks + content_chunks
 
         work.processing_status['simple_conversion_step'] = 'complete'
         session.commit()
 
-        logger.info(f"Manual pipeline complete for work {work_id}: {len(chunks)} chunks")
+        logger.info(f"Manual pipeline complete for work {work_id}: {len(chunks)} total chunks ({len(heading_chunks)} heading, {len(content_chunks)} content)")
 
         return ManualSubmitResponse(
             work_id=work_id,
@@ -452,7 +480,7 @@ async def get_results(
         return ConversionResults(
             work_id=work_id,
             title=work.title,
-            author=work.author,
+            author=work.authors,
             classification=parsed.classification.value,
             token_count=parsed.token_count,
             chunk_count=len(chunks),

@@ -116,9 +116,8 @@ def test_create_condensed_markdown():
     condensed = create_condensed_markdown(headings)
 
     assert '# Condensed Document' in condensed
-    assert 'Heading 1' in condensed
-    assert 'Main Heading' in condensed
-    assert 'Sub Heading' in condensed
+    assert 'LINE 1: # Main Heading' in condensed
+    assert 'LINE 5: ## Sub Heading' in condensed
     assert 'intro text' in condensed
     assert 'first paragraph' in condensed
 
@@ -127,7 +126,7 @@ def test_get_hardcoded_template_large():
     """Test fallback template contains required placeholder."""
     template = get_hardcoded_template_large()
 
-    assert '{condensed_markdown}' in template
+    assert '{condensed_document}' in template
     assert 'LARGE document' in template
     assert 'modifications' in template
 
@@ -136,8 +135,8 @@ def test_apply_modifications_to_markdown_remove():
     """Test removing headings from markdown."""
     markdown = "# Keep This\n\nContent.\n\n# Remove This\n\nMore content."
     modifications = [
-        {'original': 'Keep This', 'action': 'keep'},
-        {'original': 'Remove This', 'action': 'remove'}
+        {'line': 1, 'action': 'keep'},
+        {'line': 5, 'action': 'remove'}
     ]
 
     result = apply_modifications_to_markdown(markdown, modifications)
@@ -152,13 +151,13 @@ def test_apply_modifications_to_markdown_change():
     """Test changing heading text."""
     markdown = "# Old Heading\n\nContent here."
     modifications = [
-        {'original': 'Old Heading', 'action': 'change', 'new': 'New Heading'}
+        {'line': 1, 'action': 'change', 'new': '## New Heading'}
     ]
 
     result = apply_modifications_to_markdown(markdown, modifications)
 
-    assert '# New Heading' in result
-    assert 'Old Heading' not in result
+    assert '## New Heading' in result
+    assert '# Old Heading' not in result
     assert 'Content here.' in result
 
 
@@ -166,7 +165,7 @@ def test_apply_modifications_to_markdown_keep():
     """Test keeping heading unchanged."""
     markdown = "# Good Heading\n\nContent."
     modifications = [
-        {'original': 'Good Heading', 'action': 'keep'}
+        {'line': 1, 'action': 'keep'}
     ]
 
     result = apply_modifications_to_markdown(markdown, modifications)
@@ -178,10 +177,10 @@ def test_apply_modifications_to_markdown_cleanup_blank_lines():
     """Test that multiple blank lines are cleaned up after removals."""
     markdown = "# Keep\n\n# Remove1\n\n# Remove2\n\n# Keep2"
     modifications = [
-        {'original': 'Keep', 'action': 'keep'},
-        {'original': 'Remove1', 'action': 'remove'},
-        {'original': 'Remove2', 'action': 'remove'},
-        {'original': 'Keep2', 'action': 'keep'}
+        {'line': 1, 'action': 'keep'},
+        {'line': 3, 'action': 'remove'},
+        {'line': 5, 'action': 'remove'},
+        {'line': 7, 'action': 'keep'}
     ]
 
     result = apply_modifications_to_markdown(markdown, modifications)
@@ -252,11 +251,11 @@ def test_sanitize_large_document_success(mock_count, mock_load_template, mock_ll
     mock_template_obj.format.return_value = "Formatted prompt"
     mock_load_template.return_value = mock_template_obj
 
-    # Mock LLM response
+    # Mock LLM response (new format with line numbers)
     llm_response_text = json.dumps({
         'modifications': [
-            {'original': 'Heading 1', 'action': 'keep', 'reason': 'Good'},
-            {'original': 'Heading 2', 'action': 'remove', 'reason': 'Duplicate'}
+            {'line': 1, 'action': 'keep', 'vectorize': True},
+            {'line': 5, 'action': 'remove', 'vectorize': False}
         ]
     })
     mock_llm_response = MagicMock()

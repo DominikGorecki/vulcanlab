@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap } from "lucide-react";
 
 const navItems = [
   { href: "/corpus", label: "Corpus", icon: Database },
   { href: "/conv", label: "Conversion", icon: FileText },
+  { href: "/simple-conversion", label: "Simple Conversion", icon: Zap },
   { href: "/sanitization", label: "Sanitization", icon: Eraser },
   { href: "/chunk", label: "Chunking", icon: Scissors },
   { href: "/vec", label: "Vectorization", icon: Braces },

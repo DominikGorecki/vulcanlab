@@ -28,6 +28,6 @@
     "log_dir": "logs"
   },
   "conversion": {
-    "token_threshold": 17000
+    "token_threshold": 25000
   }
 }

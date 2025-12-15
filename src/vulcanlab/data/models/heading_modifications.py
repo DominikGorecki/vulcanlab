@@ -17,7 +17,7 @@ class HeadingModification(Base):
     line_number = Column(Integer, nullable=False)
     original_heading = Column(Text, nullable=False)
     modified_heading = Column(Text, nullable=True)  # Null if action=REMOVE
-    action = Column(SQLEnum(ModificationAction), nullable=False)
+    action = Column(SQLEnum(ModificationAction, name='modification_action', values_callable=lambda x: [e.value for e in x]), nullable=False)
     vectorize_flag = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
