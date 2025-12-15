@@ -19,6 +19,7 @@ from sqlalchemy import func
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
 from vulcanlab.data.models.chunk import Chunk
+from vulcanlab.data.models.sanitized_markdown import SanitizedMarkdown
 from vulcanlab.utils.file_utils import get_path_resolver
 
 
@@ -287,6 +288,10 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
     """
     Get the sanitized markdown content for a work.
 
+    Handles both:
+    - Simple conversion: Content stored in SanitizedMarkdown table (database)
+    - Regular conversion: Content stored in files (work.files['sanitized'])
+
     Args:
         work_id: ID of the work
 
@@ -294,7 +299,7 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
         Sanitized markdown content and metadata
 
     Raises:
-        404: Work not found or sanitized file missing
+        404: Work not found or sanitized content missing
         500: Error reading file from disk
     """
     with get_session() as session:
@@ -306,32 +311,58 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
                 detail=f"Work with ID {work_id} not found"
             )
 
-        if not work.files or "sanitized" not in work.files:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Work {work_id} does not have a sanitized file"
-            )
-
-        sanitized_path = resolver.resolve_work_path(work, "sanitized")
-
-        if not sanitized_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Sanitized file not found on disk: {sanitized_path.name}"
-            )
-
-        # Read file content
-        try:
-            content = sanitized_path.read_text(encoding="utf-8")
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to read sanitized file: {str(e)}"
-            )
-
-        return SanitizedContentResponse(
-            content=content,
-            filename=sanitized_path.name,
-            work_id=work.id,
-            work_title=work.title
+        # Check if this is a simple conversion work
+        is_simple_conversion = (
+            work.processing_status and
+            work.processing_status.get('simple_conversion_step') == 'complete'
         )
+
+        if is_simple_conversion:
+            # Simple conversion: Get content from database
+            sanitized = session.query(SanitizedMarkdown).filter(
+                SanitizedMarkdown.work_id == work_id
+            ).first()
+
+            if not sanitized:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Work {work_id} does not have sanitized content in database"
+                )
+
+            return SanitizedContentResponse(
+                content=sanitized.content,
+                filename=f"work_{work_id}_sanitized.md",
+                work_id=work.id,
+                work_title=work.title
+            )
+        else:
+            # Regular conversion: Get content from file
+            if not work.files or "sanitized" not in work.files:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Work {work_id} does not have a sanitized file"
+                )
+
+            sanitized_path = resolver.resolve_work_path(work, "sanitized")
+
+            if not sanitized_path.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Sanitized file not found on disk: {sanitized_path.name}"
+                )
+
+            # Read file content
+            try:
+                content = sanitized_path.read_text(encoding="utf-8")
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to read sanitized file: {str(e)}"
+                )
+
+            return SanitizedContentResponse(
+                content=content,
+                filename=sanitized_path.name,
+                work_id=work.id,
+                work_title=work.title
+            )
