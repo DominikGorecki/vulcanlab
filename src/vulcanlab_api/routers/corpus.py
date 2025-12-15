@@ -19,6 +19,7 @@ from sqlalchemy import func
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
 from vulcanlab.data.models.chunk import Chunk
+from vulcanlab.data.models.sanitized_markdown import SanitizedMarkdown
 from vulcanlab.utils.file_utils import get_path_resolver
 
 
@@ -40,11 +41,17 @@ def _is_corpus_work(work: Work) -> bool:
     """
     Check if a work is part of the corpus.
 
-    A work is in the corpus if:
+    A work is in the corpus if it meets ONE of these criteria:
+
+    Regular conversion:
     1. It has processing_status
     2. processing_status["content_chunks"] == "completed"
     3. processing_status["heading_chunks"] == "completed"
     4. It has a sanitized file in work.files
+
+    Simple conversion:
+    1. It has processing_status
+    2. processing_status["simple_conversion_step"] == "complete"
 
     Args:
         work: Work object to check
@@ -55,6 +62,12 @@ def _is_corpus_work(work: Work) -> bool:
     if not work.processing_status:
         return False
 
+    # Check for simple conversion completion
+    simple_conversion_step = work.processing_status.get("simple_conversion_step")
+    if simple_conversion_step == "complete":
+        return True
+
+    # Check for regular conversion completion
     content_status = work.processing_status.get("content_chunks")
     heading_status = work.processing_status.get("heading_chunks")
 
@@ -168,9 +181,9 @@ async def list_corpus_works() -> CorpusWorksResponse:
     List all corpus works.
 
     Returns works where:
-    - processing_status["content_chunks"] == "completed"
-    - processing_status["heading_chunks"] == "completed"
-    - work.files["sanitized"] exists
+    - Regular conversion: processing_status["content_chunks"] == "completed" AND
+      processing_status["heading_chunks"] == "completed" AND work.files["sanitized"] exists
+    - Simple conversion: processing_status["simple_conversion_step"] == "complete"
 
     Works are sorted by ID descending (newest first).
     """
@@ -184,8 +197,7 @@ async def list_corpus_works() -> CorpusWorksResponse:
                 CorpusWorkListItem(
                     id=work.id,
                     title=work.title,
-                    authors=work.authors,
-                    sanitized_path=work.files["sanitized"]["path"]
+                    authors=work.authors
                 )
             )
 
@@ -276,6 +288,10 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
     """
     Get the sanitized markdown content for a work.
 
+    Handles both:
+    - Simple conversion: Content stored in SanitizedMarkdown table (database)
+    - Regular conversion: Content stored in files (work.files['sanitized'])
+
     Args:
         work_id: ID of the work
 
@@ -283,7 +299,7 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
         Sanitized markdown content and metadata
 
     Raises:
-        404: Work not found or sanitized file missing
+        404: Work not found or sanitized content missing
         500: Error reading file from disk
     """
     with get_session() as session:
@@ -295,32 +311,58 @@ async def get_sanitized_content(work_id: int) -> SanitizedContentResponse:
                 detail=f"Work with ID {work_id} not found"
             )
 
-        if not work.files or "sanitized" not in work.files:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Work {work_id} does not have a sanitized file"
-            )
-
-        sanitized_path = resolver.resolve_work_path(work, "sanitized")
-
-        if not sanitized_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Sanitized file not found on disk: {sanitized_path.name}"
-            )
-
-        # Read file content
-        try:
-            content = sanitized_path.read_text(encoding="utf-8")
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to read sanitized file: {str(e)}"
-            )
-
-        return SanitizedContentResponse(
-            content=content,
-            filename=sanitized_path.name,
-            work_id=work.id,
-            work_title=work.title
+        # Check if this is a simple conversion work
+        is_simple_conversion = (
+            work.processing_status and
+            work.processing_status.get('simple_conversion_step') == 'complete'
         )
+
+        if is_simple_conversion:
+            # Simple conversion: Get content from database
+            sanitized = session.query(SanitizedMarkdown).filter(
+                SanitizedMarkdown.work_id == work_id
+            ).first()
+
+            if not sanitized:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Work {work_id} does not have sanitized content in database"
+                )
+
+            return SanitizedContentResponse(
+                content=sanitized.content,
+                filename=f"work_{work_id}_sanitized.md",
+                work_id=work.id,
+                work_title=work.title
+            )
+        else:
+            # Regular conversion: Get content from file
+            if not work.files or "sanitized" not in work.files:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Work {work_id} does not have a sanitized file"
+                )
+
+            sanitized_path = resolver.resolve_work_path(work, "sanitized")
+
+            if not sanitized_path.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Sanitized file not found on disk: {sanitized_path.name}"
+                )
+
+            # Read file content
+            try:
+                content = sanitized_path.read_text(encoding="utf-8")
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to read sanitized file: {str(e)}"
+                )
+
+            return SanitizedContentResponse(
+                content=content,
+                filename=sanitized_path.name,
+                work_id=work.id,
+                work_title=work.title
+            )
