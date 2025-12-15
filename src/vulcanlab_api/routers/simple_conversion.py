@@ -283,7 +283,7 @@ async def get_manual_prompt(
             prompt = template.format(markdown=parsed.content)
             instructions = (
                 "Copy the prompt below and paste it into your LLM interface (ChatGPT, Claude, etc.). "
-                "Then copy the LLM's JSON response and submit it using the Manual Submit endpoint."
+                "The LLM will return sanitized markdown (NOT JSON). Copy the entire markdown response and paste it in the text area below."
             )
         else:  # large
             # Need to create condensed version
