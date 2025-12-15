@@ -118,6 +118,7 @@ async def start_conversion(
         return StartConversionResponse(
             work_id=work.id,
             status='converting',
+            mode=request.mode,
             message=f'Conversion started in {request.mode} mode'
         )
 
@@ -190,9 +191,16 @@ async def execute_automatic(
         if not work:
             raise HTTPException(status_code=404, detail=f"Work {work_id} not found")
 
-        # Step 1: Parse and classify
-        logger.info(f"Automatic: Parse & classify work {work_id}")
-        parsed = parse_and_classify(work_id, session)
+        # Step 1: Parse and classify (if needed)
+        parsed = session.query(ParsedMarkdown).filter(
+            ParsedMarkdown.work_id == work_id
+        ).first()
+
+        if not parsed:
+            logger.info(f"Automatic: Parse & classify work {work_id}")
+            parsed = parse_and_classify(work_id, session)
+        else:
+            logger.info(f"Automatic: Using existing ParsedMarkdown for work {work_id}")
 
         # Step 2: Sanitize (small or large based on classification)
         logger.info(f"Automatic: Sanitize {parsed.classification.value} document")
