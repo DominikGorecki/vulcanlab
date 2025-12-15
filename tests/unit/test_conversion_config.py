@@ -7,9 +7,12 @@ import json
 from vulcanlab.config.conversion_config import (
     get_token_threshold,
     set_token_threshold,
+    get_advanced_mode_enabled,
+    set_advanced_mode_enabled,
     load_config,
     save_config,
-    DEFAULT_TOKEN_THRESHOLD
+    DEFAULT_TOKEN_THRESHOLD,
+    DEFAULT_ADVANCED_MODE_ENABLED
 )
 
 
@@ -104,3 +107,114 @@ def test_set_token_threshold_invalid_type():
     """Test that non-integer threshold raises ValueError."""
     with pytest.raises(ValueError, match="positive integer"):
         set_token_threshold("15000")  # String instead of int
+
+
+# Tests for get_advanced_mode_enabled
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('builtins.open', new_callable=mock_open, read_data='{"conversion": {"advanced_mode_enabled": true}}')
+def test_get_advanced_mode_enabled_from_config(mock_file, mock_path):
+    """Test reading advanced_mode_enabled from config file."""
+    mock_path.return_value = MagicMock(exists=lambda: True)
+
+    enabled = get_advanced_mode_enabled()
+
+    assert enabled is True
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('builtins.open', new_callable=mock_open, read_data='{}')
+def test_get_advanced_mode_enabled_default(mock_file, mock_path):
+    """Test default advanced_mode_enabled when not in config."""
+    mock_path.return_value = MagicMock(exists=lambda: True)
+
+    enabled = get_advanced_mode_enabled()
+
+    assert enabled is False
+    assert enabled == DEFAULT_ADVANCED_MODE_ENABLED
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+def test_get_advanced_mode_enabled_missing_file(mock_path):
+    """Test default when config file doesn't exist."""
+    mock_path.return_value = MagicMock(exists=lambda: False)
+
+    enabled = get_advanced_mode_enabled()
+
+    assert enabled is False
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('builtins.open', new_callable=mock_open, read_data='{"conversion": {"advanced_mode_enabled": "yes"}}')
+def test_get_advanced_mode_enabled_invalid_value(mock_file, mock_path):
+    """Test default when config has invalid value (string instead of bool)."""
+    mock_path.return_value = MagicMock(exists=lambda: True)
+
+    enabled = get_advanced_mode_enabled()
+
+    assert enabled is False  # Falls back to default
+
+
+# Tests for set_advanced_mode_enabled
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('vulcanlab.config.conversion_config.load_config')
+@patch('vulcanlab.config.conversion_config.save_config')
+def test_set_advanced_mode_enabled_success(mock_save, mock_load, mock_path):
+    """Test setting advanced_mode_enabled successfully."""
+    mock_load.return_value = {}
+
+    set_advanced_mode_enabled(True)
+
+    mock_save.assert_called_once()
+    saved_config = mock_save.call_args[0][0]
+    assert saved_config['conversion']['advanced_mode_enabled'] is True
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('vulcanlab.config.conversion_config.load_config')
+@patch('vulcanlab.config.conversion_config.save_config')
+def test_set_advanced_mode_enabled_false(mock_save, mock_load, mock_path):
+    """Test setting advanced_mode_enabled to False."""
+    mock_load.return_value = {}
+
+    set_advanced_mode_enabled(False)
+
+    saved_config = mock_save.call_args[0][0]
+    assert saved_config['conversion']['advanced_mode_enabled'] is False
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('vulcanlab.config.conversion_config.load_config')
+@patch('vulcanlab.config.conversion_config.save_config')
+def test_set_advanced_mode_enabled_preserves_existing_config(mock_save, mock_load, mock_path):
+    """Test that setting advanced_mode_enabled preserves other config sections."""
+    mock_load.return_value = {
+        'database': {'host': 'localhost'},
+        'conversion': {'token_threshold': 20000}
+    }
+
+    set_advanced_mode_enabled(True)
+
+    saved_config = mock_save.call_args[0][0]
+    assert saved_config['database']['host'] == 'localhost'
+    assert saved_config['conversion']['token_threshold'] == 20000
+    assert saved_config['conversion']['advanced_mode_enabled'] is True
+
+
+def test_set_advanced_mode_enabled_invalid_type_string():
+    """Test that non-boolean value raises ValueError."""
+    with pytest.raises(ValueError, match="must be a boolean"):
+        set_advanced_mode_enabled("true")
+
+
+def test_set_advanced_mode_enabled_invalid_type_int():
+    """Test that integer instead of boolean raises ValueError."""
+    with pytest.raises(ValueError, match="must be a boolean"):
+        set_advanced_mode_enabled(1)
+
+
+def test_set_advanced_mode_enabled_invalid_type_none():
+    """Test that None instead of boolean raises ValueError."""
+    with pytest.raises(ValueError, match="must be a boolean"):
+        set_advanced_mode_enabled(None)
