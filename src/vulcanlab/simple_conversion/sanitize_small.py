@@ -32,116 +32,46 @@ def get_hardcoded_template_small() -> str:
     Returns:
         Template string with {markdown} placeholder
     """
-    return '''You are an expert document sanitizer. Your task is to clean up markdown content by:
-1. Removing duplicate or redundant headings
-2. Fixing heading hierarchy issues
-3. Removing unnecessary metadata sections
-4. Keeping all substantive content intact
+    return '''You are an expert document sanitizer preparing content for a RAG system.
 
 Input markdown:
 {markdown}
 
-Respond in the following JSON format:
-{{
-  "sanitized_markdown": "... full sanitized markdown here ...",
-  "modifications": [
-    {{"original": "Heading Text", "action": "remove", "reason": "Duplicate heading"}},
-    {{"original": "Another Heading", "action": "change", "new": "Better Heading", "reason": "Improved clarity"}},
-    {{"original": "Good Heading", "action": "keep", "reason": "Already appropriate"}}
-  ]
-}}
+Your task: Return a cleaned version of this markdown with:
+1. Correct heading hierarchy (no skipped levels, proper nesting)
+2. Non-content headings removed (page numbers, ToC, references, copyright, etc.)
+3. OCR errors and formatting issues fixed
+4. All substantive content preserved
 
-Important:
-- Return ONLY valid JSON, no additional commentary
-- Include ALL headings in the modifications list
-- Use action: "remove", "change", or "keep" for each heading
-- Preserve all non-heading content exactly as-is'''
+Return ONLY the sanitized markdown. No JSON, no explanations, no code fences. Just the literal markdown text.'''
 
 
-def parse_llm_response(response_text: str) -> Dict[str, Any]:
+def parse_llm_response(response_text: str) -> str:
     """
-    Parse LLM JSON response into structured data.
+    Extract sanitized markdown from LLM response.
+
+    The LLM should return literal markdown, but may wrap it in code fences or add preamble.
+    This function extracts the markdown content.
 
     Args:
-        response_text: Raw LLM response (should be JSON)
+        response_text: Raw LLM response (should be literal markdown)
 
     Returns:
-        Dictionary with 'sanitized_markdown' and 'modifications' keys
-
-    Raises:
-        ValueError: If response is not valid JSON or missing required fields
+        Sanitized markdown string
     """
-    try:
-        # Try to extract JSON from response (handle cases where LLM adds extra text)
-        # Look for first { and last }
-        start = response_text.find('{')
-        end = response_text.rfind('}')
+    # Strip common wrapper patterns
+    content = response_text.strip()
 
-        if start == -1 or end == -1:
-            raise ValueError("No JSON found in response")
+    # Remove markdown code fences if present
+    if content.startswith('```markdown'):
+        content = content[len('```markdown'):].strip()
+    elif content.startswith('```'):
+        content = content[3:].strip()
 
-        json_str = response_text[start:end+1]
-        data = json.loads(json_str)
+    if content.endswith('```'):
+        content = content[:-3].strip()
 
-        # Validate required fields
-        if 'sanitized_markdown' not in data:
-            raise ValueError("Response missing 'sanitized_markdown' field")
-        if 'modifications' not in data:
-            raise ValueError("Response missing 'modifications' field")
-
-        return data
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse LLM response as JSON: {e}")
-        raise ValueError(f"Invalid JSON response: {e}")
-
-
-def create_heading_modifications(
-    modifications_list: List[Dict[str, str]],
-    work_id: int,
-    session: Session
-) -> List[HeadingModification]:
-    """
-    Create HeadingModification records from LLM response.
-
-    Args:
-        modifications_list: List of modification dicts from LLM
-        work_id: ID of the Work being processed
-        session: Database session
-
-    Returns:
-        List of created HeadingModification records
-    """
-    records = []
-
-    for idx, mod in enumerate(modifications_list):
-        # Parse action
-        action_str = mod.get('action', '').lower()
-        if action_str == 'remove':
-            action = ModificationAction.REMOVE
-        elif action_str == 'change':
-            action = ModificationAction.CHANGE
-        elif action_str == 'keep':
-            action = ModificationAction.KEEP
-        else:
-            logger.warning(f"Unknown action '{action_str}', defaulting to KEEP")
-            action = ModificationAction.KEEP
-
-        # Create record (adapt to existing schema)
-        heading_mod = HeadingModification(
-            work_id=work_id,
-            line_number=idx + 1,  # Use sequential line number
-            original_heading=mod.get('original', ''),
-            modified_heading=mod.get('new'),  # Maps to existing 'modified_heading' field
-            action=action,
-            vectorize_flag=False,  # Default for small documents
-            created_at=datetime.now(UTC)
-        )
-
-        session.add(heading_mod)
-        records.append(heading_mod)
-
-    return records
+    return content
 
 
 def sanitize_small_document(work_id: int, session: Session) -> SanitizedMarkdown:
@@ -203,10 +133,8 @@ def sanitize_small_document(work_id: int, session: Session) -> SanitizedMarkdown
     # Extract content from LangChain response
     response_text = response.content if hasattr(response, 'content') else str(response)
 
-    # Parse response
-    parsed_response = parse_llm_response(response_text)
-    sanitized_content = parsed_response['sanitized_markdown']
-    modifications = parsed_response['modifications']
+    # Parse response (now returns literal markdown)
+    sanitized_content = parse_llm_response(response_text)
 
     # Count tokens in sanitized content
     sanitized_token_count = count_tokens(sanitized_content)
@@ -222,23 +150,11 @@ def sanitize_small_document(work_id: int, session: Session) -> SanitizedMarkdown
     session.add(sanitized)
     session.flush()  # Get sanitized.id for later use
 
-    # Create HeadingModification records
-    heading_records = create_heading_modifications(
-        modifications,
-        work_id,
-        session
-    )
-
-    logger.info(
-        f"Created {len(heading_records)} heading modifications for work {work_id}"
-    )
-
     # Update Work.processing_status
     if not work.processing_status:
         work.processing_status = {}
 
     work.processing_status['simple_conversion_step'] = 'sanitized'
-    work.processing_status['sanitized_heading_count'] = len(heading_records)
 
     session.commit()
     session.refresh(sanitized)

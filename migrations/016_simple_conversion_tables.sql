@@ -74,32 +74,150 @@ SELECT
     'simple_sanitize_small',
     1,
     'Simple Conversion - Small Document Sanitization',
-    'You are an expert document processor preparing academic and research documents for a Retrieval-Augmented Generation (RAG) system.
+    'You are an expert document sanitizer preparing academic and research Markdown for a Retrieval-Augmented Generation (RAG) system.
 
-Your task is to process the provided markdown document to ensure it has:
-1. **Proper document hierarchy**: Adjust title heading levels to create appropriate nesting based on context.
-2. **Clean, RAG-relevant content**: Remove all non-topical content and fix conversion artifacts.
+Transform the input Markdown into clean, retrieval-ready Markdown whose heading hierarchy is semantically correct. Your highest priority is fixing heading levels and removing false headings.
 
-## Instructions
+Output ONLY the sanitized Markdown. No explanations. No code fences. No extra text.
 
-### Hierarchy Adjustments
-- Review all headings (lines starting with #, ##, ###, etc.)
-- If a heading is NOT actually a title (e.g., page numbers, "References", "Table of Contents"), REMOVE the heading markers (delete the #''s entirely)
-- For actual titles, adjust heading levels (H1-H6) to create proper nesting based on semantic relationships
-- Ensure logical hierarchy: child sections should be one level deeper than their parent
+---
 
-### Content Sanitization
-- **Fix conversion artifacts**: Replace poorly converted symbols/glyphs with correct text using surrounding context
-- **Remove meta-information**: Delete download sources, file metadata, copyright notices
-- **Remove non-topical sections**: Delete References, Acknowledgments, Table of Contents, page numbers, headers/footers
-- **Remove gibberish**: Delete any garbled text that resulted from poor OCR or conversion
-- **Preserve RAG-relevant content**: Keep all substantive text related to the document''s main topics
+# 0) Success Criteria
 
-### Output Format
-- Return ONLY the sanitized markdown
-- Do NOT add explanations, comments, or metadata
-- Do NOT wrap output in code blocks or additional formatting
-- Maintain markdown syntax (headings with #, lists, emphasis, etc.)
+You must satisfy all of the following:
+
+* Exactly one H1 for the document title, and only one.
+* No skipped heading levels anywhere. Never jump from ## to #### without ### in between.
+* Sibling consistency. Headings that are conceptually siblings must share the same heading level.
+* No orphans. A subsection must not appear without an appropriate parent heading above it.
+* False headings must not remain headings. Anything that is not a real title must not start with Markdown heading markers.
+
+---
+
+# 1) Identify and Classify Every Heading Line
+
+For every line that begins with one or more # characters, classify it as either REAL HEADING or NOT A HEADING.
+
+## 1A) NOT A HEADING Patterns
+
+A line is NOT A HEADING if it is any of the following:
+
+* Page numbers, running headers, running footers, repeated chapter headers, repeated book or article title lines
+* Table of Contents, Contents, Outline, List of Figures, List of Tables, Index
+* References, Bibliography, Works Cited, Footnotes, Endnotes
+* Acknowledgments, Dedication, About the Author, Copyright, Permissions, ISBN
+* Download or source notes, URLs, repository notes, scan metadata, conversion tool stamps
+* Navigation entries such as Title ..... 23 or any dot leader ToC lines
+* OCR or conversion noise masquerading as headings, such as random caps, broken glyphs, single symbols, character soup
+
+### What to do when a line is NOT A HEADING
+
+* If it is non-topical noise, delete it.
+* If it is topical content that was mistakenly marked as a heading, remove only the leading # markers and keep the text as a normal paragraph line.
+
+## 1B) REAL HEADING Definition
+
+A line is a REAL HEADING only if it genuinely introduces a section of substantive content that follows.
+
+---
+
+# 2) Build the Correct Heading Hierarchy
+
+Infer structure from:
+
+* Numbering patterns like 1, 1.1, 1.1.1, Chapter 3, Part II, Appendix A
+* Standard academic structure like Introduction, Methods, Results, Discussion, Conclusion
+* Context: the content that follows and how it relates to surrounding headings
+* Repetition: repeated headers and footers are not structure
+
+## 2A) Choose the single H1 Title
+
+* If a clear global title exists, make it the only # heading.
+* If multiple candidates exist, choose the most global and demote the others to H2 or lower, or convert them to plain text if they are not true section titles.
+* If no clear title exists, promote the highest-level meaningful heading to H1. Do not invent titles.
+
+## 2B) Map Levels by Semantics
+
+Use this default mapping unless the document clearly implies something else:
+
+* Parts, Chapters, Major Sections, Appendices: H2 under the H1
+* Sections within a chapter: H3
+* Subsections: H4
+* Deeper levels continue as needed, without skipping levels
+
+## 2C) Enforce Numbering Consistency
+
+If headings use numbering, enforce the implied nesting:
+
+* 2 and 3 are siblings at the same level
+* 2.1 is exactly one level deeper than 2
+* 2.1.3 is exactly one level deeper than 2.1
+  Do not renumber. Do not invent missing numbers.
+
+## 2D) No-Level-Skip Repair
+
+When adjusting headings:
+
+* If a heading is too deep relative to its nearest valid parent, raise it.
+* If a heading is too shallow relative to its siblings and children, lower it.
+* Ensure parent and child differ by exactly one heading level.
+
+## 2E) Orphan Handling
+
+If a heading looks like a subsection but no appropriate parent exists above it:
+
+* Prefer promoting it to the nearest valid level so it is not orphaned.
+* Do not reorder large blocks of content unless it is necessary to fix an obvious conversion artifact like a dumped table of contents.
+
+---
+
+# 3) Content Sanitization
+
+Hierarchy comes first. After hierarchy is correct, sanitize content.
+
+## 3A) Remove Entire Non-Topical Sections
+
+Delete these sections completely, including their content, unless they contain substantive definitions central to the document topic:
+
+* Table of Contents and similar lists
+* References and bibliography sections
+* Index
+* Acknowledgments and author bio material
+* Copyright and legal boilerplate and publisher metadata
+
+## 3B) Remove Unrecoverable Garbage
+
+Delete content that is clearly corrupted and unrecoverable:
+
+* Character soup
+* Garbled OCR fragments with no reconstructable meaning
+* Repeated headers, footers, isolated page numbers
+
+## 3C) Repair Recoverable Conversion Artifacts
+
+Fix using context:
+
+* Replace broken glyphs or replacement characters with the intended text where obvious
+* Merge words split by line breaks or hyphenation where clearly the same word
+* Normalize excessive whitespace and line breaks
+* Preserve meaningful tables and figure or table captions when they add retrieval value
+
+## 3D) Preserve Topical Substance
+
+Keep all substantive content related to the main topic:
+
+* Definitions, explanations, arguments, examples, key claims
+* Captions that explain figures or tables
+  Inline citations are fine. Remove only standalone reference-list formatting.
+
+---
+
+# 4) Output Rules
+
+* Output ONLY the sanitized Markdown.
+* Do not add explanations or metadata.
+* Do not wrap the output in code fences.
+* Preserve valid Markdown for headings, lists, emphasis, blockquotes, and paragraphs.
 
 ---
 
@@ -122,66 +240,131 @@ SELECT
     'simple_sanitize_large',
     1,
     'Simple Conversion - Large Document Analysis',
-    'You are an expert document processor analyzing a large document''s structure for a RAG system.
+    'You are an expert document structure analyst preparing heading-level corrections for a Retrieval-Augmented Generation (RAG) system.
 
-You will receive a CONDENSED representation showing each heading with contextual sentences. Your task is to provide heading-level modifications.
+You will receive a CONDENSED representation of a large document. Each entry contains a line number, a Markdown heading, and a small amount of surrounding context. Your job is to decide what to do with each heading and whether the associated section should be indexed.
 
-## Instructions
+Output ONLY the required structured list. Do not add any explanations, commentary, or code fences.
 
-For each heading, determine:
+---
 
-1. **Action**: Choose one:
-   - `KEEP`: Heading is valid, keep as-is
-   - `CHANGE`: Heading should be modified (level change, text cleanup)
-   - `REMOVE`: Not a real heading (e.g., page numbers, "References")
+# Primary Objective
 
-2. **Modified Heading**: If action=CHANGE, provide the corrected heading with proper markdown level markers (#, ##, ###)
-   - Adjust heading level for proper hierarchy
-   - Clean up formatting issues (extra spaces, weird characters)
-   - If action=REMOVE or action=KEEP, leave this blank
+Produce heading decisions that yield a clean, semantically correct hierarchy suitable for chunking and retrieval.
 
-3. **Vectorize**: Choose one:
-   - `VECTORIZE`: This section contains RAG-relevant content and should be indexed
-   - `SKIP`: This section is not relevant (meta-information, acknowledgments, etc.)
+You must ensure:
 
-## Output Format
+* Exactly one top-level document title exists in the final structure, and it should be H1 if present.
+* No skipped levels in the final hierarchy. Children must be exactly one level deeper than their parent.
+* Sibling consistency. Headings at the same conceptual level use the same H level.
+* No orphans. A subsection must not exist without an appropriate parent above it.
+* False headings are removed.
 
-Provide your modifications as a structured list, one per heading:
+You must not reorder headings. Only decide KEEP, CHANGE, or REMOVE for each heading.
 
-```
+---
+
+# How to Decide Heading Actions
+
+## 1) Determine whether the line is a real heading
+
+A heading is NOT real if it is any of the following:
+
+* Page numbers or navigation markers like Page 3, p. 12, 12, 12 of 300
+* Running headers or footers, repeated book or article title lines, repeated chapter titles
+* Table of Contents, Contents, Outline, List of Figures, List of Tables, Index
+* References, Bibliography, Works Cited, Footnotes, Endnotes
+* Acknowledgments, Dedication, About the Author
+* Copyright, Permissions, ISBN, publisher boilerplate
+* Download metadata, scan metadata, URLs, repository notes, conversion tool stamps
+* Dot leader ToC lines like Title ..... 23
+* OCR noise or character soup
+
+If it is not a real heading:
+
+* ACTION must be REMOVE
+* VECTORIZE must be SKIP
+* MODIFIED must be blank
+
+## 2) If the heading is real, decide KEEP vs CHANGE
+
+Use CHANGE if any of the following are true:
+
+* The heading level is wrong for the implied hierarchy
+* The heading is a sibling but uses a different level than its siblings
+* The heading creates a level skip relative to its parent or children
+* The heading text needs cleanup, such as:
+
+  * Extra whitespace
+  * Weird or broken characters or replacement glyphs
+  * Obvious OCR artifacts
+  * Redundant prefixes like repeated running header text
+  * Truncated titles that can be safely completed from context
+
+Use KEEP only if both the level and the text are already correct.
+
+When ACTION is CHANGE, MODIFIED must include the corrected Markdown heading line, including the correct number of # markers and cleaned text.
+
+---
+
+# Hierarchy Rules for Level Changes
+
+Infer structure using:
+
+* Numbering patterns like 1, 1.1, 1.1.1, Chapter 3, Part II, Appendix A
+* Standard academic organization like Introduction, Methods, Results, Discussion, Conclusion
+* Context snippets that show whether this is a major section, a subsection, or a subsubsection
+
+Apply these constraints:
+
+* No skipped levels.
+* Parent and child differ by exactly one heading level.
+* Siblings share the same heading level.
+* If a heading looks like a subsection but no parent exists above it, promote it to the nearest valid level to avoid orphans.
+* Preserve existing numbering if present. Do not renumber and do not invent missing numbers.
+
+Title rule:
+
+* If a clear global title exists, it should be the only H1.
+* If multiple apparent titles exist, keep only the most global as H1 and demote others to appropriate levels or treat them as non-headings if they are boilerplate.
+
+---
+
+# Vectorize Decision Rules
+
+VECTORIZE should reflect whether the section content is worth indexing for RAG.
+
+Choose VECTORIZE for:
+
+* Core topical content: definitions, explanations, arguments, examples, methods, results, discussion, conclusions, substantive appendices
+* Substantive figure or table captions and analyses
+* Glossary-like sections only if they contain real definitions useful for retrieval
+
+Choose SKIP for:
+
+* Table of contents and navigation material
+* References and bibliography lists
+* Index
+* Acknowledgments, dedications, author bio
+* Copyright and publisher boilerplate
+* Download metadata, scan metadata, URLs
+* Purely administrative or non-topical material
+
+If ACTION is REMOVE, VECTORIZE must be SKIP.
+
+---
+
+# Output Format (strict)
+
+For each heading entry, output exactly:
+
 LINE: {line_number}
 ACTION: {KEEP|CHANGE|REMOVE}
 MODIFIED: {new heading if ACTION=CHANGE, otherwise blank}
 VECTORIZE: {VECTORIZE|SKIP}
----
-```
+---------------------------
 
-## Example
-
-Input:
-```
-5: ## Introduction
-  This paper presents a novel approach to machine learning. We focus on neural networks.
-  ...
-  The rest of the paper is organized as follows.
-
-12: ### Page 3
-  Lorem ipsum dolor sit amet.
-```
-
-Output:
-```
-LINE: 5
-ACTION: KEEP
-MODIFIED:
-VECTORIZE: VECTORIZE
----
-LINE: 12
-ACTION: REMOVE
-MODIFIED:
-VECTORIZE: SKIP
----
-```
+Do not change field names. Do not add extra fields. Do not include any additional separators.
 
 ---
 

@@ -80,21 +80,19 @@ def create_condensed_markdown(headings: List[Dict[str, Any]]) -> str:
         headings: List of heading dicts from extract_headings_with_context
 
     Returns:
-        Condensed markdown string
+        Condensed markdown string with line numbers and heading info
     """
     lines = []
     lines.append("# Condensed Document (Headings + Context)\n")
 
-    for i, heading in enumerate(headings, 1):
-        lines.append(f"\n## Heading {i}")
-        lines.append(f"**Level:** {heading['level']}")
-        lines.append(f"**Text:** {heading['text']}")
+    for heading in headings:
+        lines.append(f"\nLINE {heading['line_number']}: {'#' * heading['level']} {heading['text']}")
 
         if heading['context_before']:
-            lines.append(f"**Before:** ...{heading['context_before']}")
+            lines.append(f"  Context before: ...{heading['context_before']}")
 
         if heading['context_after']:
-            lines.append(f"**After:** {heading['context_after']}...")
+            lines.append(f"  Context after: {heading['context_after']}...")
 
     condensed = '\n'.join(lines)
     logger.debug(f"Created condensed markdown: {len(condensed)} chars")
@@ -107,32 +105,40 @@ def get_hardcoded_template_large() -> str:
     Fallback hardcoded template for large document sanitization.
 
     Returns:
-        Template string with {condensed_markdown} placeholder
+        Template string with {condensed_document} placeholder
     """
-    return '''You are an expert document sanitizer analyzing a LARGE document. Due to size, you're seeing only headings with surrounding context (100 chars before/after each heading).
+    return '''You are an expert document sanitizer analyzing a LARGE document. You will see headings with line numbers and surrounding context.
 
-Condensed markdown (headings + context):
-{condensed_markdown}
+{condensed_document}
 
-Your task is to analyze the headings and decide which to keep, remove, or change:
-- REMOVE: Duplicate, redundant, or unnecessary headings
-- CHANGE: Headings that need rewording for clarity or consistency
-- KEEP: Appropriate headings that should remain as-is
+Your task: Analyze each heading and decide what to do with it.
 
-Respond in the following JSON format:
+Rules:
+- REMOVE: Non-content headings (page numbers, ToC, references, copyright, etc.)
+- CHANGE: Fix heading levels or text (OCR errors, wrong hierarchy, cleanup needed)
+- KEEP: Heading is correct as-is
+
+For CHANGE actions:
+- Include the FULL markdown heading with correct # markers (e.g., "## Introduction")
+- Fix hierarchy issues (no skipped levels, consistent sibling levels)
+- Clean up text (whitespace, OCR artifacts, formatting issues)
+
+Respond ONLY with valid JSON in this format:
 {{
   "modifications": [
-    {{"original": "Heading Text", "action": "remove", "reason": "Duplicate heading"}},
-    {{"original": "Another Heading", "action": "change", "new": "Better Heading", "reason": "Improved clarity"}},
-    {{"original": "Good Heading", "action": "keep", "reason": "Already appropriate"}}
+    {{"line": 5, "action": "remove", "vectorize": false}},
+    {{"line": 12, "action": "change", "new": "## Methods", "vectorize": true}},
+    {{"line": 25, "action": "keep", "vectorize": true}}
   ]
 }}
 
-Important:
-- Return ONLY valid JSON, no additional commentary
-- Include ALL headings from the condensed markdown in modifications list
-- Use action: "remove", "change", or "keep"
-- Base decisions on context snippets provided'''
+Required fields:
+- line: The line number from the condensed document
+- action: "keep", "change", or "remove" (lowercase)
+- vectorize: true if content should be indexed for RAG, false otherwise
+- new: Required if action is "change" - the full corrected heading with # markers
+
+Return ONLY the JSON object. No explanations or commentary.'''
 
 
 def apply_modifications_to_markdown(
@@ -140,44 +146,43 @@ def apply_modifications_to_markdown(
     modifications: List[Dict[str, Any]]
 ) -> str:
     """
-    Apply heading modifications to original markdown.
+    Apply heading modifications to original markdown using line numbers.
 
     Args:
         original_markdown: Full original markdown content
-        modifications: List of modification dicts from LLM
+        modifications: List of modification dicts from LLM with 'line', 'action', 'new' fields
 
     Returns:
         Sanitized markdown with modifications applied
     """
-    result = original_markdown
+    # Build modification lookup by line number
+    mod_map = {mod['line']: mod for mod in modifications}
 
-    # Build modification lookup by original heading text
-    mod_map = {mod['original']: mod for mod in modifications}
+    lines = original_markdown.split('\n')
+    result_lines = []
 
-    # Find and replace headings
-    def replace_heading(match):
-        level = match.group(1)  # The # symbols
-        text = match.group(2).strip()
+    for line_num, line in enumerate(lines, 1):
+        # Check if this line is a heading
+        match = HEADING_PATTERN.match(line)
 
-        if text in mod_map:
-            mod = mod_map[text]
+        if match and line_num in mod_map:
+            mod = mod_map[line_num]
             action = mod.get('action', '').lower()
 
             if action == 'remove':
-                # Remove entire heading line
-                return ''
+                # Skip this line (don't add to result)
+                continue
             elif action == 'change':
-                # Replace with new heading
-                new_text = mod.get('new', text)
-                return f"{level} {new_text}"
+                # Replace with new heading (already includes # markers)
+                new_heading = mod.get('new', line)
+                result_lines.append(new_heading)
             else:  # keep or unknown
-                # Keep as-is
-                return match.group(0)
+                result_lines.append(line)
         else:
-            # No modification for this heading, keep as-is
-            return match.group(0)
+            # Not a heading or no modification, keep as-is
+            result_lines.append(line)
 
-    result = HEADING_PATTERN.sub(replace_heading, result)
+    result = '\n'.join(result_lines)
 
     # Clean up multiple consecutive blank lines left by removals
     result = re.sub(r'\n{3,}', '\n\n', result)
@@ -220,7 +225,7 @@ def parse_llm_response_large(response_text: str) -> List[Dict[str, Any]]:
 
 
 def create_heading_modifications_large(
-    modifications_list: List[Dict[str, str]],
+    modifications_list: List[Dict[str, Any]],
     work_id: int,
     headings_info: List[Dict[str, Any]],
     session: Session
@@ -229,9 +234,9 @@ def create_heading_modifications_large(
     Create HeadingModification records from LLM response.
 
     Args:
-        modifications_list: List of modification dicts from LLM
+        modifications_list: List of modification dicts from LLM with 'line', 'action', 'new', 'vectorize'
         work_id: ID of the Work being processed
-        headings_info: Original heading extraction data for line numbers
+        headings_info: Original heading extraction data (for getting original heading text)
         session: Database session
 
     Returns:
@@ -239,33 +244,34 @@ def create_heading_modifications_large(
     """
     records = []
 
-    # Build lookup for line numbers by heading text
-    line_lookup = {h['text']: h['line_number'] for h in headings_info}
+    # Build lookup for heading info by line number
+    line_lookup = {h['line_number']: h for h in headings_info}
 
     for mod in modifications_list:
-        # Parse action
+        # Parse action - just use the lowercase string directly
         action_str = mod.get('action', '').lower()
-        if action_str == 'remove':
-            action = ModificationAction.REMOVE
-        elif action_str == 'change':
-            action = ModificationAction.CHANGE
-        elif action_str == 'keep':
-            action = ModificationAction.KEEP
-        else:
-            logger.warning(f"Unknown action '{action_str}', defaulting to KEEP")
-            action = ModificationAction.KEEP
 
-        original_heading = mod.get('original', '')
-        line_number = line_lookup.get(original_heading, 0)
+        # Validate action
+        valid_actions = {'remove', 'change', 'keep'}
+        if action_str not in valid_actions:
+            logger.warning(f"Unknown action '{action_str}', defaulting to 'keep'")
+            action_str = 'keep'
 
-        # Create record (adapt to existing schema)
+        line_number = mod.get('line', 0)
+        heading_info = line_lookup.get(line_number, {})
+        original_heading = heading_info.get('text', '')
+
+        # Get vectorize flag from LLM response
+        vectorize_flag = mod.get('vectorize', False)
+
+        # Create record - pass string directly, SQLAlchemy will convert to enum
         heading_mod = HeadingModification(
             work_id=work_id,
             line_number=line_number,
             original_heading=original_heading,
-            modified_heading=mod.get('new'),  # Maps to existing 'modified_heading' field
-            action=action,
-            vectorize_flag=False,  # Default for large documents
+            modified_heading=mod.get('new'),  # Full heading with # markers if action=change
+            action=action_str,  # Pass lowercase string directly
+            vectorize_flag=vectorize_flag,
             created_at=datetime.now(UTC)
         )
 
@@ -336,7 +342,7 @@ def sanitize_large_document(work_id: int, session: Session) -> SanitizedMarkdown
     template = load_template('simple_sanitize_large', get_hardcoded_template_large)
 
     # Format prompt
-    prompt = template.format(condensed_markdown=condensed)
+    prompt = template.format(condensed_document=condensed)
 
     # Call LLM using langchain
     logger.info(f"Calling LLM for large document sanitization (work {work_id})")

@@ -124,14 +124,31 @@ def parse_and_classify(work_id: int, session: Session) -> ParsedMarkdown:
     if not work:
         raise ValueError(f"Work {work_id} not found")
 
-    # Validate work is in correct state
-    if not work.citation_id:
-        raise ValueError(f"Work {work_id} has not been converted yet")
+    # Get file path from processing status
+    file_path = None
+    if work.processing_status and 'file_path' in work.processing_status:
+        file_path = work.processing_status['file_path']
+    
+    if not file_path:
+        raise ValueError(f"No file path found for work {work_id}")
 
-    logger.info(f"Parsing and classifying work {work_id}")
-
-    # Get markdown from Citation API
-    markdown_content = get_markdown_from_citation(work, session)
+    try:
+        from vulcanlab.conversions.conv_pdf2md import convert_pdf_to_markdown
+        logger.info(f"Converting PDF: {file_path}")
+        # Use hierarchical mode for single best output
+        markdown_content = convert_pdf_to_markdown(
+            pdf_path=file_path, 
+            compare=False, 
+            hierarchical=True,
+            verbose=True
+        )
+    except Exception as e:
+        logger.error(f"PDF conversion failed for {file_path}: {e}")
+        # Propagate error so user sees it
+        raise ValueError(f"PDF conversion failed: {str(e)}")
+        
+    if not markdown_content:
+        raise ValueError("Conversion produced empty output")
 
     # Count tokens
     token_count = count_tokens(markdown_content)
