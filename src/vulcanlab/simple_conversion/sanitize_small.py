@@ -151,10 +151,10 @@ def sanitize_small_document(work_id: int, session: Session) -> SanitizedMarkdown
     session.flush()  # Get sanitized.id for later use
 
     # Update Work.processing_status
-    if not work.processing_status:
-        work.processing_status = {}
-
-    work.processing_status['simple_conversion_step'] = 'sanitized'
+    # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+    new_status = dict(work.processing_status) if work.processing_status else {}
+    new_status['simple_conversion_step'] = 'sanitized'
+    work.processing_status = new_status
 
     session.commit()
     session.refresh(sanitized)

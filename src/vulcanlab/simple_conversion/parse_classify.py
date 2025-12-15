@@ -179,12 +179,12 @@ def parse_and_classify(work_id: int, session: Session) -> ParsedMarkdown:
     session.add(parsed)
 
     # Update Work.processing_status
-    if not work.processing_status:
-        work.processing_status = {}
-
-    work.processing_status['simple_conversion_step'] = 'parsed'
-    work.processing_status['simple_conversion_classification'] = classification.value
-    work.processing_status['simple_conversion_token_count'] = token_count
+    # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+    new_status = dict(work.processing_status) if work.processing_status else {}
+    new_status['simple_conversion_step'] = 'parsed'
+    new_status['simple_conversion_classification'] = classification.value
+    new_status['simple_conversion_token_count'] = token_count
+    work.processing_status = new_status
 
     session.commit()
     session.refresh(parsed)

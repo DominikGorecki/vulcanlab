@@ -611,10 +611,11 @@ def create_heading_chunks_simple(work_id: int, session: Session) -> List[Chunk]:
 
     if not headings:
         logger.warning(f"No headings found in sanitized markdown for work {work_id}")
-        if not work.processing_status:
-            work.processing_status = {}
-        work.processing_status['simple_conversion_step'] = 'heading_chunks_created'
-        work.processing_status['heading_chunk_count'] = 0
+        # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+        new_status = dict(work.processing_status) if work.processing_status else {}
+        new_status['simple_conversion_step'] = 'heading_chunks_created'
+        new_status['heading_chunk_count'] = 0
+        work.processing_status = new_status
         session.commit()
         return []
 
@@ -666,10 +667,11 @@ def create_heading_chunks_simple(work_id: int, session: Session) -> List[Chunk]:
     logger.info(f"Created {len(chunks)} heading chunks for work {work_id}")
 
     # Update processing status
-    if not work.processing_status:
-        work.processing_status = {}
-    work.processing_status['simple_conversion_step'] = 'heading_chunks_created'
-    work.processing_status['heading_chunk_count'] = len(chunks)
+    # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+    new_status = dict(work.processing_status) if work.processing_status else {}
+    new_status['simple_conversion_step'] = 'heading_chunks_created'
+    new_status['heading_chunk_count'] = len(chunks)
+    work.processing_status = new_status
 
     session.commit()
 
@@ -808,11 +810,12 @@ def create_content_chunks_simple(work_id: int, session: Session) -> List[Chunk]:
         logger.warning(f"Skipped {skipped_no_parent} chunks without parent heading")
 
     # Update processing status
-    if not work.processing_status:
-        work.processing_status = {}
-    work.processing_status['simple_conversion_step'] = 'content_chunks_created'
-    work.processing_status['content_chunk_count'] = len(chunks_created)
-    work.processing_status['chunk_count'] = work.processing_status.get('heading_chunk_count', 0) + len(chunks_created)
+    # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+    new_status = dict(work.processing_status) if work.processing_status else {}
+    new_status['simple_conversion_step'] = 'content_chunks_created'
+    new_status['content_chunk_count'] = len(chunks_created)
+    new_status['chunk_count'] = new_status.get('heading_chunk_count', 0) + len(chunks_created)
+    work.processing_status = new_status
 
     session.commit()
 
