@@ -84,3 +84,25 @@ class ConversionResults(BaseModel):
     token_count: int
     chunk_count: int
     chunks: List[ChunkResult]
+
+
+class SimpleConversionHistoryItem(BaseModel):
+    """Single history item for simple conversion."""
+    work_id: int
+    title: str
+    author: Optional[str] = None
+    year: Optional[int] = None
+    created_at: datetime
+    classification: Optional[str] = None
+    mode: Optional[str] = None  # 'automatic' or 'manual'
+    status: str  # 'complete' or 'failed'
+    token_count: Optional[int] = None
+    chunk_count: int = 0
+    heading_chunk_count: int = 0
+    content_chunk_count: int = 0
+    error_message: Optional[str] = None
+
+
+class SimpleConversionHistoryResponse(BaseModel):
+    """List of simple conversion history items."""
+    items: List[SimpleConversionHistoryItem]
