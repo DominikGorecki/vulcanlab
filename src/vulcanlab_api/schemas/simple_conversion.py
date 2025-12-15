@@ -22,6 +22,7 @@ class StartConversionResponse(BaseModel):
     """Response from starting conversion."""
     work_id: int
     status: str
+    mode: str
     message: str
 
 
