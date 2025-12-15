@@ -81,8 +81,7 @@ class CorpusWorkListItem(BaseModel):
             "example": {
                 "id": 5,
                 "title": "Cognitive Psychology: A Student's Handbook",
-                "authors": "Eysenck, Michael W.; Keane, Mark T.",
-                "sanitized_path": "c:\\output\\eysenck_cognitive.sanitized.md"
+                "authors": "Eysenck, Michael W.; Keane, Mark T."
             }
         }
     )
@@ -90,7 +89,6 @@ class CorpusWorkListItem(BaseModel):
     id: int = Field(..., description="Work ID")
     title: str = Field(..., description="Work title")
     authors: Optional[str] = Field(None, description="Author(s)")
-    sanitized_path: str = Field(..., description="Path to sanitized markdown file")
 
 
 class CorpusWorksResponse(BaseModel):
@@ -103,8 +101,7 @@ class CorpusWorksResponse(BaseModel):
                     {
                         "id": 5,
                         "title": "Cognitive Psychology: A Student's Handbook",
-                        "authors": "Eysenck, Michael W.; Keane, Mark T.",
-                        "sanitized_path": "c:\\output\\eysenck_cognitive.sanitized.md"
+                        "authors": "Eysenck, Michael W.; Keane, Mark T."
                     }
                 ],
                 "total": 1

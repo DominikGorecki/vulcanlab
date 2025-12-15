@@ -48,15 +48,6 @@ class CommonQueryParams:
 CommonParams = Annotated[CommonQueryParams, Depends()]
 
 
-# Placeholder for database session dependency
-# Will be implemented when integrating with vulcanlab.data.database
-async def get_db_session():
-    """
-    Get database session dependency.
-    
-    TODO: Integrate with vulcanlab.data.database.get_session()
-    """
-    # Placeholder - will yield actual session when implemented
-    yield None
+from vulcanlab.data.database import get_db_session
 
 

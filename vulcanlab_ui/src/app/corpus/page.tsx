@@ -32,7 +32,6 @@ interface CorpusWork {
   id: number;
   title: string;
   authors: string | null;
-  sanitized_path: string;
 }
 
 interface CorpusWorksResponse {
@@ -198,7 +197,6 @@ export default function CorpusPage() {
                     <TableHead className="w-[60px]">ID</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Authors</TableHead>
-                    <TableHead>Sanitized Path</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -214,9 +212,6 @@ export default function CorpusPage() {
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-muted-foreground">
                         {work.authors || "-"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono truncate max-w-sm">
-                        {work.sanitized_path}
                       </TableCell>
                     </TableRow>
                   ))}

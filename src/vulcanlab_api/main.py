@@ -27,12 +27,14 @@ from vulcanlab_api.dependencies import get_db_session
 from vulcanlab_api.routers import (
     chunking,
     conversion,
+    conversion_settings,
     corpus,
     init,
     rag,
     rag_config,
     sanitization,
     settings,
+    simple_conversion,
     templates,
     vectorization,
 )
@@ -122,12 +124,14 @@ app.include_router(init.router, prefix="/init", tags=["Init"])
 app.include_router(settings.router, prefix="/settings", tags=["Settings"])
 app.include_router(templates.router)  # Templates router has its own prefix
 app.include_router(conversion.router, prefix="/conv", tags=["Conversion"])
+app.include_router(conversion_settings.router)  # Conversion settings router has its own prefix
 app.include_router(sanitization.router, prefix="/sanitization", tags=["Sanitization"])
 app.include_router(chunking.router, prefix="/chunk", tags=["Chunking"])
 app.include_router(vectorization.router, prefix="/vec", tags=["Vectorization"])
 app.include_router(corpus.router, prefix="/corpus", tags=["Corpus"])
 app.include_router(rag.router, prefix="/rag", tags=["RAG"])
 app.include_router(rag_config.router, prefix="/api/rag-config", tags=["RAG Config"])
+app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix
 
 
 @app.get("/", include_in_schema=False)

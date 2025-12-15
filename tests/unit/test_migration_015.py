@@ -24,7 +24,7 @@ class TestExtractFilename:
 
     def test_extract_filename_windows_path(self):
         """Test extracting filename from Windows absolute path."""
-        path = "D:\\psychRAG_data\\output\\file.pdf"
+        path = "D:\\vulcanlab_data\\output\\file.pdf"
         result = extract_filename(path)
         assert result == "file.pdf"
 
