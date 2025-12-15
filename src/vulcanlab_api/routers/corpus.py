@@ -40,11 +40,17 @@ def _is_corpus_work(work: Work) -> bool:
     """
     Check if a work is part of the corpus.
 
-    A work is in the corpus if:
+    A work is in the corpus if it meets ONE of these criteria:
+
+    Regular conversion:
     1. It has processing_status
     2. processing_status["content_chunks"] == "completed"
     3. processing_status["heading_chunks"] == "completed"
     4. It has a sanitized file in work.files
+
+    Simple conversion:
+    1. It has processing_status
+    2. processing_status["simple_conversion_step"] == "complete"
 
     Args:
         work: Work object to check
@@ -55,6 +61,12 @@ def _is_corpus_work(work: Work) -> bool:
     if not work.processing_status:
         return False
 
+    # Check for simple conversion completion
+    simple_conversion_step = work.processing_status.get("simple_conversion_step")
+    if simple_conversion_step == "complete":
+        return True
+
+    # Check for regular conversion completion
     content_status = work.processing_status.get("content_chunks")
     heading_status = work.processing_status.get("heading_chunks")
 
@@ -168,9 +180,9 @@ async def list_corpus_works() -> CorpusWorksResponse:
     List all corpus works.
 
     Returns works where:
-    - processing_status["content_chunks"] == "completed"
-    - processing_status["heading_chunks"] == "completed"
-    - work.files["sanitized"] exists
+    - Regular conversion: processing_status["content_chunks"] == "completed" AND
+      processing_status["heading_chunks"] == "completed" AND work.files["sanitized"] exists
+    - Simple conversion: processing_status["simple_conversion_step"] == "complete"
 
     Works are sorted by ID descending (newest first).
     """
@@ -184,8 +196,7 @@ async def list_corpus_works() -> CorpusWorksResponse:
                 CorpusWorkListItem(
                     id=work.id,
                     title=work.title,
-                    authors=work.authors,
-                    sanitized_path=work.files["sanitized"]["path"]
+                    authors=work.authors
                 )
             )
 

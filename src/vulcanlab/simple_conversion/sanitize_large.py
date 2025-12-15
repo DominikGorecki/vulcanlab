@@ -388,12 +388,12 @@ def sanitize_large_document(work_id: int, session: Session) -> SanitizedMarkdown
     )
 
     # Update Work.processing_status
-    if not work.processing_status:
-        work.processing_status = {}
-
-    work.processing_status['simple_conversion_step'] = 'sanitized'
-    work.processing_status['sanitized_heading_count'] = len(heading_records)
-    work.processing_status['condensed_char_count'] = len(condensed)
+    # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+    new_status = dict(work.processing_status) if work.processing_status else {}
+    new_status['simple_conversion_step'] = 'sanitized'
+    new_status['sanitized_heading_count'] = len(heading_records)
+    new_status['condensed_char_count'] = len(condensed)
+    work.processing_status = new_status
 
     session.commit()
     session.refresh(sanitized)

@@ -223,7 +223,10 @@ async def execute_automatic(
         chunks = heading_chunks + content_chunks
 
         # Update final status
-        work.processing_status['simple_conversion_step'] = 'complete'
+        # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+        new_status = dict(work.processing_status)
+        new_status['simple_conversion_step'] = 'complete'
+        work.processing_status = new_status
         session.commit()
 
         logger.info(f"Automatic pipeline complete for work {work_id}: {len(chunks)} total chunks ({len(heading_chunks)} heading, {len(content_chunks)} content)")
@@ -244,10 +247,11 @@ async def execute_automatic(
         try:
             work = session.query(Work).filter(Work.id == work_id).first()
             if work:
-                if not work.processing_status:
-                    work.processing_status = {}
-                work.processing_status['simple_conversion_step'] = 'error'
-                work.processing_status['error_message'] = str(e)
+                # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+                new_status = dict(work.processing_status) if work.processing_status else {}
+                new_status['simple_conversion_step'] = 'error'
+                new_status['error_message'] = str(e)
+                work.processing_status = new_status
                 session.commit()
         except:
             pass
@@ -403,9 +407,10 @@ async def submit_manual_result(
 
         # Update work status
         work = session.query(Work).filter(Work.id == work_id).first()
-        if not work.processing_status:
-            work.processing_status = {}
-        work.processing_status['simple_conversion_step'] = 'sanitized'
+        # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+        new_status = dict(work.processing_status) if work.processing_status else {}
+        new_status['simple_conversion_step'] = 'sanitized'
+        work.processing_status = new_status
 
         # Now proceed to chunking
         logger.info(f"Manual result processed, creating chunks for work {work_id}")
@@ -420,7 +425,10 @@ async def submit_manual_result(
 
         chunks = heading_chunks + content_chunks
 
-        work.processing_status['simple_conversion_step'] = 'complete'
+        # NOTE: Must reassign the dict to trigger SQLAlchemy change detection for JSON columns
+        new_status = dict(work.processing_status)
+        new_status['simple_conversion_step'] = 'complete'
+        work.processing_status = new_status
         session.commit()
 
         logger.info(f"Manual pipeline complete for work {work_id}: {len(chunks)} total chunks ({len(heading_chunks)} heading, {len(content_chunks)} content)")
