@@ -6,10 +6,13 @@ The corpus represents works that have completed both content and heading chunkin
 and have a sanitized file. These works are ready for vectorization and RAG operations.
 
 Endpoints:
-    GET  /corpus/stats                      - Get corpus statistics
-    GET  /corpus/works                      - List all corpus works
-    GET  /corpus/work/{work_id}             - Get specific work details
-    GET  /corpus/work/{work_id}/content     - Get sanitized markdown content
+    GET     /corpus/stats                      - Get corpus statistics
+    GET     /corpus/works                      - List all corpus works
+    GET     /corpus/work/{work_id}             - Get specific work details
+    GET     /corpus/work/{work_id}/content     - Get sanitized markdown content
+
+Note: This router maintains backwards compatibility. For new write operations,
+see the v1_corpus router at /api/v1/corpus.
 """
 
 from pathlib import Path
