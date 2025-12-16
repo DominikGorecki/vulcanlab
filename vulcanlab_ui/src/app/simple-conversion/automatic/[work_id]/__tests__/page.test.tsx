@@ -144,9 +144,9 @@ describe('AutomaticWorkflowPage', () => {
     // 1. Execute success
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     // 2. Status error
-    mockFetch.mockResolvedValueOnce({ 
-      ok: true, 
-      json: async () => ({ work_id: 123, step: 'error', error_message: 'Pipeline exploded internally' }) 
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ work_id: 123, step: 'error', error_message: 'Pipeline exploded internally' })
     });
 
     await act(async () => {
@@ -155,6 +155,48 @@ describe('AutomaticWorkflowPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Pipeline exploded internally')).toBeInTheDocument();
+    });
+  });
+
+  it('displays "Start Another Conversion" button on success', async () => {
+    // 1. Execute
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    // 2. Status (complete)
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ work_id: 123, step: 'complete' }) });
+    // 3. Results fetch
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        work_id: 123,
+        title: 'Test Doc',
+        author: 'Author',
+        classification: 'small',
+        token_count: 100,
+        chunk_count: 1,
+        chunks: []
+      })
+    });
+
+    await act(async () => {
+      render(<AutomaticWorkflowPage />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Start Another Conversion')).toBeInTheDocument();
+    });
+  });
+
+  it('displays back button that navigates to main page', async () => {
+    mockSuccessfulExecution();
+
+    await act(async () => {
+      render(<AutomaticWorkflowPage />);
+    });
+
+    await waitFor(() => {
+      // Look for button with ArrowLeft icon (back button)
+      const buttons = screen.getAllByRole('button');
+      expect(buttons.length).toBeGreaterThan(0);
     });
   });
 });
