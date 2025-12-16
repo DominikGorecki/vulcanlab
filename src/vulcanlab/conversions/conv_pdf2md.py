@@ -41,6 +41,7 @@ Note: The source PDF is always copied to the output directory as <file>.pdf
 """
 
 import argparse
+import logging
 import shutil
 import sys
 import threading
@@ -57,10 +58,38 @@ from hierarchical.hierarchy_builder_metadata import HierarchyBuilderMetadata
 
 from .pdf_bookmarks2toc import extract_bookmarks_to_toc
 
+logger = logging.getLogger(__name__)
+
 # Default batch sizes for GPU processing
 DEFAULT_LAYOUT_BATCH_SIZE = 16
 DEFAULT_OCR_BATCH_SIZE = 4
 DEFAULT_TABLE_BATCH_SIZE = 4
+
+
+def _detect_gpu_availability() -> tuple[bool, str]:
+    """
+    Detect if GPU is available for Docling.
+
+    Returns:
+        Tuple of (gpu_available, device_info) where:
+        - gpu_available: True if GPU is available and will be used
+        - device_info: String describing the device (e.g., "CUDA GPU", "CPU")
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            device_name = torch.cuda.get_device_name(0)
+            logger.info(f"GPU detected: {device_name}")
+            return True, f"CUDA GPU ({device_name})"
+        else:
+            logger.info("No CUDA GPU detected, using CPU")
+            return False, "CPU"
+    except ImportError:
+        logger.info("PyTorch not available, using CPU")
+        return False, "CPU"
+    except Exception as e:
+        logger.warning(f"Error detecting GPU: {e}, using CPU")
+        return False, "CPU"
 
 
 def _copy_pdf_to_output(
@@ -142,17 +171,25 @@ def convert_pdf_to_markdown(
     if pdf_path.suffix.lower() != ".pdf":
         raise ValueError(f"File must be a PDF file, got: {pdf_path.suffix}")
 
+    # Detect GPU availability
+    gpu_available, device_info = _detect_gpu_availability()
+    actual_device = device_info if (use_gpu and gpu_available) else "CPU"
+
+    logger.info(f"Converting PDF: {pdf_path}")
+    logger.info(f"Using device: {actual_device}")
+
     if verbose:
         print(f"Converting: {pdf_path}")
+        print(f"Using device: {actual_device}")
         if ocr:
             print("OCR enabled for scanned content")
-        if use_gpu:
-            print("GPU acceleration enabled (auto-detect)")
+        if use_gpu and not gpu_available:
+            print("GPU requested but not available, using CPU")
 
     # Configure PDF pipeline options with GPU support and optimized batch sizes
     pipeline_options = ThreadedPdfPipelineOptions(do_ocr=ocr)
 
-    if use_gpu:
+    if use_gpu and gpu_available:
         # Configure accelerator options for GPU support (auto-detect GPU, fallback to CPU)
         accelerator_options = AcceleratorOptions(
             device=AcceleratorDevice.AUTO  # Auto-detect GPU, fallback to CPU

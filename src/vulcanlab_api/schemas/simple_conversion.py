@@ -43,6 +43,7 @@ class ExecuteAutoResponse(BaseModel):
     status: str
     chunks_created: int
     message: str
+    logs: Optional[List[str]] = Field(default_factory=list, description="Execution logs")
 
 
 class ManualPromptResponse(BaseModel):
