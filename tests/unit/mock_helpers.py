@@ -137,7 +137,7 @@ def create_mock_work(id: int = 1, title: str = "Test Work", **kwargs):
     Args:
         id: Work ID
         title: Work title
-        **kwargs: Additional fields (authors, year, publisher, etc.)
+        **kwargs: Additional fields (authors, year, publisher, files, etc.)
 
     Returns:
         MagicMock: Mock Work object
@@ -153,6 +153,7 @@ def create_mock_work(id: int = 1, title: str = "Test Work", **kwargs):
     work.file_path = kwargs.get('file_path')
     work.file_name = kwargs.get('file_name')
     work.file_type = kwargs.get('file_type')
+    work.files = kwargs.get('files')
     work.created_at = kwargs.get('created_at')
     work.updated_at = kwargs.get('updated_at')
     return work
