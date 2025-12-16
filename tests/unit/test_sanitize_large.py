@@ -370,3 +370,176 @@ def test_sanitize_large_document_standalone(mock_sanitize, mock_session):
 
     assert heading_count == 15
     assert condensed_chars == 3500
+
+
+@patch('vulcanlab.simple_conversion.sanitize_large.get_use_full_model')
+@patch('vulcanlab.simple_conversion.sanitize_large.create_langchain_chat')
+@patch('vulcanlab.simple_conversion.sanitize_large.load_template')
+@patch('vulcanlab.simple_conversion.sanitize_large.count_tokens')
+def test_sanitize_large_uses_light_model_when_config_false(mock_count, mock_load_template, mock_llm, mock_get_config):
+    """Test sanitize_large_document uses ModelTier.LIGHT when use_full_model is False."""
+    from vulcanlab.ai.config import ModelTier
+
+    # Setup config mock
+    mock_get_config.return_value = False
+
+    # Setup other mocks
+    mock_session = MagicMock()
+    mock_work = MagicMock()
+    mock_work.id = 1
+    mock_work.processing_status = {}
+
+    original_markdown = "# Heading 1\n\nContent."
+    mock_parsed = MagicMock()
+    mock_parsed.content = original_markdown
+    mock_parsed.classification.value = 'large'
+
+    work_query = MagicMock()
+    work_query.filter.return_value.first.return_value = mock_work
+    parsed_query = MagicMock()
+    parsed_query.filter.return_value.first.return_value = mock_parsed
+
+    mock_session.query.side_effect = [work_query, parsed_query]
+
+    mock_template_obj = MagicMock()
+    mock_template_obj.format.return_value = "Prompt"
+    mock_load_template.return_value = mock_template_obj
+
+    llm_response_text = json.dumps({
+        'modifications': [
+            {'line': 1, 'action': 'keep', 'vectorize': True}
+        ]
+    })
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = llm_response_text
+
+    mock_chat = MagicMock()
+    mock_chat.invoke.return_value = mock_llm_response
+
+    mock_llm_stack = MagicMock()
+    mock_llm_stack.chat = mock_chat
+    mock_llm.return_value = mock_llm_stack
+
+    mock_count.return_value = 10
+
+    # Execute
+    sanitize_large_document(1, mock_session)
+
+    # Verify ModelTier.LIGHT was used
+    mock_llm.assert_called_once_with(tier=ModelTier.LIGHT, temperature=0.2)
+
+
+@patch('vulcanlab.simple_conversion.sanitize_large.get_use_full_model')
+@patch('vulcanlab.simple_conversion.sanitize_large.create_langchain_chat')
+@patch('vulcanlab.simple_conversion.sanitize_large.load_template')
+@patch('vulcanlab.simple_conversion.sanitize_large.count_tokens')
+def test_sanitize_large_uses_full_model_when_config_true(mock_count, mock_load_template, mock_llm, mock_get_config):
+    """Test sanitize_large_document uses ModelTier.FULL when use_full_model is True."""
+    from vulcanlab.ai.config import ModelTier
+
+    # Setup config mock
+    mock_get_config.return_value = True
+
+    # Setup other mocks
+    mock_session = MagicMock()
+    mock_work = MagicMock()
+    mock_work.id = 1
+    mock_work.processing_status = {}
+
+    original_markdown = "# Heading 1\n\nContent."
+    mock_parsed = MagicMock()
+    mock_parsed.content = original_markdown
+    mock_parsed.classification.value = 'large'
+
+    work_query = MagicMock()
+    work_query.filter.return_value.first.return_value = mock_work
+    parsed_query = MagicMock()
+    parsed_query.filter.return_value.first.return_value = mock_parsed
+
+    mock_session.query.side_effect = [work_query, parsed_query]
+
+    mock_template_obj = MagicMock()
+    mock_template_obj.format.return_value = "Prompt"
+    mock_load_template.return_value = mock_template_obj
+
+    llm_response_text = json.dumps({
+        'modifications': [
+            {'line': 1, 'action': 'keep', 'vectorize': True}
+        ]
+    })
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = llm_response_text
+
+    mock_chat = MagicMock()
+    mock_chat.invoke.return_value = mock_llm_response
+
+    mock_llm_stack = MagicMock()
+    mock_llm_stack.chat = mock_chat
+    mock_llm.return_value = mock_llm_stack
+
+    mock_count.return_value = 10
+
+    # Execute
+    sanitize_large_document(1, mock_session)
+
+    # Verify ModelTier.FULL was used
+    mock_llm.assert_called_once_with(tier=ModelTier.FULL, temperature=0.2)
+
+
+@patch('vulcanlab.simple_conversion.sanitize_large.get_use_full_model')
+@patch('vulcanlab.simple_conversion.sanitize_large.create_langchain_chat')
+@patch('vulcanlab.simple_conversion.sanitize_large.load_template')
+@patch('vulcanlab.simple_conversion.sanitize_large.count_tokens')
+@patch('vulcanlab.simple_conversion.sanitize_large.logger')
+def test_sanitize_large_logs_model_tier(mock_logger, mock_count, mock_load_template, mock_llm, mock_get_config):
+    """Test that model tier selection is logged correctly for large docs."""
+    from vulcanlab.ai.config import ModelTier
+
+    # Setup config mock
+    mock_get_config.return_value = True
+
+    # Setup other mocks
+    mock_session = MagicMock()
+    mock_work = MagicMock()
+    mock_work.id = 1
+    mock_work.processing_status = {}
+
+    original_markdown = "# Heading 1\n\nContent."
+    mock_parsed = MagicMock()
+    mock_parsed.content = original_markdown
+    mock_parsed.classification.value = 'large'
+
+    work_query = MagicMock()
+    work_query.filter.return_value.first.return_value = mock_work
+    parsed_query = MagicMock()
+    parsed_query.filter.return_value.first.return_value = mock_parsed
+
+    mock_session.query.side_effect = [work_query, parsed_query]
+
+    mock_template_obj = MagicMock()
+    mock_template_obj.format.return_value = "Prompt"
+    mock_load_template.return_value = mock_template_obj
+
+    llm_response_text = json.dumps({
+        'modifications': [
+            {'line': 1, 'action': 'keep', 'vectorize': True}
+        ]
+    })
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = llm_response_text
+
+    mock_chat = MagicMock()
+    mock_chat.invoke.return_value = mock_llm_response
+
+    mock_llm_stack = MagicMock()
+    mock_llm_stack.chat = mock_chat
+    mock_llm.return_value = mock_llm_stack
+
+    mock_count.return_value = 10
+
+    # Execute
+    sanitize_large_document(1, mock_session)
+
+    # Verify logging was called with correct message
+    log_calls = [str(call) for call in mock_logger.info.call_args_list]
+    assert any('ModelTier.FULL' in str(call) and 'large document sanitization' in str(call) for call in log_calls)

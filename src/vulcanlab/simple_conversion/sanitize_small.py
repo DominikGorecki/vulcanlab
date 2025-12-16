@@ -21,6 +21,7 @@ from vulcanlab.data.template_loader import load_template
 from vulcanlab.ai.llm_factory import create_langchain_chat
 from vulcanlab.ai.config import ModelTier
 from vulcanlab.simple_conversion.parse_classify import count_tokens
+from vulcanlab.config.conversion_config import get_use_full_model
 
 logger = logging.getLogger(__name__)
 
@@ -125,9 +126,13 @@ def sanitize_small_document(work_id: int, session: Session) -> SanitizedMarkdown
     # Format prompt
     prompt = template.format(markdown=parsed.content)
 
+    # Determine model tier based on config
+    use_full = get_use_full_model()
+    tier = ModelTier.FULL if use_full else ModelTier.LIGHT
+    logger.info(f"Using ModelTier.{tier.name} for small document sanitization (work {work_id})")
+
     # Call LLM using langchain
-    logger.info(f"Calling LLM for small document sanitization (work {work_id})")
-    llm_stack = create_langchain_chat(tier=ModelTier.LIGHT, temperature=0.2)
+    llm_stack = create_langchain_chat(tier=tier, temperature=0.2)
     response = llm_stack.chat.invoke(prompt)
 
     # Extract content from LangChain response

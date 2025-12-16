@@ -8,11 +8,9 @@ from datetime import datetime, UTC
 from vulcanlab.simple_conversion.sanitize_small import (
     get_hardcoded_template_small,
     parse_llm_response,
-    create_heading_modifications,
     sanitize_small_document,
     sanitize_small_document_standalone
 )
-from vulcanlab.data.models.enums import ModificationAction
 
 
 def test_get_hardcoded_template_small():
@@ -248,3 +246,158 @@ def test_sanitize_small_document_standalone(mock_sanitize, mock_session):
     result = sanitize_small_document_standalone(1)
 
     assert result == 3
+
+
+@patch('vulcanlab.simple_conversion.sanitize_small.get_use_full_model')
+@patch('vulcanlab.simple_conversion.sanitize_small.create_langchain_chat')
+@patch('vulcanlab.simple_conversion.sanitize_small.load_template')
+@patch('vulcanlab.simple_conversion.sanitize_small.count_tokens')
+def test_sanitize_small_uses_light_model_when_config_false(mock_count, mock_load_template, mock_llm, mock_get_config):
+    """Test sanitize_small_document uses ModelTier.LIGHT when use_full_model is False."""
+    from vulcanlab.ai.config import ModelTier
+
+    # Setup config mock
+    mock_get_config.return_value = False
+
+    # Setup other mocks
+    mock_session = MagicMock()
+    mock_work = MagicMock()
+    mock_work.id = 1
+    mock_work.processing_status = {}
+
+    mock_parsed = MagicMock()
+    mock_parsed.content = '# Test Content'
+    mock_parsed.classification.value = 'small'
+
+    work_query = MagicMock()
+    work_query.filter.return_value.first.return_value = mock_work
+    parsed_query = MagicMock()
+    parsed_query.filter.return_value.first.return_value = mock_parsed
+
+    mock_session.query.side_effect = [work_query, parsed_query]
+
+    mock_template_obj = MagicMock()
+    mock_template_obj.format.return_value = "Prompt"
+    mock_load_template.return_value = mock_template_obj
+
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = '# Sanitized Content'
+
+    mock_chat = MagicMock()
+    mock_chat.invoke.return_value = mock_llm_response
+
+    mock_llm_stack = MagicMock()
+    mock_llm_stack.chat = mock_chat
+    mock_llm.return_value = mock_llm_stack
+
+    mock_count.return_value = 10
+
+    # Execute
+    sanitize_small_document(1, mock_session)
+
+    # Verify ModelTier.LIGHT was used
+    mock_llm.assert_called_once_with(tier=ModelTier.LIGHT, temperature=0.2)
+
+
+@patch('vulcanlab.simple_conversion.sanitize_small.get_use_full_model')
+@patch('vulcanlab.simple_conversion.sanitize_small.create_langchain_chat')
+@patch('vulcanlab.simple_conversion.sanitize_small.load_template')
+@patch('vulcanlab.simple_conversion.sanitize_small.count_tokens')
+def test_sanitize_small_uses_full_model_when_config_true(mock_count, mock_load_template, mock_llm, mock_get_config):
+    """Test sanitize_small_document uses ModelTier.FULL when use_full_model is True."""
+    from vulcanlab.ai.config import ModelTier
+
+    # Setup config mock
+    mock_get_config.return_value = True
+
+    # Setup other mocks
+    mock_session = MagicMock()
+    mock_work = MagicMock()
+    mock_work.id = 1
+    mock_work.processing_status = {}
+
+    mock_parsed = MagicMock()
+    mock_parsed.content = '# Test Content'
+    mock_parsed.classification.value = 'small'
+
+    work_query = MagicMock()
+    work_query.filter.return_value.first.return_value = mock_work
+    parsed_query = MagicMock()
+    parsed_query.filter.return_value.first.return_value = mock_parsed
+
+    mock_session.query.side_effect = [work_query, parsed_query]
+
+    mock_template_obj = MagicMock()
+    mock_template_obj.format.return_value = "Prompt"
+    mock_load_template.return_value = mock_template_obj
+
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = '# Sanitized Content'
+
+    mock_chat = MagicMock()
+    mock_chat.invoke.return_value = mock_llm_response
+
+    mock_llm_stack = MagicMock()
+    mock_llm_stack.chat = mock_chat
+    mock_llm.return_value = mock_llm_stack
+
+    mock_count.return_value = 10
+
+    # Execute
+    sanitize_small_document(1, mock_session)
+
+    # Verify ModelTier.FULL was used
+    mock_llm.assert_called_once_with(tier=ModelTier.FULL, temperature=0.2)
+
+
+@patch('vulcanlab.simple_conversion.sanitize_small.get_use_full_model')
+@patch('vulcanlab.simple_conversion.sanitize_small.create_langchain_chat')
+@patch('vulcanlab.simple_conversion.sanitize_small.load_template')
+@patch('vulcanlab.simple_conversion.sanitize_small.count_tokens')
+@patch('vulcanlab.simple_conversion.sanitize_small.logger')
+def test_sanitize_small_logs_model_tier(mock_logger, mock_count, mock_load_template, mock_llm, mock_get_config):
+    """Test that model tier selection is logged correctly."""
+    from vulcanlab.ai.config import ModelTier
+
+    # Setup config mock
+    mock_get_config.return_value = True
+
+    # Setup other mocks
+    mock_session = MagicMock()
+    mock_work = MagicMock()
+    mock_work.id = 1
+    mock_work.processing_status = {}
+
+    mock_parsed = MagicMock()
+    mock_parsed.content = '# Test Content'
+    mock_parsed.classification.value = 'small'
+
+    work_query = MagicMock()
+    work_query.filter.return_value.first.return_value = mock_work
+    parsed_query = MagicMock()
+    parsed_query.filter.return_value.first.return_value = mock_parsed
+
+    mock_session.query.side_effect = [work_query, parsed_query]
+
+    mock_template_obj = MagicMock()
+    mock_template_obj.format.return_value = "Prompt"
+    mock_load_template.return_value = mock_template_obj
+
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = '# Sanitized Content'
+
+    mock_chat = MagicMock()
+    mock_chat.invoke.return_value = mock_llm_response
+
+    mock_llm_stack = MagicMock()
+    mock_llm_stack.chat = mock_chat
+    mock_llm.return_value = mock_llm_stack
+
+    mock_count.return_value = 10
+
+    # Execute
+    sanitize_small_document(1, mock_session)
+
+    # Verify logging was called with correct message
+    log_calls = [str(call) for call in mock_logger.info.call_args_list]
+    assert any('ModelTier.FULL' in str(call) and 'small document sanitization' in str(call) for call in log_calls)
