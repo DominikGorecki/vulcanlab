@@ -19,7 +19,9 @@ from vulcanlab_api.schemas.simple_conversion import (
     ManualSubmitRequest,
     ManualSubmitResponse,
     ConversionResults,
-    ChunkResult
+    ChunkResult,
+    SimpleConversionHistoryItem,
+    SimpleConversionHistoryResponse
 )
 from vulcanlab_api.dependencies import get_db_session
 from vulcanlab.data.models.work import Work
@@ -46,6 +48,7 @@ from vulcanlab.simple_conversion.chunk_simple import (
     create_content_chunks_simple,
     create_chunks_from_sanitized  # Keep for backward compatibility
 )
+from vulcanlab.simple_conversion.history import get_simple_conversion_history
 from vulcanlab.data.template_loader import load_template
 
 logger = logging.getLogger(__name__)
@@ -190,6 +193,19 @@ async def execute_automatic(
 
         if not work:
             raise HTTPException(status_code=404, detail=f"Work {work_id} not found")
+
+        # Check if already complete - prevent duplicate execution
+        ps = work.processing_status or {}
+        if ps.get('simple_conversion_step') == 'complete':
+            # Already processed, just return success with chunk count
+            existing_chunks = session.query(Chunk).filter(Chunk.work_id == work_id).count()
+            logger.info(f"Work {work_id} already complete with {existing_chunks} chunks, skipping re-execution")
+            return ExecuteAutoResponse(
+                work_id=work_id,
+                status='complete',
+                chunks_created=existing_chunks,
+                message='Conversion already complete'
+            )
 
         # Step 1: Parse and classify (if needed)
         parsed = session.query(ParsedMarkdown).filter(
@@ -507,4 +523,34 @@ async def get_results(
         raise
     except Exception as e:
         logger.error(f"Failed to get results for work {work_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/simple-conversion/history", response_model=SimpleConversionHistoryResponse, tags=["Simple Conversion"])
+async def get_history(
+    session: Session = Depends(get_db_session)
+):
+    """
+    Get simple conversion history.
+
+    Returns list of past simple conversion works with summary data,
+    sorted by created_at DESC (most recent first).
+
+    Args:
+        session: Database session
+
+    Returns:
+        List of simple conversion history items
+    """
+    try:
+        history_data = get_simple_conversion_history(session)
+
+        items = [SimpleConversionHistoryItem(**item) for item in history_data]
+
+        logger.info(f"Retrieved {len(items)} simple conversion history items")
+
+        return SimpleConversionHistoryResponse(items=items)
+
+    except Exception as e:
+        logger.error(f"Failed to get simple conversion history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
