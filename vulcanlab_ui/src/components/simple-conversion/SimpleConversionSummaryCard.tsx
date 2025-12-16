@@ -83,7 +83,11 @@ export function SimpleConversionSummaryCard({
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">Mode</h4>
-                <Badge variant="outline" data-testid="mode-badge">
+                <Badge
+                  variant="outline"
+                  className={mode === 'automatic' ? 'border-green-600 text-green-700' : 'border-amber-600 text-amber-700'}
+                  data-testid="mode-badge"
+                >
                   {mode === 'automatic' ? 'Automatic' : 'Manual'}
                 </Badge>
               </div>
