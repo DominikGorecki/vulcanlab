@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Loader2Icon, Database } from "lucide-react";
+import { AlertCircle, Loader2Icon, Database, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ConfirmDeleteModal } from "@/components/ConfirmDeleteModal";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -45,6 +46,8 @@ export default function CorpusPage() {
   const [works, setWorks] = useState<CorpusWork[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [workToDelete, setWorkToDelete] = useState<CorpusWork | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -83,6 +86,42 @@ export default function CorpusPage() {
 
   const handleWorkClick = (workId: number) => {
     router.push(`/corpus/${workId}`);
+  };
+
+  const handleDeleteClick = (work: CorpusWork, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setWorkToDelete(work);
+  };
+
+  const handleDeleteCancel = () => {
+    setWorkToDelete(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!workToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/corpus/works/${workToDelete.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete work: ${response.statusText}`);
+      }
+
+      // Success: close modal and refresh data
+      setWorkToDelete(null);
+      await fetchData();
+    } catch (err) {
+      // T04 will handle error display
+      console.error("Error deleting work:", err);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (loading) {
@@ -197,6 +236,7 @@ export default function CorpusPage() {
                     <TableHead className="w-[60px]">ID</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Authors</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -213,6 +253,19 @@ export default function CorpusPage() {
                       <TableCell className="max-w-xs truncate text-muted-foreground">
                         {work.authors || "-"}
                       </TableCell>
+                      <TableCell>
+                        <button
+                          onClick={(e) => handleDeleteClick(work, e)}
+                          className="p-2 rounded hover:bg-muted transition-colors"
+                          aria-label="Delete work"
+                          data-testid="delete-icon"
+                        >
+                          <Trash2
+                            size={16}
+                            className="text-muted-foreground hover:text-destructive"
+                          />
+                        </button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -221,6 +274,14 @@ export default function CorpusPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDeleteModal
+        work={workToDelete}
+        isOpen={!!workToDelete}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }
