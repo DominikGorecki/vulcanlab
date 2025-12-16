@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TOKEN_THRESHOLD = 15000
 DEFAULT_ADVANCED_MODE_ENABLED = False
+DEFAULT_USE_FULL_MODEL = False
 
 def get_config_path() -> Path:
     """Get path to vulcanlab.config.json."""
@@ -150,3 +151,49 @@ def set_advanced_mode_enabled(enabled: bool) -> None:
     config['conversion']['advanced_mode_enabled'] = enabled
     save_config(config)
     logger.info(f"Advanced mode enabled updated to {enabled}")
+
+
+def get_use_full_model() -> bool:
+    """
+    Get the use_full_model setting.
+
+    Returns:
+        Boolean indicating if full model should be used for LLM calls (defaults to False)
+    """
+    config = load_config()
+
+    # Navigate nested structure: conversion.use_full_model
+    conversion = config.get('conversion', {})
+    use_full = conversion.get('use_full_model', DEFAULT_USE_FULL_MODEL)
+
+    if not isinstance(use_full, bool):
+        logger.warning(
+            f"Invalid use_full_model value: {use_full}, using default {DEFAULT_USE_FULL_MODEL}"
+        )
+        return DEFAULT_USE_FULL_MODEL
+
+    return use_full
+
+
+def set_use_full_model(enabled: bool) -> None:
+    """
+    Set the use_full_model setting.
+
+    Args:
+        enabled: Boolean indicating if full model should be used for LLM calls
+
+    Raises:
+        ValueError: If enabled is not a boolean
+    """
+    if not isinstance(enabled, bool):
+        raise ValueError("use_full_model must be a boolean")
+
+    config = load_config()
+
+    # Ensure conversion section exists
+    if 'conversion' not in config:
+        config['conversion'] = {}
+
+    config['conversion']['use_full_model'] = enabled
+    save_config(config)
+    logger.info(f"Use full model updated to {enabled}")

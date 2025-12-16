@@ -29,6 +29,7 @@
   },
   "conversion": {
     "token_threshold": 15000,
-    "advanced_mode_enabled": false
+    "advanced_mode_enabled": false,
+    "use_full_model": false
   }
 }
