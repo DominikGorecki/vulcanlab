@@ -15,11 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2Icon, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { HistoryErrorBoundary } from "@/components/simple-conversion/HistoryErrorBoundary";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -36,25 +36,6 @@ interface FormErrors {
   title?: string;
   author?: string;
   year?: string;
-}
-
-interface ChunkResult {
-  id: number;
-  heading_level: number;
-  heading_text: string;
-  start_line: number;
-  end_line: number;
-  content_preview: string;
-}
-
-interface ResultsData {
-  work_id: number;
-  title: string;
-  author: string;
-  classification: string;
-  token_count: number;
-  chunk_count: number;
-  chunks: ChunkResult[];
 }
 
 interface HistoryWorkAPI {
@@ -99,12 +80,6 @@ export default function SimpleConversionPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Automatic execution state
-  const [autoExecuting, setAutoExecuting] = useState(false);
-  const [autoStatus, setAutoStatus] = useState<string>('');
-  const [autoResults, setAutoResults] = useState<ResultsData | null>(null);
-  const [autoError, setAutoError] = useState<string | null>(null);
 
   // History state
   const [historyWorks, setHistoryWorks] = useState<HistoryWork[]>([]);
@@ -219,42 +194,6 @@ export default function SimpleConversionPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const executeAutomaticPipeline = async (workId: number) => {
-    try {
-      setAutoError(null);
-
-      // Step 1: Execute full pipeline
-      setAutoStatus('Processing document...');
-      const response = await fetch(`${API_BASE_URL}/api/simple-conversion/execute-auto/${workId}`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Pipeline execution failed');
-      }
-
-      // Step 2: Fetch results
-      setAutoStatus('Loading results...');
-      const resultsResponse = await fetch(`${API_BASE_URL}/api/simple-conversion/results/${workId}`);
-
-      if (!resultsResponse.ok) {
-        throw new Error('Failed to fetch results');
-      }
-
-      const resultsData = await resultsResponse.json();
-      setAutoResults(resultsData);
-      setAutoStatus('Complete!');
-
-    } catch (err) {
-      console.error('Automatic pipeline failed:', err);
-      const message = err instanceof Error ? err.message : 'Pipeline execution failed';
-      setAutoError(message);
-    } finally {
-      setAutoExecuting(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -286,21 +225,13 @@ export default function SimpleConversionPage() {
       const data = await response.json();
       const { work_id, mode } = data;
 
-      console.log('Backend returned mode:', mode);
-      console.log('Form data mode was:', formData.mode);
-
-      // Branch based on mode
+      // Branch based on mode and redirect to appropriate page
       if (mode === 'manual') {
-        console.log('Redirecting to manual workflow');
-        // Redirect to manual workflow
         router.push(`/simple-conversion/manual/${work_id}`);
-        return; // Exit early to prevent any further execution
+      } else {
+        // Automatic mode: Redirect to automatic execution page
+        router.push(`/simple-conversion/automatic/${work_id}`);
       }
-
-      console.log('Executing automatic pipeline');
-      // Automatic mode: Stay on page and execute pipeline
-      setAutoExecuting(true);
-      await executeAutomaticPipeline(work_id);
 
     } catch (err) {
       console.error('Failed to start conversion:', err);
@@ -355,18 +286,8 @@ export default function SimpleConversionPage() {
         </p>
       </div>
 
-      {/* Show loading during manual redirect */}
-      {submitting && !autoExecuting && (
-        <Card>
-          <CardContent className="pt-6 flex flex-col items-center justify-center space-y-4">
-            <Loader2Icon className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-lg font-medium">Redirecting to manual workflow...</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Show form unless automatic execution is in progress or completed */}
-      {!autoExecuting && !autoResults && !submitting && (
+      {/* Show form unless submitting */}
+      {!submitting && (
         <Card>
         <CardHeader>
           <CardTitle>Start Conversion</CardTitle>
@@ -548,137 +469,27 @@ export default function SimpleConversionPage() {
       </Card>
       )}
 
-      {/* Show automatic execution status */}
-      {autoExecuting && (
+      {/* Show loading during redirect */}
+      {submitting && (
         <Card>
           <CardContent className="pt-6 flex flex-col items-center justify-center space-y-4">
             <Loader2Icon className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-lg font-medium">{autoStatus}</p>
-            <p className="text-sm text-muted-foreground">
-              Processing your document automatically...
-            </p>
+            <p className="text-lg font-medium">Starting conversion...</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Show automatic execution error */}
-      {autoError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{autoError}</AlertDescription>
-          <div className="mt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setAutoError(null);
-                setAutoResults(null);
-                setAutoExecuting(false);
-              }}
-            >
-              Try Again
-            </Button>
-          </div>
-        </Alert>
-      )}
-
-      {/* Show automatic execution results */}
-      {autoResults && !autoExecuting && (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <Alert className="border-green-500 bg-green-50 text-green-900">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle>Success</AlertTitle>
-            <AlertDescription>
-              Automatic conversion completed successfully!
-            </AlertDescription>
-          </Alert>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Results Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Title</h4>
-                  <p className="font-medium">{autoResults.title}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Author</h4>
-                  <p className="font-medium">{autoResults.author}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Classification</h4>
-                  <Badge variant="secondary" className="uppercase">{autoResults.classification}</Badge>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Token Count</h4>
-                  <p className="font-mono">{autoResults.token_count.toLocaleString()}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Chunks Created</h4>
-                  <p className="font-mono">{autoResults.chunk_count}</p>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <Button
-                  onClick={() => {
-                    setAutoResults(null);
-                    setAutoError(null);
-                    setAutoExecuting(false);
-                  }}
-                >
-                  Start Another Conversion
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Generated Chunks</CardTitle>
-              <CardDescription>Preview of the generated chunks</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[600px] pr-4">
-                <div className="space-y-4">
-                  {autoResults.chunks.map((chunk) => (
-                    <div key={chunk.id} className="border rounded-lg p-4 bg-card hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-primary text-primary-foreground">H{chunk.heading_level}</Badge>
-                          <h4 className="font-semibold text-lg">{chunk.heading_text}</h4>
-                        </div>
-                        <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                          Lines {chunk.start_line}-{chunk.end_line}
-                        </span>
-                      </div>
-                      <div className="pl-4 border-l-2 border-muted mt-2">
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap font-mono text-xs">
-                          {chunk.content_preview}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       {/* History Section - Always visible below the form */}
-      <div className="space-y-4">
-        <div className="border-t pt-6">
-          <h3 className="text-2xl font-bold tracking-tight mb-2">Past Conversions</h3>
-          <p className="text-muted-foreground text-sm mb-4">
-            View your previous simple conversion works
-          </p>
+      <HistoryErrorBoundary>
+        <div className="space-y-4">
+          <div className="border-t pt-6">
+            <h3 className="text-2xl font-bold tracking-tight mb-2">Past Conversions</h3>
+            <p className="text-muted-foreground text-sm mb-4">
+              View your previous simple conversion works
+            </p>
 
-          {/* Loading State */}
-          {loadingHistory && (
+            {/* Loading State */}
+            {loadingHistory && (
             <div className="flex items-center justify-center h-32" data-testid="history-loading">
               <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
@@ -757,7 +568,11 @@ export default function SimpleConversionPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" data-testid="mode-badge">
+                          <Badge
+                            variant="outline"
+                            className={work.mode === 'automatic' ? 'border-green-600 text-green-700' : 'border-amber-600 text-amber-700'}
+                            data-testid="mode-badge"
+                          >
                             {work.mode === 'automatic' ? 'Automatic' : 'Manual'}
                           </Badge>
                         </TableCell>
@@ -784,8 +599,9 @@ export default function SimpleConversionPage() {
               </Table>
             </div>
           )}
+          </div>
         </div>
-      </div>
+      </HistoryErrorBoundary>
     </div>
   );
 }

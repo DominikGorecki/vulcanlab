@@ -194,6 +194,19 @@ async def execute_automatic(
         if not work:
             raise HTTPException(status_code=404, detail=f"Work {work_id} not found")
 
+        # Check if already complete - prevent duplicate execution
+        ps = work.processing_status or {}
+        if ps.get('simple_conversion_step') == 'complete':
+            # Already processed, just return success with chunk count
+            existing_chunks = session.query(Chunk).filter(Chunk.work_id == work_id).count()
+            logger.info(f"Work {work_id} already complete with {existing_chunks} chunks, skipping re-execution")
+            return ExecuteAutoResponse(
+                work_id=work_id,
+                status='complete',
+                chunks_created=existing_chunks,
+                message='Conversion already complete'
+            )
+
         # Step 1: Parse and classify (if needed)
         parsed = session.query(ParsedMarkdown).filter(
             ParsedMarkdown.work_id == work_id

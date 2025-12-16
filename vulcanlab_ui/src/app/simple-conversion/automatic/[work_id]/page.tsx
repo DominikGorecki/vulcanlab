@@ -84,11 +84,38 @@ export default function AutomaticWorkflowPage() {
     }
   }, [workId]);
 
-  const executeAutomatic = async () => {
+  const executeAutomatic = useCallback(async () => {
     try {
       setExecuting(true);
       setError(null);
 
+      // First check current status to see if already executed
+      const statusResponse = await fetch(`${API_BASE_URL}/api/simple-conversion/status/${workId}`);
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+
+        // If already complete or in error state, don't execute again
+        if (statusData.step === 'complete') {
+          setStatus(statusData);
+          setExecuting(false);
+          setCompleted(true);
+          return;
+        } else if (statusData.step === 'error') {
+          setStatus(statusData);
+          setExecuting(false);
+          setError(statusData.error_message || 'Pipeline execution failed');
+          return;
+        }
+
+        // If in progress (parsing, sanitizing, chunking), just poll status
+        if (['parsing', 'parsed', 'sanitizing', 'sanitized', 'chunking', 'chunked'].includes(statusData.step)) {
+          setStatus(statusData);
+          // Let the polling effect handle status updates
+          return;
+        }
+      }
+
+      // Only execute if status is 'converting' or unknown
       const response = await fetch(`${API_BASE_URL}/api/simple-conversion/execute-auto/${workId}`, {
         method: 'POST',
       });
@@ -105,9 +132,9 @@ export default function AutomaticWorkflowPage() {
       setError(message);
       setExecuting(false);
     }
-  };
+  }, [workId, fetchStatus]);
 
-  const fetchResults = async () => {
+  const fetchResults = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/simple-conversion/results/${workId}`);
       if (!response.ok) {
@@ -120,7 +147,7 @@ export default function AutomaticWorkflowPage() {
       const message = err instanceof Error ? err.message : 'Failed to load results';
       setError(message);
     }
-  };
+  }, [workId]);
 
   // Start execution on mount
   useEffect(() => {
@@ -128,7 +155,7 @@ export default function AutomaticWorkflowPage() {
       setInitialLoad(false);
       executeAutomatic();
     }
-  }, [workId, initialLoad]);
+  }, [workId, initialLoad, executeAutomatic]);
 
   // Poll for status
   useEffect(() => {
@@ -146,7 +173,7 @@ export default function AutomaticWorkflowPage() {
     if (completed && !results) {
       fetchResults();
     }
-  }, [completed, results, workId]);
+  }, [completed, results, fetchResults]);
 
   const getStepLabel = (step: string): string => {
     const labels: Record<string, string> = {
@@ -212,6 +239,19 @@ export default function AutomaticWorkflowPage() {
         </Button>
         <h1 className="text-3xl font-bold tracking-tight">Automatic Conversion</h1>
       </div>
+
+      {/* Initial loading state before we have status */}
+      {executing && !status && !error && (
+        <Card>
+          <CardContent className="pt-6 flex flex-col items-center justify-center space-y-4 min-h-[300px]">
+            <Loader2Icon className="h-12 w-12 animate-spin text-primary" />
+            <p className="text-lg font-medium">Starting automatic conversion...</p>
+            <p className="text-sm text-muted-foreground">
+              Preparing to process your document
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {status && !completed && !error && (
         <Card>
@@ -314,7 +354,12 @@ export default function AutomaticWorkflowPage() {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground">Classification</h4>
-                  <Badge variant="secondary" className="uppercase">{results.classification}</Badge>
+                  <Badge
+                    variant={results.classification === 'small' ? 'default' : 'secondary'}
+                    className={results.classification === 'small' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700 text-white'}
+                  >
+                    {results.classification === 'small' ? 'Small' : 'Large'}
+                  </Badge>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground">Token Count</h4>
