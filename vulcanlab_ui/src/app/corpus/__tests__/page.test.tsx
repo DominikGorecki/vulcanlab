@@ -282,7 +282,7 @@ describe('CorpusPage - Delete Functionality', () => {
   });
 
   describe('Delete Error Handling', () => {
-    it('handles deletion errors gracefully', async () => {
+    it('test_page_handles_404_error: shows error modal with user-friendly message for 404', async () => {
       await act(async () => {
         render(<CorpusPage />);
       });
@@ -299,10 +299,12 @@ describe('CorpusPage - Delete Functionality', () => {
         expect(screen.getByTestId('confirm-delete-modal')).toBeInTheDocument();
       });
 
-      // Mock failed deletion response
+      // Mock 404 response
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        statusText: 'Internal Server Error',
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Headers(),
       });
 
       // Click Delete
@@ -311,13 +313,217 @@ describe('CorpusPage - Delete Functionality', () => {
         fireEvent.click(deleteButton);
       });
 
-      // Modal should remain open on error (for now, until T04)
+      // Confirmation modal should close and error modal should appear
+      await waitFor(() => {
+        expect(screen.queryByTestId('confirm-delete-modal')).not.toBeInTheDocument();
+        expect(screen.getByTestId('error-modal')).toBeInTheDocument();
+        expect(screen.getByText('Work Not Found')).toBeInTheDocument();
+        expect(screen.getByText('This work may have already been deleted.')).toBeInTheDocument();
+      });
+    });
+
+    it('test_page_handles_500_error: shows error modal with detail for 500', async () => {
+      await act(async () => {
+        render(<CorpusPage />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('delete-icon')).toHaveLength(mockWorks.length);
+      });
+
+      // Open modal
+      const deleteIcons = screen.getAllByTestId('delete-icon');
+      fireEvent.click(deleteIcons[0]);
+
       await waitFor(() => {
         expect(screen.getByTestId('confirm-delete-modal')).toBeInTheDocument();
       });
 
-      // Console error should be logged
-      // (T04 will handle proper error display)
+      // Mock 500 response with error detail
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ detail: 'Database error in /app/models.py' }),
+      });
+
+      // Click Delete
+      const deleteButton = screen.getByTestId('delete-button');
+      await act(async () => {
+        fireEvent.click(deleteButton);
+      });
+
+      // Error modal should appear with sanitized error detail
+      await waitFor(() => {
+        expect(screen.queryByTestId('confirm-delete-modal')).not.toBeInTheDocument();
+        expect(screen.getByTestId('error-modal')).toBeInTheDocument();
+        expect(screen.getByText('Deletion Failed')).toBeInTheDocument();
+        expect(screen.getByText('An internal server error occurred while deleting the work.')).toBeInTheDocument();
+        // File path should be sanitized
+        expect(screen.getByText(/Database error in \[file\]/)).toBeInTheDocument();
+      });
+    });
+
+    it('test_page_handles_network_error: shows error modal for network failures', async () => {
+      await act(async () => {
+        render(<CorpusPage />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('delete-icon')).toHaveLength(mockWorks.length);
+      });
+
+      // Open modal
+      const deleteIcons = screen.getAllByTestId('delete-icon');
+      fireEvent.click(deleteIcons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-delete-modal')).toBeInTheDocument();
+      });
+
+      // Mock network error
+      mockFetch.mockRejectedValueOnce(new Error('Network request failed'));
+
+      // Click Delete
+      const deleteButton = screen.getByTestId('delete-button');
+      await act(async () => {
+        fireEvent.click(deleteButton);
+      });
+
+      // Error modal should appear with network error message
+      await waitFor(() => {
+        expect(screen.queryByTestId('confirm-delete-modal')).not.toBeInTheDocument();
+        expect(screen.getByTestId('error-modal')).toBeInTheDocument();
+        expect(screen.getByText('Connection Error')).toBeInTheDocument();
+        expect(screen.getByText('Failed to connect to server. Please check your network connection and try again.')).toBeInTheDocument();
+      });
+    });
+
+    it('test_page_closes_confirm_modal_on_error: confirmation modal closes when error occurs', async () => {
+      await act(async () => {
+        render(<CorpusPage />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('delete-icon')).toHaveLength(mockWorks.length);
+      });
+
+      // Open confirmation modal
+      const deleteIcons = screen.getAllByTestId('delete-icon');
+      fireEvent.click(deleteIcons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-delete-modal')).toBeInTheDocument();
+      });
+
+      // Mock error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Headers(),
+      });
+
+      // Click Delete
+      const deleteButton = screen.getByTestId('delete-button');
+      await act(async () => {
+        fireEvent.click(deleteButton);
+      });
+
+      // Confirmation modal should be closed
+      await waitFor(() => {
+        expect(screen.queryByTestId('confirm-delete-modal')).not.toBeInTheDocument();
+      });
+    });
+
+    it('test_page_clears_error_on_modal_close: error state clears when error modal closes', async () => {
+      await act(async () => {
+        render(<CorpusPage />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('delete-icon')).toHaveLength(mockWorks.length);
+      });
+
+      // Open modal and trigger error
+      const deleteIcons = screen.getAllByTestId('delete-icon');
+      fireEvent.click(deleteIcons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-delete-modal')).toBeInTheDocument();
+      });
+
+      // Mock error
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Headers(),
+      });
+
+      const deleteButton = screen.getByTestId('delete-button');
+      await act(async () => {
+        fireEvent.click(deleteButton);
+      });
+
+      // Error modal should appear
+      await waitFor(() => {
+        expect(screen.getByTestId('error-modal')).toBeInTheDocument();
+      });
+
+      // Close error modal
+      const closeButton = screen.getByTestId('close-button');
+      fireEvent.click(closeButton);
+
+      // Error modal should disappear
+      await waitFor(() => {
+        expect(screen.queryByTestId('error-modal')).not.toBeInTheDocument();
+      });
+
+      // Page should still be functional - can open delete modal again
+      fireEvent.click(deleteIcons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-delete-modal')).toBeInTheDocument();
+      });
+    });
+
+    it('handles 500 error without JSON response', async () => {
+      await act(async () => {
+        render(<CorpusPage />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('delete-icon')).toHaveLength(mockWorks.length);
+      });
+
+      const deleteIcons = screen.getAllByTestId('delete-icon');
+      fireEvent.click(deleteIcons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-delete-modal')).toBeInTheDocument();
+      });
+
+      // Mock 500 response without JSON
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Headers({ 'content-type': 'text/html' }),
+      });
+
+      const deleteButton = screen.getByTestId('delete-button');
+      await act(async () => {
+        fireEvent.click(deleteButton);
+      });
+
+      // Error modal should appear without error details
+      await waitFor(() => {
+        expect(screen.getByTestId('error-modal')).toBeInTheDocument();
+        expect(screen.getByText('Deletion Failed')).toBeInTheDocument();
+        expect(screen.queryByTestId('error-details')).not.toBeInTheDocument();
+      });
     });
   });
 
