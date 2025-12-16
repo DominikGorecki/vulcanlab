@@ -136,7 +136,14 @@ def sanitize_small_document(work_id: int, session: Session) -> SanitizedMarkdown
     response = llm_stack.chat.invoke(prompt)
 
     # Extract content from LangChain response
-    response_text = response.content if hasattr(response, 'content') else str(response)
+    if hasattr(response, 'content'):
+        # Handle both string and list responses (Anthropic returns list)
+        if isinstance(response.content, list):
+            response_text = response.content[0].get('text', '') if response.content else ''
+        else:
+            response_text = response.content
+    else:
+        response_text = str(response)
 
     # Parse response (now returns literal markdown)
     sanitized_content = parse_llm_response(response_text)

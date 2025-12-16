@@ -30,6 +30,6 @@
   "conversion": {
     "token_threshold": 15000,
     "advanced_mode_enabled": false,
-    "use_full_model": false
+    "use_full_model": true
   }
 }
