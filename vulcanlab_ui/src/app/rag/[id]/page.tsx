@@ -235,7 +235,7 @@ export default function GeneratePage() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/rag/queries/${queryId}/augment/run`,
+        `${API_BASE_URL}/rag/queries/${queryId}/augment/run?top_n=${selectedSourceCount}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
