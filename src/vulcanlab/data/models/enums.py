@@ -7,6 +7,7 @@ class FileType(str, enum.Enum):
     """File type for parsed markdown."""
     PDF = 'pdf'
     EPUB = 'epub'
+    MARKDOWN_IMPORT = 'markdown_import'
 
 
 class DocumentClassification(str, enum.Enum):
