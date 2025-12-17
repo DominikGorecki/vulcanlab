@@ -69,7 +69,18 @@ def is_safe_path(path: Path, base_dir: Path) -> bool:
         return False
 
 
+from .export import (
+    export_work,
+    generate_export_filename,
+    create_frontmatter,
+    get_markdown_source,
+)
+
 __all__ = [
     "get_exports_dir",
     "is_safe_path",
+    "export_work",
+    "generate_export_filename",
+    "create_frontmatter",
+    "get_markdown_source",
 ]

@@ -30,6 +30,7 @@ from vulcanlab_api.routers import (
     conversion_settings,
     corpus,
     init,
+    markdown,
     rag,
     rag_config,
     sanitization,
@@ -101,6 +102,10 @@ app = FastAPI(
             "name": "RAG Config",
             "description": "RAG configuration preset management. Create, edit, and manage retrieval/consolidation/augmentation settings.",
         },
+        {
+            "name": "Markdown",
+            "description": "Markdown import/export operations. Export works to markdown files, import markdown files as works.",
+        },
     ],
     # Additional metadata
     contact={
@@ -134,6 +139,7 @@ app.include_router(v1_corpus.router, prefix="/api/v1/corpus", tags=["Corpus V1"]
 app.include_router(rag.router, prefix="/rag", tags=["RAG"])
 app.include_router(rag_config.router, prefix="/api/rag-config", tags=["RAG Config"])
 app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix
+app.include_router(markdown.router, prefix="/api/v1/markdown", tags=["Markdown"])
 
 
 @app.get("/", include_in_schema=False)
