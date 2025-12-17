@@ -102,6 +102,13 @@ export default function RAGPage() {
     router.push(`/rag/new?q=${encodeURIComponent(newQuery.trim())}`);
   };
 
+  const handleAutoQuery = () => {
+    if (!newQuery.trim()) return;
+    // Store query in sessionStorage for the auto page
+    sessionStorage.setItem("vulcanlab_auto_query_text", newQuery.trim());
+    router.push("/rag/auto");
+  };
+
   const handleEmbed = async (queryId: number) => {
     setOperatingId(queryId);
     setOperationError(null);
@@ -513,14 +520,25 @@ export default function RAGPage() {
               placeholder="Enter your query here... (e.g., What is working memory?)"
               className="flex-1 min-h-[80px] resize-none"
             />
-            <Button
-              onClick={handleNewQuery}
-              disabled={!newQuery.trim()}
-              className="gap-2 self-end"
-            >
-              <Plus className="h-4 w-4" />
-              New
-            </Button>
+            <div className="flex flex-col gap-2 self-end">
+              <Button
+                onClick={handleAutoQuery}
+                disabled={!newQuery.trim()}
+                className="gap-2"
+              >
+                <Zap className="h-4 w-4" />
+                Auto
+              </Button>
+              <Button
+                onClick={handleNewQuery}
+                disabled={!newQuery.trim()}
+                variant="outline"
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Manual
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
