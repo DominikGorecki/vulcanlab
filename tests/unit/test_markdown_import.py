@@ -86,9 +86,10 @@ Test content."""
 
                     work = import_sanitized_markdown(str(test_file), metadata, mock_session)
 
-                    # Verify SanitizedMarkdown was added
-                    assert mock_session.add.call_count == 2
-                    sanitized = mock_session.add.call_args_list[1][0][0]
+                    # Verify ParsedMarkdown and SanitizedMarkdown were added
+                    # call_count should be 3: Work, ParsedMarkdown, SanitizedMarkdown
+                    assert mock_session.add.call_count == 3
+                    sanitized = mock_session.add.call_args_list[2][0][0]
                     assert isinstance(sanitized, SanitizedMarkdown)
                     assert "# Content" in sanitized.content
                     assert "Test content." in sanitized.content
@@ -194,7 +195,7 @@ title: "Test"
             metadata = Metadata(title="Test")
             mock_session = MagicMock()
 
-            with pytest.raises(ValueError, match="no content after stripping frontmatter"):
+            with pytest.raises(ValueError, match="only frontmatter or whitespace"):
                 import_sanitized_markdown(str(test_file), metadata, mock_session)
 
     def test_import_heading_chunking_failure(self):
@@ -212,8 +213,8 @@ title: "Test"
                 with pytest.raises(ValueError, match="Heading chunking failed"):
                     import_sanitized_markdown(str(test_file), metadata, mock_session)
 
-                # Verify status updated to failed
-                mock_session.commit.assert_called()
+                # Verify transaction was rolled back on failure
+                mock_session.rollback.assert_called()
 
     def test_import_content_chunking_failure(self):
         """Test import handles content chunking failure."""

@@ -200,6 +200,23 @@ def import_sanitized_markdown(
 
         logger.debug(f"Created Work record with ID {work.id}")
 
+        # Count tokens for proper classification
+        token_count = count_tokens_simple(clean_content)
+
+        # Create ParsedMarkdown record (required by results endpoint)
+        from vulcanlab.data.models.parsed_markdown import ParsedMarkdown
+        from vulcanlab.data.models.enums import DocumentClassification
+
+        parsed = ParsedMarkdown(
+            work_id=work.id,
+            content=clean_content,
+            file_type=FileType.MARKDOWN_IMPORT,
+            classification=DocumentClassification.SMALL,  # Sanitized imports are treated as small
+            token_count=token_count
+        )
+        session.add(parsed)
+        session.flush()
+
         # Store sanitized markdown
         token_count = count_tokens_simple(clean_content)
 
