@@ -171,48 +171,30 @@ export default function MarkdownExportPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Export Markdown</h2>
-          <p className="text-muted-foreground">Export corpus works as markdown files with metadata.</p>
-        </div>
-        <div className="flex items-center justify-center h-64">
-          <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Export Markdown</h2>
-          <p className="text-muted-foreground">Export corpus works as markdown files with metadata.</p>
-        </div>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              <p>{error}</p>
-            </div>
-            <Button onClick={fetchWorks} className="mt-4">
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-3 text-destructive">
+            <AlertCircle className="h-5 w-5" />
+            <p>{error}</p>
+          </div>
+          <Button onClick={fetchWorks} className="mt-4">
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Export Markdown</h2>
-        <p className="text-muted-foreground">
-          Export corpus works as markdown files with metadata
-        </p>
-      </div>
 
       {/* Works Table */}
       <Card>

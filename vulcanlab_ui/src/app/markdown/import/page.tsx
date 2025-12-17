@@ -538,35 +538,31 @@ export default function MarkdownImportPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="flex items-center justify-center py-12">
-            <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-            <span className="ml-3 text-muted-foreground">Loading markdown files...</span>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-3 text-muted-foreground">Loading markdown files...</span>
+        </CardContent>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="flex items-center gap-3 py-8 text-destructive">
-            <AlertCircle className="h-6 w-6" />
-            <div>
-              <p className="font-semibold">Error loading files</p>
-              <p className="text-sm">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="flex items-center gap-3 py-8 text-destructive">
+          <AlertCircle className="h-6 w-6" />
+          <div>
+            <p className="font-semibold">Error loading files</p>
+            <p className="text-sm">{error}</p>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <>
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -663,6 +659,6 @@ export default function MarkdownImportPage() {
           error={importError.detail}
         />
       )}
-    </div>
+    </>
   );
 }

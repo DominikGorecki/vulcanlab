@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp } from "lucide-react";
 import { useConversionSettings } from "@/contexts/conversion-settings";
 
 const navItems = [
   { href: "/corpus", label: "Corpus", icon: Database, alwaysVisible: true },
+  { href: "/markdown/export", label: "MD Import/Export", icon: FileUp, alwaysVisible: true },
   { href: "/simple-conversion", label: "Simple Conversion", icon: Zap, alwaysVisible: true },
   { href: "/conv", label: "Conversion", icon: FileText, alwaysVisible: false },
   { href: "/sanitization", label: "Sanitization", icon: Eraser, alwaysVisible: false },
