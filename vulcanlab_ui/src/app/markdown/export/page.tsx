@@ -88,45 +88,89 @@ export default function MarkdownExportPage() {
         let errorMessage: string;
         let errorTitle: string;
 
-        if (response.status === 404) {
-          errorTitle = "Work Not Found";
-          errorMessage = "This work may have been deleted or does not exist.";
-        } else if (response.status === 400) {
-          errorTitle = "Export Failed";
-          errorMessage = "This work cannot be exported. It may not have sanitized markdown content.";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
 
-          // Try to parse error detail from response
-          try {
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-              const errorData = await response.json();
-              if (errorData.detail) {
-                errorDetail = String(errorData.detail);
-              }
-            }
-          } catch {
-            // Ignore JSON parsing errors
-          }
-        } else if (response.status === 500) {
-          errorTitle = "Export Failed";
-          errorMessage = "An internal server error occurred while exporting the work.";
+            // Handle structured error response from API
+            if (errorData.detail && typeof errorData.detail === 'object') {
+              const structuredError = errorData.detail;
 
-          // Try to parse error detail from response
-          try {
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-              const errorData = await response.json();
-              if (errorData.detail) {
-                // Remove file paths from error details
-                errorDetail = String(errorData.detail).replace(/\/[^\s]+\.py/g, "[file]");
+              // Map error types to user-friendly messages
+              switch (structuredError.error) {
+                case "file_not_found":
+                  errorTitle = "Work Not Found";
+                  errorMessage = structuredError.message || "This work may have been deleted or does not exist.";
+                  break;
+                case "disk_full":
+                  errorTitle = "Disk Full";
+                  errorMessage = structuredError.message || "Cannot write export file: disk is full.";
+                  break;
+                case "permission_denied":
+                  errorTitle = "Permission Denied";
+                  errorMessage = structuredError.message || "Cannot write to exports directory due to permission restrictions.";
+                  break;
+                case "read_only":
+                  errorTitle = "Read-Only Filesystem";
+                  errorMessage = structuredError.message || "Cannot write to read-only exports directory.";
+                  break;
+                default:
+                  if (response.status === 404) {
+                    errorTitle = "Work Not Found";
+                    errorMessage = structuredError.message || "This work may have been deleted or does not exist.";
+                  } else if (response.status === 400) {
+                    errorTitle = "Export Failed";
+                    errorMessage = structuredError.message || "This work cannot be exported. It may not have sanitized markdown content.";
+                  } else if (response.status === 500) {
+                    errorTitle = "Export Failed";
+                    errorMessage = structuredError.message || "An internal server error occurred while exporting the work.";
+                  } else {
+                    errorTitle = "Export Failed";
+                    errorMessage = structuredError.message || `Failed to export work: ${response.statusText}`;
+                  }
               }
+
+              errorDetail = structuredError.detail;
+            } else if (errorData.detail) {
+              // Handle old-style string detail
+              errorDetail = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+
+              // Fallback to status code based messages
+              if (response.status === 404) {
+                errorTitle = "Work Not Found";
+                errorMessage = "This work may have been deleted or does not exist.";
+              } else if (response.status === 400) {
+                errorTitle = "Export Failed";
+                errorMessage = "This work cannot be exported. It may not have sanitized markdown content.";
+              } else if (response.status === 500) {
+                errorTitle = "Export Failed";
+                errorMessage = "An internal server error occurred while exporting the work.";
+              } else {
+                errorTitle = "Export Failed";
+                errorMessage = `Failed to export work: ${response.statusText}`;
+              }
+            } else {
+              throw new Error("No error detail in response");
             }
-          } catch {
-            // Ignore JSON parsing errors
+          } else {
+            throw new Error("Non-JSON error response");
           }
-        } else {
-          errorTitle = "Export Failed";
-          errorMessage = `Failed to export work: ${response.statusText}`;
+        } catch {
+          // Couldn't parse error - use default messages based on status code
+          if (response.status === 404) {
+            errorTitle = "Work Not Found";
+            errorMessage = "This work may have been deleted or does not exist.";
+          } else if (response.status === 400) {
+            errorTitle = "Export Failed";
+            errorMessage = "This work cannot be exported. It may not have sanitized markdown content.";
+          } else if (response.status === 500) {
+            errorTitle = "Export Failed";
+            errorMessage = "An internal server error occurred while exporting the work.";
+          } else {
+            errorTitle = "Export Failed";
+            errorMessage = `Failed to export work: ${response.statusText}`;
+          }
         }
 
         setExportError({ title: errorTitle, message: errorMessage, detail: errorDetail });

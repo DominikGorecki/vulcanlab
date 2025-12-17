@@ -482,19 +482,75 @@ export default function MarkdownImportPage() {
         let errorMessage = "Failed to import the markdown file.";
         let errorDetail: string | undefined;
 
-        if (response.status === 404) {
-          errorTitle = "File Not Found";
-          errorMessage = "The selected file could not be found.";
-        } else if (response.status === 400) {
-          errorTitle = "Validation Error";
-          errorMessage = "The file content or metadata is invalid.";
-        }
-
         try {
           const errorData = await response.json();
-          errorDetail = errorData.detail || errorData.message;
+
+          // Handle structured error response from API
+          if (errorData.detail && typeof errorData.detail === 'object') {
+            const structuredError = errorData.detail;
+
+            // Map error types to user-friendly titles
+            switch (structuredError.error) {
+              case "file_not_found":
+                errorTitle = "File Not Found";
+                errorMessage = structuredError.message || "The selected file could not be found.";
+                break;
+              case "empty_file":
+                errorTitle = "Empty File";
+                errorMessage = structuredError.message || "The file is empty and cannot be imported.";
+                break;
+              case "no_content":
+                errorTitle = "No Content";
+                errorMessage = structuredError.message || "The file contains only metadata or whitespace, no actual content.";
+                break;
+              case "encoding_error":
+                errorTitle = "Encoding Error";
+                errorMessage = structuredError.message || "The file encoding is not supported.";
+                break;
+              case "permission_denied":
+                errorTitle = "Permission Denied";
+                errorMessage = structuredError.message || "Permission denied reading the file.";
+                break;
+              case "chunking_failed":
+                errorTitle = "Processing Error";
+                errorMessage = structuredError.message || "Failed to process the markdown structure.";
+                break;
+              case "sanitization_failed":
+                errorTitle = "Sanitization Error";
+                errorMessage = structuredError.message || "Failed to sanitize the markdown content. Please try importing as already sanitized.";
+                break;
+              case "validation_error":
+                errorTitle = "Validation Error";
+                errorMessage = structuredError.message || "The file content or metadata is invalid.";
+                break;
+              default:
+                errorTitle = "Import Failed";
+                errorMessage = structuredError.message || "An error occurred during import.";
+            }
+
+            errorDetail = structuredError.detail;
+          } else if (errorData.detail) {
+            // Handle old-style string detail
+            errorDetail = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+
+            // Fallback to status code based titles
+            if (response.status === 404) {
+              errorTitle = "File Not Found";
+              errorMessage = "The selected file could not be found.";
+            } else if (response.status === 400) {
+              errorTitle = "Validation Error";
+              errorMessage = "The file content or metadata is invalid.";
+            }
+          }
         } catch {
-          // Couldn't parse error
+          // Couldn't parse error - use default messages
+          if (response.status === 404) {
+            errorTitle = "File Not Found";
+            errorMessage = "The selected file could not be found.";
+          } else if (response.status === 400) {
+            errorTitle = "Validation Error";
+            errorMessage = "The file content or metadata is invalid.";
+          }
         }
 
         setImportError({

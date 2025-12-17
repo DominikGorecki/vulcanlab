@@ -170,3 +170,28 @@ class ImportResponse(BaseModel):
         None,
         description="Warning message if duplicate work detected"
     )
+
+
+class ErrorResponse(BaseModel):
+    """Structured error response for API errors."""
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "error": "validation_error",
+            "message": "File is empty (0 bytes)",
+            "detail": None
+        }
+    }}
+
+    error: str = Field(
+        ...,
+        description="Error type/code (e.g., 'validation_error', 'file_not_found', 'permission_denied')"
+    )
+    message: str = Field(
+        ...,
+        description="User-friendly error message"
+    )
+    detail: Optional[str] = Field(
+        None,
+        description="Optional technical details for debugging (not shown to end users)"
+    )

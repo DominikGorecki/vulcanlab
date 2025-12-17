@@ -3,6 +3,7 @@
 This module provides functions to export work markdown to files with YAML frontmatter.
 """
 
+import errno
 import logging
 import re
 from pathlib import Path
@@ -135,6 +136,12 @@ def get_markdown_source(work: Work, session: Session) -> Tuple[str, str]:
                         content = sanitized_path.read_text(encoding='utf-8')
                         logger.debug(f"Retrieved markdown from file for work {work.id}: {sanitized_path}")
                         return (content, "file")
+                    except PermissionError as e:
+                        logger.error(f"Permission denied reading markdown file {sanitized_path}: {e}")
+                        raise ValueError(f"Permission denied reading markdown file")
+                    except UnicodeDecodeError as e:
+                        logger.error(f"Invalid encoding in markdown file {sanitized_path}: {e}")
+                        raise ValueError(f"Invalid file encoding (not UTF-8)")
                     except Exception as e:
                         logger.error(f"Failed to read sanitized markdown file {sanitized_path}: {e}")
                         raise ValueError(f"Failed to read markdown file: {e}")
@@ -175,8 +182,24 @@ def export_work(work_id: int, session: Session) -> str:
         logger.error(f"Markdown unavailable for work {work_id}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Validate markdown content is not empty
+    if not markdown_content or not markdown_content.strip():
+        logger.error(f"Empty markdown content for work {work_id}")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot export work with empty markdown content"
+        )
+
     # Generate filename
     filename = generate_export_filename(work.title)
+
+    # Validate filename is not empty
+    if not filename or filename == ".md":
+        logger.error(f"Invalid filename generated from title: '{work.title}'")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot generate valid filename from work title"
+        )
 
     # Create frontmatter
     frontmatter = create_frontmatter(work.title, work.authors, work.year)
@@ -191,13 +214,70 @@ def export_work(work_id: int, session: Session) -> str:
         logger.error(f"Failed to get exports directory: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to access exports directory: {e}")
 
-    # Write file
+    # Write file with comprehensive error handling
     export_path = exports_dir / filename
+    temp_path = None
+
     try:
-        export_path.write_text(full_content, encoding='utf-8')
-        logger.info(f"Exported work {work_id} to {export_path}")
+        # Write to temporary file first (atomic write pattern)
+        temp_path = export_path.with_suffix('.tmp')
+        temp_path.write_text(full_content, encoding='utf-8')
+
+        # Move temp file to final destination
+        temp_path.replace(export_path)
+
+        logger.info(f"Exported work {work_id} to {export_path} ({len(full_content)} bytes)")
+
+    except OSError as e:
+        # Handle specific OS errors
+        if e.errno == errno.ENOSPC:
+            logger.error(f"Disk full when writing export file {export_path}: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Disk full: cannot write export file"
+            )
+        elif e.errno == errno.EACCES or isinstance(e, PermissionError):
+            logger.error(f"Permission denied writing export file {export_path}: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Permission denied: cannot write to exports directory"
+            )
+        elif e.errno == errno.ENAMETOOLONG:
+            logger.error(f"Filename too long for export {export_path}: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail="Generated filename is too long"
+            )
+        elif e.errno == errno.EROFS:
+            logger.error(f"Read-only filesystem for export {export_path}: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Cannot write to read-only exports directory"
+            )
+        else:
+            logger.error(f"OS error writing export file {export_path}: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"File system error: {type(e).__name__}"
+            )
+    except UnicodeEncodeError as e:
+        logger.error(f"Unicode encoding error writing export file {export_path}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Cannot encode content to UTF-8"
+        )
     except Exception as e:
-        logger.error(f"Failed to write export file {export_path}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to write export file: {e}")
+        logger.error(f"Unexpected error writing export file {export_path}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to write export file: {type(e).__name__}"
+        )
+    finally:
+        # Clean up temp file if it still exists
+        if temp_path and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to clean up temp file {temp_path}: {cleanup_error}")
 
     return str(export_path)

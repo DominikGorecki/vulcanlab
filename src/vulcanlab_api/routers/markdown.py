@@ -21,7 +21,8 @@ from vulcanlab_api.schemas.markdown import (
     MarkdownFileSchema,
     MetadataSchema,
     ImportRequest,
-    ImportResponse
+    ImportResponse,
+    ErrorResponse
 )
 from vulcanlab.markdown_export import export_work
 from vulcanlab.markdown_import.duplicate_check import check_duplicate_work
@@ -55,13 +56,16 @@ router = APIRouter()
             }
         },
         400: {
-            "description": "Markdown not available for this work"
+            "description": "Markdown not available for this work",
+            "model": ErrorResponse
         },
         404: {
-            "description": "Work not found"
+            "description": "Work not found",
+            "model": ErrorResponse
         },
         500: {
-            "description": "Failed to write export file"
+            "description": "Failed to write export file",
+            "model": ErrorResponse
         }
     },
     tags=["Markdown"],
@@ -94,13 +98,17 @@ async def export_work_endpoint(
             "export_path": export_path
         }
     except HTTPException:
-        # Re-raise HTTPExceptions from export_work
+        # Re-raise HTTPExceptions from export_work (already have good error messages)
         raise
     except Exception as e:
         logger.error(f"Unexpected error exporting work {work_id}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Unexpected error during export: {str(e)}"
+            detail={
+                "error": "unexpected_error",
+                "message": "An unexpected error occurred during export",
+                "detail": str(e) if logger.level <= logging.DEBUG else None
+            }
         )
 
 
@@ -307,13 +315,16 @@ async def list_files_endpoint() -> MarkdownFilesResponse:
             }
         },
         400: {
-            "description": "Invalid request or validation error"
+            "description": "Invalid request or validation error",
+            "model": ErrorResponse
         },
         404: {
-            "description": "File not found"
+            "description": "File not found",
+            "model": ErrorResponse
         },
         500: {
-            "description": "Import failed"
+            "description": "Import failed",
+            "model": ErrorResponse
         }
     },
     tags=["Markdown"],
@@ -413,14 +424,47 @@ async def import_markdown_endpoint(
             )
 
         except FileNotFoundError as e:
+            error_msg = str(e)
             raise HTTPException(
                 status_code=404,
-                detail=f"File not found during import: {str(e)}"
+                detail={
+                    "error": "file_not_found",
+                    "message": "The specified file could not be found",
+                    "detail": error_msg
+                }
             )
         except ValueError as e:
+            error_msg = str(e)
+            # Determine error type based on message
+            if "empty" in error_msg.lower():
+                error_type = "empty_file"
+                user_message = "The file is empty or contains no content"
+            elif "encoding" in error_msg.lower():
+                error_type = "encoding_error"
+                user_message = "The file encoding is not supported"
+            elif "permission" in error_msg.lower():
+                error_type = "permission_denied"
+                user_message = "Permission denied reading the file"
+            elif "frontmatter" in error_msg.lower() or "whitespace" in error_msg.lower():
+                error_type = "no_content"
+                user_message = "File contains only metadata or whitespace, no actual content"
+            elif "chunking" in error_msg.lower():
+                error_type = "chunking_failed"
+                user_message = "Failed to process markdown structure"
+            elif "sanitization" in error_msg.lower():
+                error_type = "sanitization_failed"
+                user_message = "Failed to sanitize markdown content"
+            else:
+                error_type = "validation_error"
+                user_message = error_msg
+
             raise HTTPException(
                 status_code=400,
-                detail=f"Validation error: {str(e)}"
+                detail={
+                    "error": error_type,
+                    "message": user_message,
+                    "detail": error_msg if error_msg != user_message else None
+                }
             )
 
     except HTTPException:
@@ -430,5 +474,9 @@ async def import_markdown_endpoint(
         logger.error(f"Unexpected error importing markdown: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Import failed: {str(e)}"
+            detail={
+                "error": "unexpected_error",
+                "message": "An unexpected error occurred during import",
+                "detail": str(e) if logger.level <= logging.DEBUG else None
+            }
         )
