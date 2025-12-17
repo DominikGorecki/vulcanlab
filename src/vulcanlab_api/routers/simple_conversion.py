@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime, UTC
+from io import StringIO
 
 from vulcanlab_api.schemas.simple_conversion import (
     StartConversionRequest,
@@ -186,8 +187,20 @@ async def execute_automatic(
         session: Database session
 
     Returns:
-        Final status with chunk count
+        Final status with chunk count and execution logs
     """
+    # Setup log capture
+    log_stream = StringIO()
+    log_handler = logging.StreamHandler(log_stream)
+    log_handler.setLevel(logging.INFO)
+    log_formatter = logging.Formatter('%(levelname)s - %(name)s - %(message)s')
+    log_handler.setFormatter(log_formatter)
+
+    # Add handler to relevant loggers
+    conversion_logger = logging.getLogger('vulcanlab.simple_conversion')
+    conversion_logger.addHandler(log_handler)
+    conversion_logger.setLevel(logging.INFO)
+
     try:
         work = session.query(Work).filter(Work.id == work_id).first()
 
@@ -200,11 +213,19 @@ async def execute_automatic(
             # Already processed, just return success with chunk count
             existing_chunks = session.query(Chunk).filter(Chunk.work_id == work_id).count()
             logger.info(f"Work {work_id} already complete with {existing_chunks} chunks, skipping re-execution")
+
+            # Capture logs and remove handler
+            log_stream.seek(0)
+            logs = [line.strip() for line in log_stream.readlines() if line.strip()]
+            conversion_logger.removeHandler(log_handler)
+            log_handler.close()
+
             return ExecuteAutoResponse(
                 work_id=work_id,
                 status='complete',
                 chunks_created=existing_chunks,
-                message='Conversion already complete'
+                message='Conversion already complete',
+                logs=logs
             )
 
         # Step 1: Parse and classify (if needed)
@@ -247,17 +268,35 @@ async def execute_automatic(
 
         logger.info(f"Automatic pipeline complete for work {work_id}: {len(chunks)} total chunks ({len(heading_chunks)} heading, {len(content_chunks)} content)")
 
+        # Capture logs and remove handler
+        log_stream.seek(0)
+        logs = [line.strip() for line in log_stream.readlines() if line.strip()]
+        conversion_logger.removeHandler(log_handler)
+        log_handler.close()
+
         return ExecuteAutoResponse(
             work_id=work_id,
             status='complete',
             chunks_created=len(chunks),
-            message=f'Automatic pipeline completed successfully'
+            message=f'Automatic pipeline completed successfully',
+            logs=logs
         )
 
     except HTTPException:
+        # Clean up log handler
+        conversion_logger.removeHandler(log_handler)
+        log_handler.close()
         raise
     except Exception as e:
         logger.error(f"Automatic pipeline failed for work {work_id}: {e}")
+
+        # Capture logs before cleanup
+        log_stream.seek(0)
+        logs = [line.strip() for line in log_stream.readlines() if line.strip()]
+
+        # Clean up log handler
+        conversion_logger.removeHandler(log_handler)
+        log_handler.close()
 
         # Update error status
         try:

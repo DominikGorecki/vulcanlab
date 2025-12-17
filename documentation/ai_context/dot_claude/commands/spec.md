@@ -9,7 +9,8 @@ You generate a new spec markdown file for spec-driven development.
 
 ## Hard requirements
 - You MUST read `documentation/patterns.md` first. If it does not exist or is empty, stop and ask.
-- You MUST ask clarifying questions first (up to 10). Wait for the user's answers before writing the spec file.
+- You MUST ask clarifying questions first, but ONLY ask the minimum number needed. Maximum is 10, not a target.
+- You MUST wait for the user's answers before writing the spec file.
 - You MUST write the spec to `documentation/work/<slug>.spec.md`.
 - `<slug>` is derived from the spec title: lowercase, ASCII letters and digits, replace spaces with hyphens, collapse multiple hyphens, trim hyphens.
 - If the output spec file already exists, stop and ask what to do.
@@ -38,11 +39,16 @@ You generate a new spec markdown file for spec-driven development.
 - Note what you found; if ambiguous, include it as an assumption to confirm in questions.
 
 ## Step 2: Ask clarifying questions (must ask, then wait)
-Ask up to 10 questions total. Use multiple-choice options plus a short freeform field. Make the questions specific to the input.
+### Question count rule (critical)
+Ask ONLY questions that are necessary to produce a correct, ticketable spec.
+- Do NOT ask questions for choices that are obvious or already specified in the prompt/input file.
+- Do NOT ask "preference" questions unless the answer materially changes scope, contracts, or acceptance criteria.
+- If the input is detailed and unambiguous, you may ask as few as 0 to 3 questions.
+- Maximum is 10 questions total.
 
-Your questions MUST cover, when relevant:
+Your questions MUST cover the following topics ONLY if they are unclear or missing and relevant:
 - Problem and user impact
-- Goals vs non-goals (strict non-goals required)
+- Goals vs non-goals (strict non-goals required if there is meaningful scope)
 - Scope boundaries (what is explicitly out)
 - Interfaces/APIs/contracts (if any)
 - Data model/storage (if any)
@@ -52,12 +58,28 @@ Your questions MUST cover, when relevant:
 - Risks and alternatives
 - How patterns.md applies, and where you might deviate (ask for approval if deviating)
 
-Format each question like this:
+### Formatting rule (critical)
+Questions MUST be easy to read in Markdown:
+- Put the question text on its own line.
+- Put each option on its own line.
+- Put the freeform line on its own line.
+- Insert a separator between questions using a Markdown horizontal rule: `---`
+- Do not collapse content into a single paragraph line.
+
+Use exactly this format:
 
 Q1) <question text>
-A. ...
-B. ...
-C. ...
+A. <option>
+B. <option>
+C. <option>
+Freeform: <what you need if none of the options fit>
+
+---
+
+Q2) <question text>
+A. <option>
+B. <option>
+C. <option>
 Freeform: <what you need if none of the options fit>
 
 After asking questions, STOP. Do not create or write the spec file yet.

@@ -9,10 +9,13 @@ from vulcanlab.config.conversion_config import (
     set_token_threshold,
     get_advanced_mode_enabled,
     set_advanced_mode_enabled,
+    get_use_full_model,
+    set_use_full_model,
     load_config,
     save_config,
     DEFAULT_TOKEN_THRESHOLD,
-    DEFAULT_ADVANCED_MODE_ENABLED
+    DEFAULT_ADVANCED_MODE_ENABLED,
+    DEFAULT_USE_FULL_MODEL
 )
 
 
@@ -218,3 +221,115 @@ def test_set_advanced_mode_enabled_invalid_type_none():
     """Test that None instead of boolean raises ValueError."""
     with pytest.raises(ValueError, match="must be a boolean"):
         set_advanced_mode_enabled(None)
+
+
+# Tests for get_use_full_model
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('builtins.open', new_callable=mock_open, read_data='{"conversion": {"use_full_model": true}}')
+def test_get_use_full_model_from_config(mock_file, mock_path):
+    """Test reading use_full_model from config file."""
+    mock_path.return_value = MagicMock(exists=lambda: True)
+
+    use_full = get_use_full_model()
+
+    assert use_full is True
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('builtins.open', new_callable=mock_open, read_data='{}')
+def test_get_use_full_model_default(mock_file, mock_path):
+    """Test default use_full_model when not in config."""
+    mock_path.return_value = MagicMock(exists=lambda: True)
+
+    use_full = get_use_full_model()
+
+    assert use_full is False
+    assert use_full == DEFAULT_USE_FULL_MODEL
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+def test_get_use_full_model_missing_file(mock_path):
+    """Test default when config file doesn't exist."""
+    mock_path.return_value = MagicMock(exists=lambda: False)
+
+    use_full = get_use_full_model()
+
+    assert use_full is False
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('builtins.open', new_callable=mock_open, read_data='{"conversion": {"use_full_model": "yes"}}')
+def test_get_use_full_model_invalid_value(mock_file, mock_path):
+    """Test default when config has invalid value (string instead of bool)."""
+    mock_path.return_value = MagicMock(exists=lambda: True)
+
+    use_full = get_use_full_model()
+
+    assert use_full is False  # Falls back to default
+
+
+# Tests for set_use_full_model
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('vulcanlab.config.conversion_config.load_config')
+@patch('vulcanlab.config.conversion_config.save_config')
+def test_set_use_full_model_success(mock_save, mock_load, mock_path):
+    """Test setting use_full_model successfully."""
+    mock_load.return_value = {}
+
+    set_use_full_model(True)
+
+    mock_save.assert_called_once()
+    saved_config = mock_save.call_args[0][0]
+    assert saved_config['conversion']['use_full_model'] is True
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('vulcanlab.config.conversion_config.load_config')
+@patch('vulcanlab.config.conversion_config.save_config')
+def test_set_use_full_model_false(mock_save, mock_load, mock_path):
+    """Test setting use_full_model to False."""
+    mock_load.return_value = {}
+
+    set_use_full_model(False)
+
+    saved_config = mock_save.call_args[0][0]
+    assert saved_config['conversion']['use_full_model'] is False
+
+
+@patch('vulcanlab.config.conversion_config.get_config_path')
+@patch('vulcanlab.config.conversion_config.load_config')
+@patch('vulcanlab.config.conversion_config.save_config')
+def test_set_use_full_model_preserves_existing_config(mock_save, mock_load, mock_path):
+    """Test that setting use_full_model preserves other config sections."""
+    mock_load.return_value = {
+        'database': {'host': 'localhost'},
+        'conversion': {'token_threshold': 20000, 'advanced_mode_enabled': True}
+    }
+
+    set_use_full_model(True)
+
+    saved_config = mock_save.call_args[0][0]
+    assert saved_config['database']['host'] == 'localhost'
+    assert saved_config['conversion']['token_threshold'] == 20000
+    assert saved_config['conversion']['advanced_mode_enabled'] is True
+    assert saved_config['conversion']['use_full_model'] is True
+
+
+def test_set_use_full_model_invalid_type_string():
+    """Test that non-boolean value raises ValueError."""
+    with pytest.raises(ValueError, match="must be a boolean"):
+        set_use_full_model("true")
+
+
+def test_set_use_full_model_invalid_type_int():
+    """Test that integer instead of boolean raises ValueError."""
+    with pytest.raises(ValueError, match="must be a boolean"):
+        set_use_full_model(1)
+
+
+def test_set_use_full_model_invalid_type_none():
+    """Test that None instead of boolean raises ValueError."""
+    with pytest.raises(ValueError, match="must be a boolean"):
+        set_use_full_model(None)
