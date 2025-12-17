@@ -14,8 +14,6 @@
 ## Minor Improvements
 
 [x] `sanitization/[id]/title-changes` -- make dynamic -- show changes, allow user to change them interactively
-[ ] Lock Document -- simplify cleaning
-[ ] CONVERSION - Manual ToC LLM call not templated
 [ ] Works should have all the columns for a bibliography 
 [ ] Check to ensure that when creating new DB app user it uses the `/.env` file
 
