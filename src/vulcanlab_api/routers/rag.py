@@ -18,9 +18,15 @@ Endpoints for query expansion:
     POST /rag/expansion/prompt             - Generate expansion prompt (no LLM)
     POST /rag/expansion/run                - Run full expansion with LLM
     POST /rag/expansion/manual             - Parse & save manual expansion response
+
+Endpoints for automated RAG:
+    POST /rag/auto                         - Run full automated RAG pipeline
 """
 
+import logging
 from fastapi import APIRouter, HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Query, Result
@@ -57,6 +63,8 @@ from vulcanlab_api.schemas.rag_queries import (
     AugmentManualResponse,
     ResultListResponse,
     ResultItem,
+    AutoRAGRequest,
+    AutoRAGResponse,
 )
 
 router = APIRouter()
@@ -486,6 +494,96 @@ async def save_manual_expansion(request: ExpansionManualRequest) -> ExpansionMan
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+# ============================================================================
+# Auto RAG Endpoint
+# ============================================================================
+
+@router.post(
+    "/auto",
+    response_model=AutoRAGResponse,
+    summary="Run automated RAG pipeline",
+    description="Automatically run the complete RAG preparation pipeline: expansion, embedding, retrieval, and consolidation.",
+)
+async def run_auto_rag(request: AutoRAGRequest) -> AutoRAGResponse:
+    """Run the full automated RAG pipeline.
+
+    This endpoint orchestrates the complete RAG preparation process:
+    1. Expand query using LLM (creates Query record)
+    2. Generate embeddings for the query
+    3. Retrieve relevant chunks
+    4. Consolidate context
+
+    On success, returns the query_id with status "ready".
+    On failure, raises HTTPException with detail and failed_step.
+    """
+    logger.info(f"Starting automated RAG pipeline for query: {request.query[:100]}...")
+
+    query_id = None
+
+    # Step 1: Expand query (creates Query record)
+    try:
+        logger.info("Step 1/4: Expanding query...")
+        result = expand_query(query=request.query, n=3, verbose=False)
+        query_id = result.query_id
+        logger.info(f"Query expanded successfully. Query ID: {query_id}")
+    except ValueError as e:
+        logger.error(f"Query expansion failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Query expansion failed: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during query expansion: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Query expansion failed: {str(e)}"
+        )
+
+    # Step 2: Generate embeddings
+    try:
+        logger.info(f"Step 2/4: Generating embeddings for query {query_id}...")
+        vectorize_query(query_id=query_id, verbose=False)
+        logger.info(f"Embeddings generated successfully for query {query_id}")
+    except Exception as e:
+        logger.error(f"Embedding generation failed for query {query_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Embedding generation failed: {str(e)}"
+        )
+
+    # Step 3: Retrieve chunks
+    try:
+        logger.info(f"Step 3/4: Retrieving chunks for query {query_id}...")
+        retrieve(query_id=query_id, config_preset=None, verbose=False)
+        logger.info(f"Retrieval completed successfully for query {query_id}")
+    except Exception as e:
+        logger.error(f"Retrieval failed for query {query_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Retrieval failed: {str(e)}"
+        )
+
+    # Step 4: Consolidate context
+    try:
+        logger.info(f"Step 4/4: Consolidating context for query {query_id}...")
+        consolidate_context(query_id=query_id, config_preset=None, verbose=False)
+        logger.info(f"Context consolidated successfully for query {query_id}")
+    except Exception as e:
+        logger.error(f"Consolidation failed for query {query_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Consolidation failed: {str(e)}"
+        )
+
+    logger.info(f"Automated RAG pipeline completed successfully for query {query_id}")
+
+    return AutoRAGResponse(
+        query_id=query_id,
+        status="ready",
+        message="Query processed successfully through all pipeline steps"
+    )
 
 
 # ============================================================================
