@@ -526,77 +526,79 @@ export default function SimpleConversionPage() {
 
           {/* History Table */}
           {!loadingHistory && !historyError && historyWorks.length > 0 && (
-            <div className="border rounded-lg" data-testid="history-list">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Author</TableHead>
-                    <TableHead>Classification</TableHead>
-                    <TableHead>Mode</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historyWorks.map((work) => {
-                    const formatDate = (dateString: string): string => {
-                      const date = new Date(dateString);
-                      return date.toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      });
-                    };
+            <div className="border rounded-lg overflow-hidden" data-testid="history-list">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[200px] w-[30%]">Title</TableHead>
+                      <TableHead className="min-w-[150px] w-[20%]">Author</TableHead>
+                      <TableHead className="min-w-[120px] w-[15%]">Classification</TableHead>
+                      <TableHead className="min-w-[110px] w-[15%]">Mode</TableHead>
+                      <TableHead className="min-w-[110px] w-[12%]">Status</TableHead>
+                      <TableHead className="min-w-[100px] w-[8%]">Created</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyWorks.map((work) => {
+                      const formatDate = (dateString: string): string => {
+                        const date = new Date(dateString);
+                        return date.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        });
+                      };
 
-                    return (
-                      <TableRow
-                        key={work.work_id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => router.push(`/simple-conversion/history/${work.work_id}`)}
-                        data-testid={`history-row-${work.work_id}`}
-                      >
-                        <TableCell className="font-medium">{work.title}</TableCell>
-                        <TableCell>{work.author}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={work.classification === 'small' ? 'default' : 'secondary'}
-                            className={work.classification === 'small' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700 text-white'}
-                            data-testid="classification-badge"
-                          >
-                            {work.classification === 'small' ? 'Small' : 'Large'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={work.mode === 'automatic' ? 'border-green-600 text-green-700' : 'border-amber-600 text-amber-700'}
-                            data-testid="mode-badge"
-                          >
-                            {work.mode === 'automatic' ? 'Automatic' : 'Manual'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {work.status === 'success' ? (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <CheckCircle2 className="h-4 w-4" data-testid="status-success" />
-                              <span>Success</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 text-red-600">
-                              <AlertCircle className="h-4 w-4" data-testid="status-error" />
-                              <span>Error</span>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground" data-testid="created-date">
-                          {formatDate(work.created_at)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                      return (
+                        <TableRow
+                          key={work.work_id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => router.push(`/simple-conversion/history/${work.work_id}`)}
+                          data-testid={`history-row-${work.work_id}`}
+                        >
+                          <TableCell className="font-medium min-w-[200px] max-w-[300px] break-words whitespace-normal">{work.title}</TableCell>
+                          <TableCell className="min-w-[150px] max-w-[200px] break-words whitespace-normal">{work.author}</TableCell>
+                          <TableCell className="min-w-[120px]">
+                            <Badge
+                              variant={work.classification === 'small' ? 'default' : 'secondary'}
+                              className={work.classification === 'small' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700 text-white'}
+                              data-testid="classification-badge"
+                            >
+                              {work.classification === 'small' ? 'Small' : 'Large'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="min-w-[110px]">
+                            <Badge
+                              variant="outline"
+                              className={work.mode === 'automatic' ? 'border-green-600 text-green-700' : 'border-amber-600 text-amber-700'}
+                              data-testid="mode-badge"
+                            >
+                              {work.mode === 'automatic' ? 'Automatic' : 'Manual'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="min-w-[110px]">
+                            {work.status === 'success' ? (
+                              <div className="flex items-center gap-2 text-green-600 whitespace-nowrap">
+                                <CheckCircle2 className="h-4 w-4 flex-shrink-0" data-testid="status-success" />
+                                <span>Success</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-red-600 whitespace-nowrap">
+                                <AlertCircle className="h-4 w-4 flex-shrink-0" data-testid="status-error" />
+                                <span>Error</span>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground min-w-[100px] whitespace-nowrap" data-testid="created-date">
+                            {formatDate(work.created_at)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
           </div>

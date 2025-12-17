@@ -23,6 +23,7 @@ from vulcanlab.data.template_loader import load_template
 from vulcanlab.ai.llm_factory import create_langchain_chat
 from vulcanlab.ai.config import ModelTier
 from vulcanlab.simple_conversion.parse_classify import count_tokens
+from vulcanlab.config.conversion_config import get_use_full_model
 
 logger = logging.getLogger(__name__)
 
@@ -344,13 +345,24 @@ def sanitize_large_document(work_id: int, session: Session) -> SanitizedMarkdown
     # Format prompt
     prompt = template.format(condensed_document=condensed)
 
+    # Determine model tier based on config
+    use_full = get_use_full_model()
+    tier = ModelTier.FULL if use_full else ModelTier.LIGHT
+    logger.info(f"Using ModelTier.{tier.name} for large document sanitization (work {work_id})")
+
     # Call LLM using langchain
-    logger.info(f"Calling LLM for large document sanitization (work {work_id})")
-    llm_stack = create_langchain_chat(tier=ModelTier.LIGHT, temperature=0.2)
+    llm_stack = create_langchain_chat(tier=tier, temperature=0.2)
     response = llm_stack.chat.invoke(prompt)
 
     # Extract content from LangChain response
-    response_text = response.content if hasattr(response, 'content') else str(response)
+    if hasattr(response, 'content'):
+        # Handle both string and list responses (Anthropic returns list)
+        if isinstance(response.content, list):
+            response_text = response.content[0].get('text', '') if response.content else ''
+        else:
+            response_text = response.content
+    else:
+        response_text = str(response)
 
     # Parse response
     modifications = parse_llm_response_large(response_text)

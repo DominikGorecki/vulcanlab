@@ -36,6 +36,7 @@ from vulcanlab_api.routers import (
     settings,
     simple_conversion,
     templates,
+    v1_corpus,
     vectorization,
 )
 
@@ -128,7 +129,8 @@ app.include_router(conversion_settings.router)  # Conversion settings router has
 app.include_router(sanitization.router, prefix="/sanitization", tags=["Sanitization"])
 app.include_router(chunking.router, prefix="/chunk", tags=["Chunking"])
 app.include_router(vectorization.router, prefix="/vec", tags=["Vectorization"])
-app.include_router(corpus.router, prefix="/corpus", tags=["Corpus"])
+app.include_router(corpus.router, prefix="/corpus", tags=["Corpus"])  # Legacy endpoints for backwards compatibility
+app.include_router(v1_corpus.router, prefix="/api/v1/corpus", tags=["Corpus V1"])  # New versioned endpoints
 app.include_router(rag.router, prefix="/rag", tags=["RAG"])
 app.include_router(rag_config.router, prefix="/api/rag-config", tags=["RAG Config"])
 app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix

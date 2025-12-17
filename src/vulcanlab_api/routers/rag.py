@@ -349,7 +349,12 @@ async def run_augment(
 
         # Call LLM
         response = stack.chat.invoke(prompt)
-        response_text = response.content
+
+        # Handle both string and list responses (some models return list of content blocks)
+        if isinstance(response.content, list):
+            response_text = response.content[0].get('text', '') if response.content else ''
+        else:
+            response_text = response.content
 
         # Save result to database
         with get_session() as session:

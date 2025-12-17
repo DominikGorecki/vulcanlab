@@ -14,18 +14,22 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 interface ConversionSettingsData {
   token_threshold: number;
   advanced_mode_enabled: boolean;
+  use_full_model: boolean;
 }
 
 export function ConversionTab() {
   const { updateAdvancedMode } = useConversionSettings();
   const [threshold, setThreshold] = useState<number>(15000);
   const [advancedMode, setAdvancedMode] = useState<boolean>(false);
+  const [fullLLMMode, setFullLLMMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [savingToggle, setSavingToggle] = useState<boolean>(false);
+  const [savingFullLLM, setSavingFullLLM] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [toggleSaveSuccess, setToggleSaveSuccess] = useState<boolean>(false);
+  const [fullLLMSaveSuccess, setFullLLMSaveSuccess] = useState<boolean>(false);
 
   // Load current settings on mount
   useEffect(() => {
@@ -45,6 +49,7 @@ export function ConversionTab() {
       const data: ConversionSettingsData = await response.json();
       setThreshold(data.token_threshold);
       setAdvancedMode(data.advanced_mode_enabled ?? false);
+      setFullLLMMode(data.use_full_model ?? false);
     } catch (err) {
       console.error('Failed to load conversion settings:', err);
       setError(err instanceof Error ? err.message : 'Failed to load settings. Using default value.');
@@ -68,7 +73,11 @@ export function ConversionTab() {
       const response = await fetch(`${API_BASE_URL}/api/conversion/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token_threshold: threshold }),
+        body: JSON.stringify({
+          token_threshold: threshold,
+          advanced_mode_enabled: advancedMode,
+          use_full_model: fullLLMMode
+        }),
       });
 
       if (!response.ok) {
@@ -106,7 +115,8 @@ export function ConversionTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token_threshold: threshold,
-          advanced_mode_enabled: checked
+          advanced_mode_enabled: checked,
+          use_full_model: fullLLMMode
         }),
       });
 
@@ -126,6 +136,39 @@ export function ConversionTab() {
       setError(message);
     } finally {
       setSavingToggle(false);
+    }
+  };
+
+  const handleFullLLMToggleChange = async (checked: boolean) => {
+    try {
+      setSavingFullLLM(true);
+      setError(null);
+      setFullLLMSaveSuccess(false);
+
+      const response = await fetch(`${API_BASE_URL}/api/conversion/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token_threshold: threshold,
+          advanced_mode_enabled: advancedMode,
+          use_full_model: checked
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to save: ${response.statusText}`);
+      }
+
+      setFullLLMMode(checked);
+      setFullLLMSaveSuccess(true);
+      setTimeout(() => setFullLLMSaveSuccess(false), 2000);
+    } catch (err: any) {
+      console.error('Failed to save full LLM mode toggle:', err);
+      const message = err instanceof Error ? err.message : 'Failed to save toggle setting';
+      setError(message);
+    } finally {
+      setSavingFullLLM(false);
     }
   };
 
@@ -162,6 +205,13 @@ export function ConversionTab() {
           </div>
         )}
 
+        {fullLLMSaveSuccess && (
+          <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 px-4 py-3 rounded-md text-sm">
+            <CheckCircleIcon className="h-4 w-4" />
+            <span>Full LLM mode setting saved successfully</span>
+          </div>
+        )}
+
         <div className="space-y-4 pb-4 border-b">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
@@ -183,6 +233,37 @@ export function ConversionTab() {
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <Loader2Icon className="h-3 w-3 animate-spin" />
               <span>Saving...</span>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4 pb-4 border-b">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="full-llm-mode" className="text-base font-medium">
+                Simple Conversion - Full LLM Calls
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Use full LLM model tier instead of light for all simple conversion processing. Does not affect document classification (token threshold).
+              </p>
+            </div>
+            <Switch
+              id="full-llm-mode"
+              checked={fullLLMMode}
+              onCheckedChange={handleFullLLMToggleChange}
+              disabled={savingFullLLM}
+            />
+          </div>
+          {savingFullLLM && (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2Icon className="h-3 w-3 animate-spin" />
+              <span>Saving...</span>
+            </div>
+          )}
+          {fullLLMMode && (
+            <div className="flex items-start gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-4 py-3 rounded-md text-sm">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>Enabling full LLM mode will use more expensive and slower models. This may increase processing time and costs.</span>
             </div>
           )}
         </div>
