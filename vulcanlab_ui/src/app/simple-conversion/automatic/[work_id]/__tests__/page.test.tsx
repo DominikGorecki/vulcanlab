@@ -199,4 +199,68 @@ describe('AutomaticWorkflowPage', () => {
       expect(buttons.length).toBeGreaterThan(0);
     });
   });
+
+  it('displays "View in Corpus" button on completion', async () => {
+    // 1. Execute
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    // 2. Status (complete)
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ work_id: 123, step: 'complete' }) });
+    // 3. Results fetch
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        work_id: 123,
+        title: 'Test Doc',
+        author: 'Author',
+        classification: 'small',
+        token_count: 100,
+        chunk_count: 1,
+        chunks: []
+      })
+    });
+
+    await act(async () => {
+      render(<AutomaticWorkflowPage />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('View in Corpus')).toBeInTheDocument();
+    });
+  });
+
+  it('navigates to corpus page when "View in Corpus" is clicked', async () => {
+    // 1. Execute
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    // 2. Status (complete)
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ work_id: 123, step: 'complete' }) });
+    // 3. Results fetch
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        work_id: 123,
+        title: 'Test Doc',
+        author: 'Author',
+        classification: 'small',
+        token_count: 100,
+        chunk_count: 1,
+        chunks: []
+      })
+    });
+
+    await act(async () => {
+      render(<AutomaticWorkflowPage />);
+    });
+
+    await waitFor(() => {
+      const viewButton = screen.getByText('View in Corpus');
+      expect(viewButton).toBeInTheDocument();
+    });
+
+    const viewButton = screen.getByText('View in Corpus');
+    await act(async () => {
+      viewButton.click();
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/corpus/123');
+  });
 });
