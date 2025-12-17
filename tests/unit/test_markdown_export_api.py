@@ -4,6 +4,8 @@ Unit tests for markdown export/import API endpoints.
 Tests:
     - POST /api/v1/markdown/export/{work_id} endpoint
     - GET /api/v1/markdown/check-duplicate endpoint
+    - GET /api/v1/markdown/files endpoint
+    - POST /api/v1/markdown/import endpoint
 
 Usage:
     pytest tests/unit/test_markdown_export_api.py -v
@@ -12,7 +14,7 @@ Usage:
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock, Mock, MagicMock as MMock
 from pathlib import Path
 
 from vulcanlab_api.routers.markdown import router
@@ -404,3 +406,440 @@ class TestCheckDuplicateEndpoint:
         # Verify session was passed as third argument
         call_args = mock_check_duplicate.call_args
         assert call_args[0][2] == mock_session_instance
+
+
+class TestListFilesEndpoint:
+    """Tests for GET /api/v1/markdown/files endpoint."""
+
+    @patch('vulcanlab_api.routers.markdown.list_markdown_files')
+    def test_list_files_success(self, mock_list_files):
+        """Test returns list of markdown files with metadata."""
+        from vulcanlab.markdown_import.metadata import MarkdownFile, Metadata
+
+        # Mock markdown files
+        mock_files = [
+            MarkdownFile(
+                filename="test1.md",
+                file_path="/input/test1.md",
+                has_metadata=True,
+                metadata=Metadata(title="Test 1", author="Author 1", year=2020)
+            ),
+            MarkdownFile(
+                filename="test2.md",
+                file_path="/input/test2.md",
+                has_metadata=False,
+                metadata=None
+            )
+        ]
+        mock_list_files.return_value = mock_files
+
+        response = client.get('/api/v1/markdown/files')
+
+        assert response.status_code == 200
+        data = response.json()
+        assert 'files' in data
+        assert len(data['files']) == 2
+
+        # Check first file with metadata
+        file1 = data['files'][0]
+        assert file1['filename'] == "test1.md"
+        assert file1['has_metadata'] is True
+        assert file1['metadata']['title'] == "Test 1"
+        assert file1['metadata']['author'] == "Author 1"
+        assert file1['metadata']['year'] == 2020
+
+        # Check second file without metadata
+        file2 = data['files'][1]
+        assert file2['filename'] == "test2.md"
+        assert file2['has_metadata'] is False
+        assert file2['metadata'] is None
+
+    @patch('vulcanlab_api.routers.markdown.list_markdown_files')
+    def test_list_files_empty(self, mock_list_files):
+        """Test returns empty list when no files found."""
+        mock_list_files.return_value = []
+
+        response = client.get('/api/v1/markdown/files')
+
+        assert response.status_code == 200
+        data = response.json()
+        assert 'files' in data
+        assert len(data['files']) == 0
+
+    @patch('vulcanlab_api.routers.markdown.list_markdown_files')
+    def test_list_files_config_error(self, mock_list_files):
+        """Test returns 500 on configuration error."""
+        mock_list_files.side_effect = ValueError("input_dir not configured")
+
+        response = client.get('/api/v1/markdown/files')
+
+        assert response.status_code == 500
+        assert "Configuration error" in response.json()['detail']
+
+    @patch('vulcanlab_api.routers.markdown.list_markdown_files')
+    def test_list_files_filesystem_error(self, mock_list_files):
+        """Test returns 500 on filesystem error."""
+        mock_list_files.side_effect = OSError("Permission denied")
+
+        response = client.get('/api/v1/markdown/files')
+
+        assert response.status_code == 500
+        assert "Filesystem error" in response.json()['detail']
+
+
+class TestImportMarkdownEndpoint:
+    """Tests for POST /api/v1/markdown/import endpoint."""
+
+    def _mock_path_exists(self, exists=True, is_file=True):
+        """Helper to properly mock Path with / operator support."""
+        mock_path_cls = MagicMock()
+        mock_input_dir = MagicMock()
+        mock_file_path = MagicMock()
+        mock_file_path.exists.return_value = exists
+        mock_file_path.is_file.return_value = is_file
+        mock_input_dir.__truediv__.return_value = mock_file_path
+        mock_path_cls.return_value = mock_input_dir
+        return mock_path_cls
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    @patch('vulcanlab_api.routers.markdown.check_duplicate_work')
+    @patch('vulcanlab_api.routers.markdown.import_sanitized_markdown')
+    def test_import_sanitized_success(self, mock_import_sanitized, mock_check_dup, mock_config):
+        """Test successful import of sanitized markdown."""
+        # Mock config
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = "/tmp/input"
+        mock_config.return_value = mock_cfg
+
+        # Mock no duplicate
+        mock_check_dup.return_value = None
+
+        # Mock successful import
+        mock_work = Mock()
+        mock_work.id = 456
+        mock_import_sanitized.return_value = mock_work
+
+        # Mock Path properly
+        with patch('vulcanlab_api.routers.markdown.Path', self._mock_path_exists()):
+            response = client.post(
+                '/api/v1/markdown/import',
+                json={
+                    "filename": "test.md",
+                    "title": "Test Book",
+                    "author": "Test Author",
+                    "year": 2023,
+                    "is_sanitized": True
+                }
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['work_id'] == 456
+        assert data['status'] == "completed"
+        assert data['duplicate_warning'] is None
+
+        # Verify import function was called
+        mock_import_sanitized.assert_called_once()
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    @patch('vulcanlab_api.routers.markdown.check_duplicate_work')
+    @patch('vulcanlab_api.routers.markdown.import_unsanitized_markdown')
+    def test_import_unsanitized_success(self, mock_import_unsanitized, mock_check_dup, mock_config):
+        """Test successful import of unsanitized markdown."""
+        # Mock config
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = "/tmp/input"
+        mock_config.return_value = mock_cfg
+
+        # Mock no duplicate
+        mock_check_dup.return_value = None
+
+        # Mock successful import
+        mock_work = Mock()
+        mock_work.id = 789
+        mock_import_unsanitized.return_value = mock_work
+
+        # Mock Path properly
+        with patch('vulcanlab_api.routers.markdown.Path', self._mock_path_exists()):
+            response = client.post(
+                '/api/v1/markdown/import',
+                json={
+                    "filename": "test.md",
+                    "title": "Test Book",
+                    "author": "Test Author",
+                    "year": 2023,
+                    "is_sanitized": False
+                }
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['work_id'] == 789
+        assert data['status'] == "completed"
+
+        # Verify import function was called
+        mock_import_unsanitized.assert_called_once()
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    @patch('vulcanlab_api.routers.markdown.check_duplicate_work')
+    def test_import_with_duplicate_warning(self, mock_check_dup, mock_config):
+        """Test import proceeds with duplicate warning."""
+        # Mock config
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = "/tmp/input"
+        mock_config.return_value = mock_cfg
+
+        # Mock duplicate found
+        mock_dup_work = Mock()
+        mock_dup_work.id = 100
+        mock_dup_work.title = "Existing Work"
+        mock_check_dup.return_value = mock_dup_work
+
+        # Mock successful import
+        with patch('vulcanlab_api.routers.markdown.import_sanitized_markdown') as mock_import:
+            mock_work = Mock()
+            mock_work.id = 999
+            mock_import.return_value = mock_work
+
+            with patch('vulcanlab_api.routers.markdown.Path', self._mock_path_exists()):
+                response = client.post(
+                    '/api/v1/markdown/import',
+                    json={
+                        "filename": "test.md",
+                        "title": "Test Book",
+                        "author": "Test Author",
+                        "is_sanitized": True
+                    }
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['work_id'] == 999
+        assert data['duplicate_warning'] is not None
+        assert "already exists" in data['duplicate_warning']
+        assert "100" in data['duplicate_warning']
+
+    def test_import_missing_required_fields(self):
+        """Test validation error for missing required fields."""
+        # Missing title
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "author": "Test Author",
+                "is_sanitized": True
+            }
+        )
+        assert response.status_code == 422
+
+        # Missing author
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "title": "Test Book",
+                "is_sanitized": True
+            }
+        )
+        assert response.status_code == 422
+
+        # Missing is_sanitized
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "title": "Test Book",
+                "author": "Test Author"
+            }
+        )
+        assert response.status_code == 422
+
+    def test_import_empty_title(self):
+        """Test validation error for empty title."""
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "title": "",
+                "author": "Test Author",
+                "is_sanitized": True
+            }
+        )
+        assert response.status_code == 422
+
+    def test_import_empty_author(self):
+        """Test validation error for empty author."""
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "title": "Test Book",
+                "author": "",
+                "is_sanitized": True
+            }
+        )
+        assert response.status_code == 422
+
+    def test_import_invalid_year(self):
+        """Test validation error for invalid year."""
+        # Year too old
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "title": "Test Book",
+                "author": "Test Author",
+                "year": 500,
+                "is_sanitized": True
+            }
+        )
+        assert response.status_code == 422
+
+        # Year too far in future
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "title": "Test Book",
+                "author": "Test Author",
+                "year": 3000,
+                "is_sanitized": True
+            }
+        )
+        assert response.status_code == 422
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    def test_import_file_not_found(self, mock_config):
+        """Test returns 404 when file doesn't exist."""
+        # Mock config
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = "/tmp/input"
+        mock_config.return_value = mock_cfg
+
+        # Mock Path to return file not found
+        with patch('vulcanlab_api.routers.markdown.Path', self._mock_path_exists(exists=False)):
+            response = client.post(
+                '/api/v1/markdown/import',
+                json={
+                    "filename": "nonexistent.md",
+                    "title": "Test Book",
+                    "author": "Test Author",
+                    "is_sanitized": True
+                }
+            )
+
+        assert response.status_code == 404
+        assert "not found" in response.json()['detail']
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    def test_import_config_error(self, mock_config):
+        """Test returns 500 when input_dir not configured."""
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = None
+        mock_config.return_value = mock_cfg
+
+        response = client.post(
+            '/api/v1/markdown/import',
+            json={
+                "filename": "test.md",
+                "title": "Test Book",
+                "author": "Test Author",
+                "is_sanitized": True
+            }
+        )
+
+        assert response.status_code == 500
+        assert "not configured" in response.json()['detail']
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    @patch('vulcanlab_api.routers.markdown.check_duplicate_work')
+    @patch('vulcanlab_api.routers.markdown.import_sanitized_markdown')
+    def test_import_processing_error(self, mock_import, mock_check_dup, mock_config):
+        """Test returns 500 on import processing error."""
+        # Mock config
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = "/tmp/input"
+        mock_config.return_value = mock_cfg
+
+        # Mock no duplicate
+        mock_check_dup.return_value = None
+
+        # Mock import failure
+        mock_import.side_effect = RuntimeError("Processing failed")
+
+        with patch('vulcanlab_api.routers.markdown.Path', self._mock_path_exists()):
+            response = client.post(
+                '/api/v1/markdown/import',
+                json={
+                    "filename": "test.md",
+                    "title": "Test Book",
+                    "author": "Test Author",
+                    "is_sanitized": True
+                }
+            )
+
+        assert response.status_code == 500
+        assert "Import failed" in response.json()['detail']
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    @patch('vulcanlab_api.routers.markdown.check_duplicate_work')
+    @patch('vulcanlab_api.routers.markdown.import_sanitized_markdown')
+    def test_import_validation_error(self, mock_import, mock_check_dup, mock_config):
+        """Test returns 400 on validation error during import."""
+        # Mock config
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = "/tmp/input"
+        mock_config.return_value = mock_cfg
+
+        # Mock no duplicate
+        mock_check_dup.return_value = None
+
+        # Mock validation error
+        mock_import.side_effect = ValueError("Invalid content")
+
+        with patch('vulcanlab_api.routers.markdown.Path', self._mock_path_exists()):
+            response = client.post(
+                '/api/v1/markdown/import',
+                json={
+                    "filename": "test.md",
+                    "title": "Test Book",
+                    "author": "Test Author",
+                    "is_sanitized": True
+                }
+            )
+
+        assert response.status_code == 400
+        assert "Validation error" in response.json()['detail']
+
+    @patch('vulcanlab_api.routers.markdown.load_config')
+    @patch('vulcanlab_api.routers.markdown.check_duplicate_work')
+    def test_import_duplicate_check_error_doesnt_block(self, mock_check_dup, mock_config):
+        """Test import proceeds even if duplicate check fails."""
+        # Mock config
+        mock_cfg = Mock()
+        mock_cfg.paths.input_dir = "/tmp/input"
+        mock_config.return_value = mock_cfg
+
+        # Mock duplicate check failure
+        mock_check_dup.side_effect = Exception("DB error")
+
+        # Mock successful import
+        with patch('vulcanlab_api.routers.markdown.import_sanitized_markdown') as mock_import:
+            mock_work = Mock()
+            mock_work.id = 555
+            mock_import.return_value = mock_work
+
+            with patch('vulcanlab_api.routers.markdown.Path', self._mock_path_exists()):
+                response = client.post(
+                    '/api/v1/markdown/import',
+                    json={
+                        "filename": "test.md",
+                        "title": "Test Book",
+                        "author": "Test Author",
+                        "is_sanitized": True
+                    }
+                )
+
+        # Should still succeed
+        assert response.status_code == 200
+        assert response.json()['work_id'] == 555
