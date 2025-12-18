@@ -29,6 +29,9 @@ class RagConfig(Base):
         is_default: Whether this preset is the system default (only one can be true).
         description: Optional description of preset purpose and use cases.
         config: JSONB containing retrieval, consolidation, and augmentation parameters.
+            Retrieval parameters include:
+                - min_sentence_filter_enabled (bool): Enable filtering chunks by minimum sentence count.
+                - min_sentence_count (int): Minimum sentences required in chunk (if filter enabled).
         created_at: Timestamp when preset was created.
         updated_at: Timestamp when preset was last updated (auto-updated by trigger).
     """

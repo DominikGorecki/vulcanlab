@@ -721,7 +721,9 @@ def create_default_rag_config(verbose: bool = False) -> None:
                     "enrich_lines_below": 13,
                     "mmr_lambda": 0.7,
                     "reranker_batch_size": 8,
-                    "reranker_max_length": 512
+                    "reranker_max_length": 512,
+                    "min_sentence_filter_enabled": false,
+                    "min_sentence_count": 5
                 },
                 "consolidation": {
                     "coverage_threshold": 0.5,
