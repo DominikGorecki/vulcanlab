@@ -439,6 +439,11 @@ export function RagConfigTab() {
                       const typedKey = key as keyof RetrievalParams;
                       const value = currentConfig.retrieval[typedKey];
 
+                      // Skip sentence filter fields (handled separately below)
+                      if (key === 'min_sentence_filter_enabled' || key === 'min_sentence_count') {
+                        return null;
+                      }
+
                       // Float parameters use slider + input
                       if ("step" in constraint && constraint.step) {
                         return (
@@ -491,6 +496,57 @@ export function RagConfigTab() {
                         </div>
                       );
                     })}
+
+                    {/* Sentence Filter Section */}
+                    <div className="col-span-2 pt-4 border-t">
+                      <h4 className="text-sm font-medium mb-4">Sentence-Based Filtering</h4>
+
+                      {/* Enable Sentence Filter Toggle */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="min-sentence-filter-enabled">Enable Minimum Sentence Filter</Label>
+                            <p className="text-xs text-muted-foreground">
+                              {PARAM_CONSTRAINTS.retrieval.min_sentence_filter_enabled.description}
+                            </p>
+                          </div>
+                          <Switch
+                            id="min-sentence-filter-enabled"
+                            checked={currentConfig.retrieval.min_sentence_filter_enabled}
+                            onCheckedChange={(checked) =>
+                              updateRetrievalParam("min_sentence_filter_enabled", checked)
+                            }
+                          />
+                        </div>
+
+                        {/* Minimum Sentence Count Input */}
+                        <div className="space-y-2">
+                          <Label
+                            htmlFor="min-sentence-count"
+                            className={!currentConfig.retrieval.min_sentence_filter_enabled ? "text-muted-foreground" : ""}
+                          >
+                            Minimum Sentences
+                          </Label>
+                          <Input
+                            id="min-sentence-count"
+                            type="number"
+                            min={PARAM_CONSTRAINTS.retrieval.min_sentence_count.min}
+                            max={PARAM_CONSTRAINTS.retrieval.min_sentence_count.max}
+                            value={currentConfig.retrieval.min_sentence_count ?? ""}
+                            disabled={!currentConfig.retrieval.min_sentence_filter_enabled}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              if (!isNaN(val) && val >= PARAM_CONSTRAINTS.retrieval.min_sentence_count.min) {
+                                updateRetrievalParam("min_sentence_count", val);
+                              }
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {PARAM_CONSTRAINTS.retrieval.min_sentence_count.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>

@@ -34,6 +34,8 @@ export interface RetrievalParams {
   mmr_lambda: number;
   reranker_batch_size: number;
   reranker_max_length: number;
+  min_sentence_filter_enabled: boolean;
+  min_sentence_count: number;
 }
 
 export interface ConsolidationParams {
@@ -77,6 +79,8 @@ export const PARAM_CONSTRAINTS = {
     mmr_lambda: { min: 0.0, max: 1.0, default: 0.7, step: 0.01, description: "MMR balance: relevance (1.0) vs diversity (0.0)" },
     reranker_batch_size: { min: 1, max: 32, default: 8, description: "Batch size for BGE reranker inference" },
     reranker_max_length: { min: 128, max: 1024, default: 512, description: "Max token length for reranker" },
+    min_sentence_filter_enabled: { default: false, description: "Enable minimum sentence filter" },
+    min_sentence_count: { min: 1, max: 100, default: 5, description: "Minimum sentences in chunk" },
   },
   consolidation: {
     coverage_threshold: { min: 0.0, max: 1.0, default: 0.5, step: 0.01, description: "% of parent coverage to replace with parent" },
@@ -107,6 +111,8 @@ export function getDefaultConfig(): RagConfigParams {
       mmr_lambda: PARAM_CONSTRAINTS.retrieval.mmr_lambda.default,
       reranker_batch_size: PARAM_CONSTRAINTS.retrieval.reranker_batch_size.default,
       reranker_max_length: PARAM_CONSTRAINTS.retrieval.reranker_max_length.default,
+      min_sentence_filter_enabled: PARAM_CONSTRAINTS.retrieval.min_sentence_filter_enabled.default,
+      min_sentence_count: PARAM_CONSTRAINTS.retrieval.min_sentence_count.default,
     },
     consolidation: {
       coverage_threshold: PARAM_CONSTRAINTS.consolidation.coverage_threshold.default,
