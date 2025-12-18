@@ -20,6 +20,7 @@ Raises:
     HashMismatchError: If file hashes don't match stored values.
 """
 
+import logging
 import re
 from pathlib import Path
 from typing import Optional
@@ -30,6 +31,9 @@ from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Work
 from vulcanlab.sanitization.extract_titles import HashMismatchError
 from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 # Initialize path resolver
@@ -777,6 +781,18 @@ def chunk_content(work_id: int, verbose: bool = False, min_chunk_words: int = MI
             level = chunk_data['level']
             level_str = f"H{level}-chunk" if level else "chunk"
 
+            # Count sentences for 'chunk' level chunks only (e.g., "H1-chunk", "H2-chunk", "chunk")
+            sentence_count = None
+            if level_str.endswith('-chunk') or level_str == 'chunk':
+                try:
+                    sentences = _get_sentences(chunk_data['content'])
+                    sentence_count = len(sentences)
+                    if verbose:
+                        logger.info(f"Counted {sentence_count} sentences for chunk at lines {chunk_data['start_line']}-{chunk_data['end_line']}")
+                except Exception as e:
+                    logger.warning(f"Failed to count sentences for chunk at lines {chunk_data['start_line']}-{chunk_data['end_line']}: {e}")
+                    sentence_count = None
+
             chunk = Chunk(
                 parent_id=parent_id,
                 work_id=work_id,
@@ -786,7 +802,8 @@ def chunk_content(work_id: int, verbose: bool = False, min_chunk_words: int = MI
                 embedding=None,
                 start_line=chunk_data['start_line'],
                 end_line=chunk_data['end_line'],
-                vector_status=chunk_data['vector_status']
+                vector_status=chunk_data['vector_status'],
+                sentence_count=sentence_count
             )
 
             session.add(chunk)
