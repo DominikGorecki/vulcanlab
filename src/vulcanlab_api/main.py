@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from vulcanlab_api.config import get_settings
 from vulcanlab_api.dependencies import get_db_session
 from vulcanlab_api.routers import (
+    chunks,
     chunking,
     conversion,
     conversion_settings,
@@ -106,6 +107,10 @@ app = FastAPI(
             "name": "Markdown",
             "description": "Markdown import/export operations. Export works to markdown files, import markdown files as works.",
         },
+        {
+            "name": "Chunks",
+            "description": "Chunk management operations. Search, preview, and delete chunks with descendants.",
+        },
     ],
     # Additional metadata
     contact={
@@ -140,6 +145,7 @@ app.include_router(rag.router, prefix="/rag", tags=["RAG"])
 app.include_router(rag_config.router, prefix="/api/rag-config", tags=["RAG Config"])
 app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix
 app.include_router(markdown.router, prefix="/api/v1/markdown", tags=["Markdown"])
+app.include_router(chunks.router, prefix="/api/v1/chunks", tags=["Chunks"])
 
 
 @app.get("/", include_in_schema=False)
