@@ -21,13 +21,13 @@ import json
 import numpy as np
 import torch
 from sqlalchemy import text
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Query, Work
 from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
 from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name
 from vulcanlab.config.app_config import load_config
+from vulcanlab.retrieval.reranker import get_reranker
 
 
 # Initialize path resolver
@@ -356,27 +356,6 @@ def _enrich_content(
     return '\n'.join(parts)
 
 
-def _load_reranker():
-    """Load BGE reranker model with GPU fallback to CPU."""
-    model_name = "BAAI/bge-reranker-large"
-
-    # Try GPU first
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    if device == "cuda":
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16
-        ).to(device)
-    else:
-        model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
-
-    model.eval()
-    return tokenizer, model, device
-
-
 def _rerank_chunks(
     query: str,
     chunks: list[RetrievedChunk],
@@ -397,7 +376,7 @@ def _rerank_chunks(
     if not chunks:
         return chunks
 
-    tokenizer, model, device = _load_reranker()
+    tokenizer, model, device = get_reranker()
 
     # Prepare pairs
     pairs = [(query, chunk.enriched_content) for chunk in chunks]
