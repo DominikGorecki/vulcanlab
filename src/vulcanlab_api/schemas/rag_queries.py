@@ -258,3 +258,34 @@ class ResultListResponse(BaseModel):
     query_id: int = Field(..., description="Query ID")
     results: list[ResultItem] = Field(..., description="List of results")
     total: int = Field(..., description="Total number of results")
+
+
+# ============================================================================
+# Auto RAG Schemas
+# ============================================================================
+
+class AutoRAGRequest(BaseModel):
+    """Request to run full automated RAG pipeline."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "query": "What is working memory?",
+            }
+        }
+    )
+
+    query: str = Field(
+        ...,
+        description="The query to process through the full RAG pipeline",
+        min_length=1,
+        max_length=2000,
+    )
+
+
+class AutoRAGResponse(BaseModel):
+    """Response after running automated RAG pipeline."""
+
+    query_id: int = Field(..., description="ID of the created query record")
+    status: str = Field(..., description="Final status (should be 'ready')")
+    message: str = Field(..., description="Success message")

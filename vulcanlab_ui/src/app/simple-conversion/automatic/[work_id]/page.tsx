@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2Icon, CheckCircle2, AlertCircle, FileText, ArrowLeft } from "lucide-react";
+import { Loader2Icon, CheckCircle2, AlertCircle, FileText, ArrowLeft, ExternalLink } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -372,6 +372,13 @@ export default function AutomaticWorkflowPage() {
               </div>
 
               <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/corpus/${workId}`)}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View in Corpus
+                </Button>
                 <Button onClick={() => router.push('/simple-conversion')}>
                   Start Another Conversion
                 </Button>
