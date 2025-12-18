@@ -924,9 +924,10 @@ class TestRetrievalLogging:
     @patch('vulcanlab.retrieval.retrieve.get_default_config')
     @patch('vulcanlab.retrieval.retrieve._dense_search')
     @patch('vulcanlab.retrieval.retrieve._lexical_search')
+    @patch('vulcanlab.retrieval.retrieve.enrich_chunk_from_parent')
     @patch('vulcanlab.retrieval.retrieve._rerank_chunks')
     def test_retrieve_logging_disabled(
-        self, mock_rerank, mock_lexical, mock_dense, mock_get_default, mock_get_session, mock_save_log, mock_load_config
+        self, mock_rerank, mock_enrich, mock_lexical, mock_dense, mock_get_default, mock_get_session, mock_save_log, mock_load_config
     ):
         """Test that logging is NOT called when disabled."""
         # Setup logging config
@@ -969,8 +970,9 @@ class TestRetrievalLogging:
     @patch('vulcanlab.retrieval.retrieve._lexical_search')
     @patch('vulcanlab.retrieval.retrieve.get_session')
     @patch('vulcanlab.retrieval.retrieve.get_default_config')
+    @patch('vulcanlab.retrieval.retrieve.enrich_chunk_from_parent')
     def test_retrieve_with_mqe_queries(
-        self, mock_get_config, mock_get_session, mock_lexical_search,
+        self, mock_enrich, mock_get_config, mock_get_session, mock_lexical_search,
         mock_dense_search, mock_rerank_chunks, mock_session
     ):
         """Test retrieval with MQE expanded queries."""
@@ -1036,8 +1038,9 @@ class TestRetrievalLogging:
     @patch('vulcanlab.retrieval.retrieve._lexical_search')
     @patch('vulcanlab.retrieval.retrieve.get_session')
     @patch('vulcanlab.retrieval.retrieve.get_default_config')
+    @patch('vulcanlab.retrieval.retrieve.enrich_chunk_from_parent')
     def test_retrieve_filters_short_chunks(
-        self, mock_get_config, mock_get_session, mock_lexical_search,
+        self, mock_enrich, mock_get_config, mock_get_session, mock_lexical_search,
         mock_dense_search, mock_rerank_chunks, mock_session
     ):
         """Test that chunks below minimum requirements are filtered out."""

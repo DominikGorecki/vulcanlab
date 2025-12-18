@@ -22,14 +22,13 @@ from vulcanlab.augmentation.consolidate_context import (
     _calculate_coverage,
     _merge_adjacent_items,
     _finalize_group,
-    _read_content_from_file,
     _get_heading_chain,
     _get_level_order,
     consolidate_context,
     DEFAULT_COVERAGE_THRESHOLD,
     DEFAULT_LINE_GAP,
     DEFAULT_MIN_CONTENT_LENGTH,
-    DEFAULT_ENRICH_FROM_MD,
+    DEFAULT_ENRICH_FROM_PARENT,
 )
 
 
@@ -161,55 +160,6 @@ class TestCalculateCoverage:
         assert coverage == 0.0
 
 
-class TestReadContentFromFile:
-    """Tests for _read_content_from_file() function."""
-
-    def test_read_content_success(self):
-        """Test reading content from file successfully."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            lines = ["Line 1", "Line 2", "Line 3", "Line 4", "Line 5"]
-            md_path.write_text("\n".join(lines), encoding='utf-8')
-            
-            content = _read_content_from_file(md_path, start_line=2, end_line=4)
-            assert content == "Line 2\nLine 3\nLine 4"
-
-    def test_read_single_line(self):
-        """Test reading a single line."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2\nLine 3", encoding='utf-8')
-            
-            content = _read_content_from_file(md_path, start_line=2, end_line=2)
-            assert content == "Line 2"
-
-    def test_read_first_line(self):
-        """Test reading from first line."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2\nLine 3", encoding='utf-8')
-            
-            content = _read_content_from_file(md_path, start_line=1, end_line=2)
-            assert content == "Line 1\nLine 2"
-
-    def test_read_all_lines(self):
-        """Test reading all lines."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            lines = ["Line 1", "Line 2", "Line 3"]
-            md_path.write_text("\n".join(lines), encoding='utf-8')
-            
-            content = _read_content_from_file(md_path, start_line=1, end_line=3)
-            assert content == "\n".join(lines)
-
-    def test_read_empty_file(self):
-        """Test reading from empty file."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("", encoding='utf-8')
-            
-            content = _read_content_from_file(md_path, start_line=1, end_line=1)
-            assert content == ""
 
 
 class TestGetHeadingChain:
@@ -278,111 +228,85 @@ class TestMergeAdjacentItems:
 
     def test_merge_adjacent_items_within_gap(self):
         """Test merging items that are within line gap."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 21)]), encoding='utf-8')
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 17, 'end_line': 20, 'work_id': 1, 'content': 'Content 2'},
+        ]
+        parent = Mock()
+        parent.content = "\n".join([f"Line {i}" for i in range(1, 21)])
 
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 17, 'end_line': 20, 'work_id': 1, 'content': 'Content 2'},
-            ]
-
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 1
-            assert merged[0]['start_line'] == 10
-            assert merged[0]['end_line'] == 20
-            assert 1 in merged[0]['chunk_ids']
-            assert 2 in merged[0]['chunk_ids']
+        merged = _merge_adjacent_items(items, parent, line_gap=7, enrich_from_parent=True)
+        assert len(merged) == 1
+        assert merged[0]['start_line'] == 10
+        assert merged[0]['end_line'] == 20
+        assert 1 in merged[0]['chunk_ids']
+        assert 2 in merged[0]['chunk_ids']
 
     def test_merge_adjacent_items_beyond_gap(self):
         """Test that items beyond gap are not merged."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 31)]), encoding='utf-8')
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 25, 'end_line': 30, 'work_id': 1, 'content': 'Content 2'},
+        ]
 
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 25, 'end_line': 30, 'work_id': 1, 'content': 'Content 2'},
-            ]
-
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 2
-            assert merged[0]['start_line'] == 10
-            assert merged[1]['start_line'] == 25
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=True)
+        assert len(merged) == 2
+        assert merged[0]['start_line'] == 10
+        assert merged[1]['start_line'] == 25
 
     def test_merge_adjacent_items_empty_list(self):
         """Test merging empty items list."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("", encoding='utf-8')
-            
-            merged = _merge_adjacent_items([], None, md_path, line_gap=7, enrich_from_md=True)
-            assert merged == []
+        merged = _merge_adjacent_items([], None, line_gap=7, enrich_from_parent=True)
+        assert merged == []
 
     def test_merge_adjacent_items_single_item(self):
         """Test merging single item."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2\nLine 3", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 3, 'work_id': 1, 'content': 'Content 1'},
-            ]
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 1
-            assert merged[0]['start_line'] == 1
-            assert merged[0]['end_line'] == 3
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 3, 'work_id': 1, 'content': 'Content 1'},
+        ]
+        
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=True)
+        assert len(merged) == 1
+        assert merged[0]['start_line'] == 1
+        assert merged[0]['end_line'] == 3
 
     def test_merge_adjacent_items_multiple_groups(self):
         """Test merging items into multiple groups."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 41)]), encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 17, 'end_line': 20, 'work_id': 1, 'content': 'Content 2'},
-                {'id': 3, 'chunk_ids': [3], 'start_line': 30, 'end_line': 35, 'work_id': 1, 'content': 'Content 3'},
-                {'id': 4, 'chunk_ids': [4], 'start_line': 37, 'end_line': 40, 'work_id': 1, 'content': 'Content 4'},
-            ]
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 2
-            assert merged[0]['start_line'] == 10
-            assert merged[0]['end_line'] == 20
-            assert merged[1]['start_line'] == 30
-            assert merged[1]['end_line'] == 40
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 17, 'end_line': 20, 'work_id': 1, 'content': 'Content 2'},
+            {'id': 3, 'chunk_ids': [3], 'start_line': 30, 'end_line': 35, 'work_id': 1, 'content': 'Content 3'},
+            {'id': 4, 'chunk_ids': [4], 'start_line': 37, 'end_line': 40, 'work_id': 1, 'content': 'Content 4'},
+        ]
+        
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=True)
+        assert len(merged) == 2
+        assert merged[0]['start_line'] == 10
+        assert merged[0]['end_line'] == 20
+        assert merged[1]['start_line'] == 30
+        assert merged[1]['end_line'] == 40
 
     def test_merge_adjacent_items_unsorted(self):
         """Test that items are sorted before merging."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 21)]), encoding='utf-8')
-            
-            items = [
-                {'id': 2, 'chunk_ids': [2], 'start_line': 17, 'end_line': 20, 'work_id': 1, 'content': 'Content 2'},
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
-            ]
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 1
-            assert merged[0]['start_line'] == 10
+        items = [
+            {'id': 2, 'chunk_ids': [2], 'start_line': 17, 'end_line': 20, 'work_id': 1, 'content': 'Content 2'},
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
+        ]
+        
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=False)
+        assert len(merged) == 1
+        assert merged[0]['start_line'] == 10
 
     def test_merge_adjacent_items_without_enrich(self):
-        """Test merging without enriching from markdown."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2\nLine 3", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1'},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 3, 'end_line': 3, 'work_id': 1, 'content': 'Content 2'},
-            ]
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=False)
-            assert len(merged) == 1
-            assert merged[0]['content'] == 'Content 1\n\nContent 2'
+        """Test merging without enriching from parent."""
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1'},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 3, 'end_line': 3, 'work_id': 1, 'content': 'Content 2'},
+        ]
+        
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=False)
+        assert len(merged) == 1
+        assert merged[0]['content'] == 'Content 1\n\nContent 2'
 
 
 class TestFinalizeGroup:
@@ -390,97 +314,81 @@ class TestFinalizeGroup:
 
     def test_finalize_group_basic(self):
         """Test finalizing a basic group."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': 10},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 3, 'end_line': 5, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': 10},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            assert result['start_line'] == 1
-            assert result['end_line'] == 5
-            assert result['score'] == 0.9
-            assert result['work_id'] == 1
-            assert result['parent_id'] == 10
-            assert 1 in result['chunk_ids']
-            assert 2 in result['chunk_ids']
-            assert 'Line 1' in result['content']
-            assert 'Line 5' in result['content']
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': 10},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 3, 'end_line': 5, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': 10},
+        ]
+        parent = Mock()
+        parent.content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+        
+        result = _finalize_group(items, parent, enrich_from_parent=True)
+        assert result['start_line'] == 1
+        assert result['end_line'] == 5
+        assert result['score'] == 0.9
+        assert result['work_id'] == 1
+        assert result['parent_id'] == 10
+        assert 1 in result['chunk_ids']
+        assert 2 in result['chunk_ids']
+        assert 'Line 1' in result['content']
+        assert 'Line 5' in result['content']
 
     def test_finalize_group_max_score(self):
         """Test that finalize_group uses max score."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'score': 0.5, 'parent_id': None},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': None},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            assert result['score'] == 0.9
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'score': 0.5, 'parent_id': None},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': None},
+        ]
+        
+        result = _finalize_group(items, None, enrich_from_parent=False)
+        assert result['score'] == 0.9
 
     def test_finalize_group_with_heading_breadcrumbs(self):
         """Test finalize_group with heading breadcrumbs."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None, 
-                 'heading_breadcrumbs': 'Chapter 1 > Section A', 'level': 'H2'},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            assert result['content'].startswith('## Section A')
-            assert 'Line 1' in result['content']
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None, 
+             'heading_breadcrumbs': 'Chapter 1 > Section A', 'level': 'H2'},
+        ]
+        parent = Mock()
+        parent.content = "Line 1\nLine 2"
+        
+        result = _finalize_group(items, parent, enrich_from_parent=True)
+        assert result['content'].startswith('## Section A')
+        assert 'Line 1' in result['content']
 
     def test_finalize_group_heading_already_present(self):
         """Test that heading is not prepended if already present."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("## Section A\nLine 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 3, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None,
-                 'heading_breadcrumbs': 'Chapter 1 > Section A', 'level': 'H2'},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            # Should not duplicate the heading
-            assert result['content'].count('## Section A') == 1
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 3, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None,
+             'heading_breadcrumbs': 'Chapter 1 > Section A', 'level': 'H2'},
+        ]
+        parent = Mock()
+        parent.content = "## Section A\nLine 1\nLine 2"
+        
+        result = _finalize_group(items, parent, enrich_from_parent=True)
+        # Should not duplicate the heading
+        assert result['content'].count('## Section A') == 1
 
     def test_finalize_group_with_list_breadcrumbs(self):
         """Test finalize_group with list format breadcrumbs."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None,
-                 'heading_breadcrumbs': ['Chapter 1', 'Section A'], 'level': 'H2'},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            assert result['content'].startswith('## Section A')
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None,
+             'heading_breadcrumbs': ['Chapter 1', 'Section A'], 'level': 'H2'},
+        ]
+        parent = Mock()
+        parent.content = "Line 1\nLine 2"
+        
+        result = _finalize_group(items, parent, enrich_from_parent=True)
+        assert result['content'].startswith('## Section A')
 
     def test_finalize_group_without_enrich(self):
-        """Test finalize_group without enriching from markdown."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': None},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=False)
-            assert result['content'] == 'Content 1\n\nContent 2'
+        """Test finalize_group without enriching from parent."""
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'score': 0.8, 'parent_id': None},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': None},
+        ]
+        
+        result = _finalize_group(items, None, enrich_from_parent=False)
+        assert result['content'] == 'Content 1\n\nContent 2'
 
 
 class TestConsolidatedGroup:
@@ -610,11 +518,10 @@ class TestConsolidateContext:
         chunk.content = "Parent content here with enough characters to calculate coverage"
         return chunk
 
-    @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
     @patch('vulcanlab.augmentation.consolidate_context.get_session')
     @patch('vulcanlab.augmentation.consolidate_context.get_default_config')
     def test_consolidate_context_success(
-        self, mock_get_config, mock_get_session, mock_compute_hash, mock_query, mock_work, mock_parent_chunk
+        self, mock_get_config, mock_get_session, mock_query, mock_work, mock_parent_chunk
     ):
         """Test successful consolidation."""
         # Setup config
@@ -653,23 +560,16 @@ class TestConsolidateContext:
         mock_session.query.return_value.filter.return_value.all.side_effect = all_side_effect
         mock_get_session.return_value.__enter__.return_value = mock_session
 
-        # Setup file hash
-        mock_compute_hash.return_value = "test_hash"
 
-        # Create temporary markdown file
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 26)]), encoding='utf-8')
-            mock_work.files["sanitized"]["path"] = str(md_path)
-            # Make Path(mock_work.files["sanitized"]["path"]) work correctly
-            mock_work.files["sanitized"]["path"] = str(md_path)
+        mock_session.query.return_value.filter.return_value.all.side_effect = all_side_effect
+        mock_get_session.return_value.__enter__.return_value = mock_session
 
-            result = consolidate_context(query_id=1, verbose=False)
+        result = consolidate_context(query_id=1, verbose=False)
 
-            assert result.query_id == 1
-            assert result.original_count == 2
-            assert result.consolidated_count >= 0
-            mock_session.commit.assert_called_once()
+        assert result.query_id == 1
+        assert result.original_count == 2
+        assert result.consolidated_count >= 0
+        mock_session.commit.assert_called_once()
 
     @patch('vulcanlab.augmentation.consolidate_context.get_session')
     @patch('vulcanlab.augmentation.consolidate_context.get_default_config')
@@ -680,7 +580,7 @@ class TestConsolidateContext:
                 "coverage_threshold": 0.5,
                 "line_gap": 7,
                 "min_content_length": 350,
-                "enrich_from_md": True
+                "enrich_from_parent": True
             }
         }
         mock_get_config.return_value = mock_config
@@ -701,7 +601,7 @@ class TestConsolidateContext:
                 "coverage_threshold": 0.5,
                 "line_gap": 7,
                 "min_content_length": 350,
-                "enrich_from_md": True
+                "enrich_from_parent": True
             }
         }
         mock_get_config.return_value = mock_config
@@ -717,60 +617,11 @@ class TestConsolidateContext:
         with pytest.raises(ValueError, match="has no retrieved_context"):
             consolidate_context(query_id=1)
 
-    @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
-    @patch('vulcanlab.augmentation.consolidate_context.get_session')
-    @patch('vulcanlab.augmentation.consolidate_context.get_default_config')
-    def test_consolidate_context_hash_mismatch(
-        self, mock_get_config, mock_get_session, mock_compute_hash, mock_query, mock_work
-    ):
-        """Test consolidation when file hash doesn't match."""
-        mock_config = {
-            "consolidation": {
-                "coverage_threshold": 0.5,
-                "line_gap": 7,
-                "min_content_length": 350,
-                "enrich_from_md": True
-            }
-        }
-        mock_get_config.return_value = mock_config
 
-        mock_query.retrieved_context = [
-            {
-                'id': 1,
-                'work_id': 1,
-                'parent_id': None,
-                'content': 'Content 1',
-                'start_line': 10,
-                'end_line': 15,
-                'final_score': 0.9,
-                'level': 'chunk'
-            },
-        ]
-
-        mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_query
-        mock_session.query.return_value.filter.return_value.all.side_effect = [
-            [mock_work],  # Works
-            [],  # Parents
-        ]
-        mock_get_session.return_value.__enter__.return_value = mock_session
-
-        # Hash mismatch
-        mock_compute_hash.return_value = "different_hash"
-
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Test content", encoding='utf-8')
-            mock_work.files["sanitized"]["path"] = str(md_path)
-
-            with pytest.raises(RuntimeError, match="Content hash mismatch"):
-                consolidate_context(query_id=1)
-
-    @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
     @patch('vulcanlab.augmentation.consolidate_context.get_session')
     @patch('vulcanlab.augmentation.consolidate_context.get_default_config')
     def test_consolidate_context_empty_context(
-        self, mock_get_config, mock_get_session, mock_compute_hash
+        self, mock_get_config, mock_get_session
     ):
         """Test consolidation with empty retrieved context raises ValueError."""
         mock_config = {
@@ -794,19 +645,18 @@ class TestConsolidateContext:
         with pytest.raises(ValueError, match="has no retrieved_context"):
             consolidate_context(query_id=1)
 
-    @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
     @patch('vulcanlab.augmentation.consolidate_context.get_session')
     @patch('vulcanlab.augmentation.consolidate_context.get_default_config')
     def test_consolidate_context_single_context(
-        self, mock_get_config, mock_get_session, mock_compute_hash, mock_query, mock_work
+        self, mock_get_config, mock_get_session, mock_query, mock_work
     ):
         """Test consolidation with single context item."""
         mock_config = {
             "consolidation": {
                 "coverage_threshold": 0.5,
                 "line_gap": 7,
-                "min_content_length": 10,  # Low threshold for testing
-                "enrich_from_md": True
+                "min_content_length": 10,
+                "enrich_from_parent": True
             }
         }
         mock_get_config.return_value = mock_config
@@ -840,22 +690,14 @@ class TestConsolidateContext:
         mock_session.query.return_value.filter.return_value.all.side_effect = all_side_effect
         mock_get_session.return_value.__enter__.return_value = mock_session
 
-        mock_compute_hash.return_value = "test_hash"
+        result = consolidate_context(query_id=1)
+        assert result.original_count == 1
+        assert result.consolidated_count >= 0
 
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 21)]), encoding='utf-8')
-            mock_work.files["sanitized"]["path"] = str(md_path)
-
-            result = consolidate_context(query_id=1)
-            assert result.original_count == 1
-            assert result.consolidated_count >= 0
-
-    @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
     @patch('vulcanlab.augmentation.consolidate_context.get_session')
     @patch('vulcanlab.augmentation.consolidate_context.get_config_by_name')
     def test_consolidate_context_with_config_preset(
-        self, mock_get_config_by_name, mock_get_session, mock_compute_hash, mock_query, mock_work
+        self, mock_get_config_by_name, mock_get_session, mock_query, mock_work
     ):
         """Test consolidation with config preset."""
         mock_config = {
@@ -863,7 +705,7 @@ class TestConsolidateContext:
                 "coverage_threshold": 0.6,
                 "line_gap": 10,
                 "min_content_length": 400,
-                "enrich_from_md": False
+                "enrich_from_parent": False
             }
         }
         mock_get_config_by_name.return_value = mock_config
@@ -897,16 +739,9 @@ class TestConsolidateContext:
         mock_session.query.return_value.filter.return_value.all.side_effect = all_side_effect
         mock_get_session.return_value.__enter__.return_value = mock_session
 
-        mock_compute_hash.return_value = "test_hash"
-
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Test content", encoding='utf-8')
-            mock_work.files["sanitized"]["path"] = str(md_path)
-
-            result = consolidate_context(query_id=1, config_preset="test_preset")
-            mock_get_config_by_name.assert_called_once_with("test_preset")
-            assert result.query_id == 1
+        result = consolidate_context(query_id=1, config_preset="test_preset")
+        mock_get_config_by_name.assert_called_once_with("test_preset")
+        assert result.query_id == 1
 
 
 class TestDeduplicationAndMerging:
@@ -914,42 +749,35 @@ class TestDeduplicationAndMerging:
 
     def test_merge_overlapping_chunks(self):
         """Test merging chunks that overlap."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 21)]), encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 13, 'end_line': 18, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
-            ]
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 1
-            assert merged[0]['start_line'] == 10
-            assert merged[0]['end_line'] == 18
-            assert merged[0]['score'] == 0.9  # Max score
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 13, 'end_line': 18, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
+        ]
+        parent = Mock()
+        parent.content = "\n".join([f"Line {i}" for i in range(1, 21)])
+        
+        merged = _merge_adjacent_items(items, parent, line_gap=7, enrich_from_parent=True)
+        assert len(merged) == 1
+        assert merged[0]['start_line'] == 10
+        assert merged[0]['end_line'] == 18
+        assert merged[0]['score'] == 0.9  # Max score
 
     def test_deduplicate_identical_chunks(self):
         """Test handling of identical chunks."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 21)]), encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1', 'score': 0.9},
-            ]
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 1
-            assert merged[0]['start_line'] == 10
-            assert merged[0]['end_line'] == 15
-            assert 1 in merged[0]['chunk_ids']
-            assert 2 in merged[0]['chunk_ids']
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1', 'score': 0.9},
+        ]
+        
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=False)
+        assert len(merged) == 1
+        assert merged[0]['start_line'] == 10
+        assert merged[0]['end_line'] == 15
+        assert 1 in merged[0]['chunk_ids']
+        assert 2 in merged[0]['chunk_ids']
 
     def test_coverage_threshold_replacement(self):
         """Test that items with high coverage are replaced with parent."""
-        from unittest.mock import Mock
         parent = Mock()
         parent.content = "1234567890"  # 10 chars
 
@@ -964,7 +792,6 @@ class TestDeduplicationAndMerging:
 
     def test_coverage_below_threshold_no_replacement(self):
         """Test that items below coverage threshold are not replaced."""
-        from unittest.mock import Mock
         parent = Mock()
         parent.content = "1234567890"  # 10 chars
 
@@ -978,95 +805,68 @@ class TestDeduplicationAndMerging:
 
     def test_merge_adjacent_exact_gap(self):
         """Test merging when gap equals line_gap exactly."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 31)]), encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 22, 'end_line': 25, 'work_id': 1, 'content': 'Content 2'},
-            ]
-            # Gap = 22 - 15 - 1 = 6 lines, but check is: start_line - end_line <= gap
-            # So: 22 - 15 = 7, which equals line_gap (7), so they should merge
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 1
-            assert merged[0]['start_line'] == 10
-            assert merged[0]['end_line'] == 25
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 22, 'end_line': 25, 'work_id': 1, 'content': 'Content 2'},
+        ]
+        # Gap = 22 - 15 - 1 = 6 lines, but check is: start_line - end_line <= gap
+        # So: 22 - 15 = 7, which equals line_gap (7), so they should merge
+        
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=False)
+        assert len(merged) == 1
+        assert merged[0]['start_line'] == 10
+        assert merged[0]['end_line'] == 25
 
     def test_merge_adjacent_one_line_over_gap(self):
         """Test that items one line over gap are not merged."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("\n".join([f"Line {i}" for i in range(1, 31)]), encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 24, 'end_line': 25, 'work_id': 1, 'content': 'Content 2'},
-            ]
-            # Gap = 24 - 15 - 1 = 8 lines (one over threshold)
-            
-            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
-            assert len(merged) == 2
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 24, 'end_line': 25, 'work_id': 1, 'content': 'Content 2'},
+        ]
+        # Gap = 24 - 15 - 1 = 8 lines (one over threshold)
+        
+        merged = _merge_adjacent_items(items, None, line_gap=7, enrich_from_parent=False)
+        assert len(merged) == 2
 
     def test_finalize_group_with_multiple_chunk_ids(self):
         """Test finalize_group with items that have chunk_ids lists."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2\nLine 3", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1, 2], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
-                {'id': 2, 'chunk_ids': [3, 4], 'start_line': 3, 'end_line': 3, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            assert set(result['chunk_ids']) == {1, 2, 3, 4}
+        items = [
+            {'id': 1, 'chunk_ids': [1, 2], 'start_line': 1, 'end_line': 2, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
+            {'id': 2, 'chunk_ids': [3, 4], 'start_line': 3, 'end_line': 3, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
+        ]
+        
+        result = _finalize_group(items, None, enrich_from_parent=False)
+        assert set(result['chunk_ids']) == {1, 2, 3, 4}
 
     def test_finalize_group_mixed_chunk_ids(self):
         """Test finalize_group with mixed chunk_ids and id fields."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1, 2], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
-                {'id': 3, 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            assert 1 in result['chunk_ids']
-            assert 2 in result['chunk_ids']
-            assert 3 in result['chunk_ids']
+        items = [
+            {'id': 1, 'chunk_ids': [1, 2], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'score': 0.8},
+            {'id': 3, 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
+        ]
+        
+        result = _finalize_group(items, None, enrich_from_parent=False)
+        assert set(result['chunk_ids']) == {1, 2, 3}
 
     def test_finalize_group_uses_final_score(self):
         """Test that finalize_group uses final_score if score not present."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'final_score': 0.8},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'final_score': 0.9},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=True)
-            assert result['score'] == 0.9
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'content': 'Content 1', 'final_score': 0.8},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'final_score': 0.9},
+        ]
+        
+        result = _finalize_group(items, None, enrich_from_parent=False)
+        assert result['score'] == 0.9
 
     def test_finalize_group_no_content_items(self):
         """Test finalize_group when items have no content."""
-        with TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "test.md"
-            md_path.write_text("Line 1\nLine 2", encoding='utf-8')
-            
-            items = [
-                {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'score': 0.8},
-                {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': '', 'score': 0.9},
-            ]
-            
-            result = _finalize_group(items, None, md_path, enrich_from_md=False)
-            # Should only include content from items that have it
-            assert result['content'] == ''
+        items = [
+            {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 1, 'work_id': 1, 'score': 0.8},
+            {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': '', 'score': 0.9},
+        ]
+        
+        result = _finalize_group(items, None, enrich_from_parent=False)
+        assert result['content'] == ''
 
     def test_get_heading_chain_with_empty_separators(self):
         """Test getting heading chain with empty separators."""
@@ -1084,11 +884,10 @@ class TestConsolidationLogging:
 
     @patch('vulcanlab.augmentation.consolidate_context.load_config')
     @patch('vulcanlab.augmentation.consolidate_context._save_consolidation_log')
-    @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
     @patch('vulcanlab.augmentation.consolidate_context.get_session')
     @patch('vulcanlab.augmentation.consolidate_context.get_default_config')
     def test_consolidation_logging_enabled(
-        self, mock_get_config, mock_get_session, mock_compute_hash, mock_save_log, mock_load_config
+        self, mock_get_config, mock_get_session, mock_save_log, mock_load_config
     ):
         """Test that logging is called when enabled in config."""
         # Setup mocks
@@ -1101,7 +900,7 @@ class TestConsolidationLogging:
                 "coverage_threshold": 0.5,
                 "line_gap": 7,
                 "min_content_length": 350,
-                "enrich_from_md": True
+                "enrich_from_parent": True
             }
         }
         mock_get_config.return_value = mock_rag_config
@@ -1109,7 +908,6 @@ class TestConsolidationLogging:
         # Setup data
         mock_work = Mock()
         mock_work.id = 1
-        mock_work.files = {"sanitized": {"path": "/tmp/test.md", "hash": "hash"}}
         
         mock_query = Mock()
         mock_query.id = 1
@@ -1123,11 +921,7 @@ class TestConsolidationLogging:
         mock_session.query.return_value.filter.return_value.all.side_effect = [[mock_work], [], []]
         mock_get_session.return_value.__enter__.return_value = mock_session
         
-        mock_compute_hash.return_value = "hash"
-        
-        with patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.read_text', return_value="Content"):
-            consolidate_context(1)
+        consolidate_context(1)
 
         mock_save_log.assert_called_once()
         args = mock_save_log.call_args[0]
@@ -1137,11 +931,10 @@ class TestConsolidationLogging:
 
     @patch('vulcanlab.augmentation.consolidate_context.load_config')
     @patch('vulcanlab.augmentation.consolidate_context._save_consolidation_log')
-    @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
     @patch('vulcanlab.augmentation.consolidate_context.get_session')
     @patch('vulcanlab.augmentation.consolidate_context.get_default_config')
     def test_consolidation_logging_disabled(
-        self, mock_get_config, mock_get_session, mock_compute_hash, mock_save_log, mock_load_config
+        self, mock_get_config, mock_get_session, mock_save_log, mock_load_config
     ):
         """Test that logging is NOT called when disabled."""
         # Setup mocks
@@ -1154,7 +947,7 @@ class TestConsolidationLogging:
                 "coverage_threshold": 0.5,
                 "line_gap": 7,
                 "min_content_length": 350,
-                "enrich_from_md": True
+                "enrich_from_parent": True
             }
         }
         mock_get_config.return_value = mock_rag_config
@@ -1162,7 +955,6 @@ class TestConsolidationLogging:
         # Setup data
         mock_work = Mock()
         mock_work.id = 1
-        mock_work.files = {"sanitized": {"path": "/tmp/test.md", "hash": "hash"}}
         
         mock_query = Mock()
         mock_query.id = 1
@@ -1176,10 +968,6 @@ class TestConsolidationLogging:
         mock_session.query.return_value.filter.return_value.all.side_effect = [[mock_work], [], []]
         mock_get_session.return_value.__enter__.return_value = mock_session
         
-        mock_compute_hash.return_value = "hash"
-        
-        with patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.read_text', return_value="Content"):
-            consolidate_context(1)
+        consolidate_context(1)
 
         mock_save_log.assert_not_called()

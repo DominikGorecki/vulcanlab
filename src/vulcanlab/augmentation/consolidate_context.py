@@ -17,13 +17,14 @@ import json
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Query, Work
-from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
-from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name
+from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name, get_config_value
 from vulcanlab.config.app_config import load_config
 
+import logging
 
-# Initialize path resolver
-resolver = get_path_resolver()
+logger = logging.getLogger(__name__)
+
+
 
 
 
@@ -55,8 +56,8 @@ class ConsolidationResult:
 # Default parameters
 DEFAULT_COVERAGE_THRESHOLD = 0.5
 DEFAULT_LINE_GAP = 7
-DEFAULT_MIN_CONTENT_LENGTH = 350  # Minimum characters in content for final output
-DEFAULT_ENRICH_FROM_MD = True # Read content from markdown file during consolidation
+DEFAULT_MIN_CONTENT_LENGTH = 350
+DEFAULT_ENRICH_FROM_PARENT = True
 
 
 def _serialize_group_for_log(group: ConsolidatedGroup) -> dict:
@@ -142,15 +143,6 @@ def _get_heading_chain(
     return []
 
 
-def _read_content_from_file(
-    markdown_path: Path,
-    start_line: int,
-    end_line: int
-) -> str:
-    """Read content from markdown file by line range."""
-    lines = markdown_path.read_text(encoding='utf-8').splitlines()
-    # Convert to 0-indexed
-    return '\n'.join(lines[start_line - 1:end_line])
 
 
 def _extract_content_from_parent(
@@ -211,18 +203,16 @@ def _calculate_coverage(
 def _merge_adjacent_items(
     items: list[dict],
     parent: Chunk | None,
-    markdown_path: Path | None = None,
     line_gap: int = DEFAULT_LINE_GAP,
-    enrich_from_md: bool = DEFAULT_ENRICH_FROM_MD
+    enrich_from_parent: bool = DEFAULT_ENRICH_FROM_PARENT
 ) -> list[dict]:
     """Merge items that are within line_gap of each other.
 
     Args:
         items: List of item dictionaries to merge
-        parent: Parent Chunk object (used for content extraction when not using files)
-        markdown_path: Path to markdown file (used only if enrich_from_md=True and parent is None)
+        parent: Parent Chunk object (used for content extraction)
         line_gap: Maximum line gap between items to merge them
-        enrich_from_md: Whether to read content from markdown files
+        enrich_from_parent: Whether to extract content from parent chunk
 
     Returns:
         List of merged item dictionaries
@@ -243,12 +233,12 @@ def _merge_adjacent_items(
             current_group.append(item)
         else:
             # Finalize current group
-            merged.append(_finalize_group(current_group, parent, markdown_path, enrich_from_md))
+            merged.append(_finalize_group(current_group, parent, enrich_from_parent))
             current_group = [item]
 
     # Finalize last group
     if current_group:
-        merged.append(_finalize_group(current_group, parent, markdown_path, enrich_from_md))
+        merged.append(_finalize_group(current_group, parent, enrich_from_parent))
 
     return merged
 
@@ -256,16 +246,14 @@ def _merge_adjacent_items(
 def _finalize_group(
     items: list[dict],
     parent: Chunk | None,
-    markdown_path: Path | None = None,
-    enrich_from_md: bool = DEFAULT_ENRICH_FROM_MD
+    enrich_from_parent: bool = DEFAULT_ENRICH_FROM_PARENT
 ) -> dict:
     """Create a merged item from a group of items.
 
     Args:
         items: List of items to merge
-        parent: Parent Chunk object (preferred for content extraction)
-        markdown_path: Path to markdown file (fallback if parent is None and enrich_from_md=True)
-        enrich_from_md: Whether to extract content from parent/file vs concatenating existing content
+        parent: Parent Chunk object
+        enrich_from_parent: Whether to extract content from parent vs concatenating existing content
 
     Returns:
         Dictionary representing the merged item
@@ -281,15 +269,12 @@ def _finalize_group(
     end_line = max(item['end_line'] for item in items)
     score = max(item.get('score', item.get('final_score', 0)) for item in items)
 
-    # Get content: priority order is parent chunk > markdown file > existing content
+    # Get content: priority order is parent chunk > existing content
     content = ""
-    if enrich_from_md:
+    if enrich_from_parent:
         if parent and parent.content:
-            # Use parent chunk content (preferred method)
+            # Use parent chunk content (no file I/O)
             content = _extract_content_from_parent(parent, start_line, end_line)
-        elif markdown_path and markdown_path.exists():
-            # Fallback to markdown file if parent not available
-            content = _read_content_from_file(markdown_path, start_line, end_line)
         else:
             # Fallback to concatenating existing content
             content = '\n\n'.join(item['content'] for item in items if item.get('content'))
@@ -344,7 +329,7 @@ def consolidate_context(
     coverage_threshold: float | None = None,
     line_gap: int | None = None,
     min_content_length: int | None = None,
-    enrich_from_md: bool | None = None,
+    enrich_from_parent: bool | None = None,
     config_preset: str | None = None,
     verbose: bool = False
 ) -> ConsolidationResult:
@@ -355,7 +340,7 @@ def consolidate_context(
         coverage_threshold: Threshold for replacing with parent. If None, uses config.
         line_gap: Max lines between chunks to merge. If None, uses config.
         min_content_length: Minimum characters in content for final output. If None, uses config.
-        enrich_from_md: Read content from markdown file during consolidation. If None, uses config.
+        enrich_from_parent: Enrich from parent chunk during consolidation. If None, uses config.
         config_preset: Name of RAG config preset to use. If None, uses default.
         verbose: Print progress information
 
@@ -374,15 +359,15 @@ def consolidate_context(
 
     consolidation_params = config["consolidation"]
 
-    # Use provided parameters or fall back to config
-    coverage_threshold = coverage_threshold if coverage_threshold is not None else consolidation_params["coverage_threshold"]
-    line_gap = line_gap if line_gap is not None else consolidation_params["line_gap"]
-    min_content_length = min_content_length if min_content_length is not None else consolidation_params["min_content_length"]
-    enrich_from_md = enrich_from_md if enrich_from_md is not None else consolidation_params["enrich_from_md"]
+    # Use provided parameters or fall back to config (with backwards compatibility)
+    coverage_threshold = coverage_threshold if coverage_threshold is not None else get_config_value(config, "consolidation", "coverage_threshold", DEFAULT_COVERAGE_THRESHOLD)
+    line_gap = line_gap if line_gap is not None else get_config_value(config, "consolidation", "line_gap", DEFAULT_LINE_GAP)
+    min_content_length = min_content_length if min_content_length is not None else get_config_value(config, "consolidation", "min_content_length", DEFAULT_MIN_CONTENT_LENGTH)
+    enrich_from_parent = enrich_from_parent if enrich_from_parent is not None else get_config_value(config, "consolidation", "enrich_from_parent", DEFAULT_ENRICH_FROM_PARENT)
 
     if verbose:
         print(f"Using RAG config preset: {config_preset or 'default'}")
-        print(f"  coverage_threshold={coverage_threshold}, line_gap={line_gap}, enrich_from_md={enrich_from_md}")
+        print(f"  coverage_threshold={coverage_threshold}, line_gap={line_gap}, enrich_from_parent={enrich_from_parent}")
 
     # Initialize logging
     log_data = {
@@ -393,7 +378,7 @@ def consolidate_context(
             "coverage_threshold": coverage_threshold,
             "line_gap": line_gap,
             "min_content_length": min_content_length,
-            "enrich_from_md": enrich_from_md,
+            "enrich_from_parent": enrich_from_parent,
         },
         "iterations": []
     }
@@ -416,19 +401,6 @@ def consolidate_context(
         works = session.query(Work).filter(Work.id.in_(work_ids)).all()
         works_map = {w.id: w for w in works}
 
-        # Verify content hashes
-        for work_id, work in works_map.items():
-            if work.files and "sanitized" in work.files:
-                md_path = resolver.resolve_work_path(work, "sanitized")
-                stored_hash = work.files["sanitized"].get("hash")
-
-                if md_path.exists() and stored_hash:
-                    current_hash = compute_file_hash(md_path)
-                    if current_hash != stored_hash:
-                        raise RuntimeError(
-                            f"Content hash mismatch for work {work_id} ({work.title}). "
-                            f"Sanitized file may have been modified. Cannot consolidate."
-                        )
 
         # Get all parent chunks we need
         parent_ids = {item['parent_id'] for item in query.retrieved_context if item.get('parent_id')}
@@ -501,13 +473,6 @@ def consolidate_context(
             for (work_id, parent_id), group_items in groups.items():
                 work = works_map.get(work_id)
 
-                # Get markdown path if available (used as fallback)
-                md_path = None
-                if work and work.files and "sanitized" in work.files:
-                    md_path = resolver.resolve_work_path(work, "sanitized")
-                    if not md_path.exists():
-                        md_path = None
-
                 # Get parent chunk if available
                 parent = None
                 if parent_id and parent_id in parents_map:
@@ -517,18 +482,11 @@ def consolidate_context(
                     coverage = _calculate_coverage(group_items, parent)
 
                     if coverage >= coverage_threshold:
-                        # Replace with parent content
-                        # Priority: parent.content > markdown file (if enrich_from_md)
+                        # Replace with parent content (no file I/O)
                         if parent.content:
                             content = parent.content
-                        elif enrich_from_md and md_path:
-                            content = _read_content_from_file(
-                                md_path,
-                                parent.start_line,
-                                parent.end_line
-                            )
                         else:
-                            # Fallback: concatenate child content
+                            # Fallback: concatenate child content if parent has no content
                             content = '\n\n'.join(item['content'] for item in group_items if item.get('content'))
 
                         score = max(item['score'] for item in group_items)
@@ -563,7 +521,7 @@ def consolidate_context(
                             })
                     else:
                         # Merge adjacent items using parent chunk
-                        merged = _merge_adjacent_items(group_items, parent, md_path, line_gap, enrich_from_md)
+                        merged = _merge_adjacent_items(group_items, parent, line_gap, enrich_from_parent)
                         if len(merged) < len(group_items):
                             processed = True
                             if verbose:
@@ -580,7 +538,7 @@ def consolidate_context(
                         new_items.extend(merged)
                 else:
                     # No parent, just merge adjacent
-                    merged = _merge_adjacent_items(group_items, None, md_path, line_gap, enrich_from_md)
+                    merged = _merge_adjacent_items(group_items, None, line_gap, enrich_from_parent)
                     if len(merged) < len(group_items):
                         processed = True
 

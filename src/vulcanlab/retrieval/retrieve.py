@@ -18,21 +18,22 @@ from datetime import datetime
 from pathlib import Path
 import json
 
+import logging
 import numpy as np
 import torch
 from sqlalchemy import text
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Query, Work
-from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
-from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name
+from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name, get_config_value
 from vulcanlab.config.app_config import load_config
 from vulcanlab.retrieval.reranker import get_reranker
 from vulcanlab.retrieval.content_utils import count_words, truncate_to_word_limit
 
 
-# Initialize path resolver
-resolver = get_path_resolver()
+logger = logging.getLogger(__name__)
+
+
 
 
 
@@ -79,12 +80,10 @@ DEFAULT_LEXICAL_LIMIT = 5
 DEFAULT_RRF_K = 50                  #60
 DEFAULT_TOP_K_RRF = 75              #60
 DEFAULT_TOP_N_FINAL = 17
-DEFAULT_ENTITY_BOOST = 0.05   #0.05
-DEFAULT_MIN_CONTENT_LENGTH = 750    # characters (for enrichment)
-DEFAULT_ENRICH_LINES_ABOVE = 0      # lines to add above chunk when enriching
-DEFAULT_ENRICH_LINES_BELOW = 13     # lines to add below chunk when enriching
-DEFAULT_MIN_WORD_COUNT = 150         # minimum words in chunk.content to be included
-DEFAULT_MIN_CHAR_COUNT = 250        # minimum characters in chunk.content to be included
+DEFAULT_ENTITY_BOOST = 0.05
+DEFAULT_MIN_WORD_COUNT = 150
+DEFAULT_MAX_WORD_COUNT = 1000
+DEFAULT_MIN_CHAR_COUNT = 250
 # Default MMR parameters
 DEFAULT_MMR_LAMBDA = 0.7  #0.7 Balance between relevance (1.0) and diversity (0.0)
 
@@ -295,66 +294,6 @@ def _compute_rrf_scores(
     return scores
 
 
-def _enrich_content(
-    chunk: Chunk,
-    work: Work,
-    lines_above: int = DEFAULT_ENRICH_LINES_ABOVE,
-    lines_below: int = DEFAULT_ENRICH_LINES_BELOW,
-    min_length: int = DEFAULT_MIN_CONTENT_LENGTH
-) -> str:
-    """Enrich short chunks with surrounding context from markdown file.
-
-    Args:
-        chunk: The chunk to potentially enrich
-        work: The work containing markdown_path
-        lines_above: Number of lines to add above chunk (default 0)
-        lines_below: Number of lines to add below chunk (default 13)
-        min_length: Minimum content length before enrichment (default 350)
-
-    Returns:
-        Enriched content or original content
-    """
-    if len(chunk.content) >= min_length:
-        return chunk.content
-
-    # Check if work has sanitized markdown file
-    if not work.files or "sanitized" not in work.files:
-        return chunk.content
-
-    markdown_path = resolver.resolve_work_path(work, "sanitized")
-    if not markdown_path.exists():
-        return chunk.content
-
-    # Verify file hasn't changed
-    if work.content_hash:
-        current_hash = compute_file_hash(markdown_path)
-        if current_hash != work.content_hash:
-            return chunk.content
-
-    # Read markdown file
-    try:
-        lines = markdown_path.read_text(encoding='utf-8').splitlines()
-    except Exception:
-        return chunk.content
-
-    # Get context lines (0-indexed)
-    start_idx = max(0, chunk.start_line - 1 - lines_above)
-    end_idx = min(len(lines), chunk.end_line + lines_below)
-
-    # Build enriched content
-    above_lines = lines[start_idx:chunk.start_line - 1] if lines_above > 0 and chunk.start_line > 1 else []
-    below_lines = lines[chunk.end_line:end_idx] if lines_below > 0 and chunk.end_line < len(lines) else []
-
-    parts = []
-    if above_lines:
-        parts.append('\n'.join(above_lines))
-        parts.append('')  # Blank line
-    parts.append(chunk.content)
-    if below_lines:
-        parts.append('')  # Blank line
-        parts.append('\n'.join(below_lines))
-
-    return '\n'.join(parts)
 
 
 def extract_chunk_title(chunk: Chunk) -> str:
@@ -860,25 +799,24 @@ def retrieve(
 
     retrieval_params = config["retrieval"]
 
-    # Use provided parameters or fall back to config
-    dense_limit = dense_limit if dense_limit is not None else retrieval_params["dense_limit"]
-    lexical_limit = lexical_limit if lexical_limit is not None else retrieval_params["lexical_limit"]
-    rrf_k = rrf_k if rrf_k is not None else retrieval_params["rrf_k"]
-    top_k_rrf = top_k_rrf if top_k_rrf is not None else retrieval_params["top_k_rrf"]
-    top_n_final = top_n_final if top_n_final is not None else retrieval_params["top_n_final"]
-    entity_boost = entity_boost if entity_boost is not None else retrieval_params["entity_boost"]
-    min_word_count = min_word_count if min_word_count is not None else retrieval_params["min_word_count"]
-    min_char_count = min_char_count if min_char_count is not None else retrieval_params["min_char_count"]
-    min_content_length = retrieval_params["min_content_length"]
-    enrich_lines_above = retrieval_params["enrich_lines_above"]
-    enrich_lines_below = retrieval_params["enrich_lines_below"]
-    mmr_lambda = retrieval_params["mmr_lambda"]
-    reranker_batch_size = retrieval_params["reranker_batch_size"]
-    reranker_max_length = retrieval_params["reranker_max_length"]
+    # Use provided parameters or fall back to config (with backwards compatibility)
+    dense_limit = dense_limit if dense_limit is not None else get_config_value(config, "retrieval", "dense_limit", DEFAULT_DENSE_LIMIT)
+    lexical_limit = lexical_limit if lexical_limit is not None else get_config_value(config, "retrieval", "lexical_limit", DEFAULT_LEXICAL_LIMIT)
+    rrf_k = rrf_k if rrf_k is not None else get_config_value(config, "retrieval", "rrf_k", DEFAULT_RRF_K)
+    top_k_rrf = top_k_rrf if top_k_rrf is not None else get_config_value(config, "retrieval", "top_k_rrf", DEFAULT_TOP_K_RRF)
+    top_n_final = top_n_final if top_n_final is not None else get_config_value(config, "retrieval", "top_n_final", DEFAULT_TOP_N_FINAL)
+    entity_boost = entity_boost if entity_boost is not None else get_config_value(config, "retrieval", "entity_boost", DEFAULT_ENTITY_BOOST)
+    min_word_count = min_word_count if min_word_count is not None else get_config_value(config, "retrieval", "min_word_count", DEFAULT_MIN_WORD_COUNT)
+    max_word_count = get_config_value(config, "retrieval", "max_word_count", DEFAULT_MAX_WORD_COUNT)
+    min_char_count = min_char_count if min_char_count is not None else get_config_value(config, "retrieval", "min_char_count", DEFAULT_MIN_CHAR_COUNT)
+    
+    mmr_lambda = get_config_value(config, "retrieval", "mmr_lambda", DEFAULT_MMR_LAMBDA)
+    reranker_batch_size = get_config_value(config, "retrieval", "reranker_batch_size", 8)
+    reranker_max_length = get_config_value(config, "retrieval", "reranker_max_length", 512)
 
     # Sentence filter settings
-    min_sentence_filter_enabled = retrieval_params.get("min_sentence_filter_enabled", False)
-    min_sentence_count = retrieval_params.get("min_sentence_count", 5)
+    min_sentence_filter_enabled = get_config_value(config, "retrieval", "min_sentence_filter_enabled", False)
+    min_sentence_count = get_config_value(config, "retrieval", "min_sentence_count", 5)
 
     if verbose:
         print(f"Using RAG config preset: {config_preset or 'default'}")
@@ -1071,13 +1009,22 @@ def retrieve(
             chunk = chunks_map[chunk_id]
             work = works_map.get(chunk.work_id)
 
-            # Enrich content
-            enriched = _enrich_content(
-                chunk, work,
-                lines_above=enrich_lines_above,
-                lines_below=enrich_lines_below,
-                min_length=min_content_length
-            ) if work else chunk.content
+            # Enrich content from parent hierarchy (no file I/O)
+            try:
+                enrich_result = enrich_chunk_from_parent(
+                    chunk,
+                    session,
+                    min_word_count=min_word_count,
+                    max_word_count=max_word_count
+                )
+                enriched = enrich_result['content']
+                parent_id = enrich_result['parent_id']
+                is_enriched = enrich_result['enriched']
+            except Exception as e:
+                logger.error(f"Enrichment failed for chunk {chunk.id}: {e}")
+                enriched = chunk.content
+                parent_id = chunk.parent_id
+                is_enriched = False
 
             # Option B: Keep breadcrumbs separate, reranker sees content only
             # Breadcrumbs are stored in heading_breadcrumbs field and saved context
@@ -1090,7 +1037,7 @@ def retrieve(
 
             retrieved_chunks.append(RetrievedChunk(
                 id=chunk.id,
-                parent_id=chunk.parent_id,
+                parent_id=parent_id if is_enriched else chunk.parent_id,
                 work_id=chunk.work_id,
                 content=chunk.content,
                 enriched_content=enriched,
