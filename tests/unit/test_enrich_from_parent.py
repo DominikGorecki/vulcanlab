@@ -217,6 +217,8 @@ class TestEnrichChunkFromParent:
         parent.id = 2
         parent.content = parent_content
         parent.parent_id = None
+        parent.start_line = 1
+        parent.end_line = 100
         parent.heading_breadcrumbs = json.dumps(["Title"])
 
         session = Mock()

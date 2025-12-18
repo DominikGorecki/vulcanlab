@@ -136,8 +136,18 @@ def _get_heading_chain(
 
     # Use heading_breadcrumbs field if available
     if parent.heading_breadcrumbs:
-        # Split by " > " separator and return as list
-        return [h.strip() for h in parent.heading_breadcrumbs.split(' > ') if h.strip()]
+        # Check if it's a JSON string or already a list (if using some ORM magic, though usually it's string in DB)
+        if isinstance(parent.heading_breadcrumbs, list):
+            return parent.heading_breadcrumbs
+        
+        try:
+            # Try parsing as JSON first (proper format)
+            breadcrumbs = json.loads(parent.heading_breadcrumbs)
+            if isinstance(breadcrumbs, list):
+                return breadcrumbs
+        except (json.JSONDecodeError, TypeError):
+            # Fallback: Split by " > " separator if it's a legacy string format
+            return [h.strip() for h in parent.heading_breadcrumbs.split(' > ') if h.strip()]
 
     # Fallback: return empty list if no breadcrumbs
     return []
@@ -160,16 +170,24 @@ def _extract_content_from_parent(
     Returns:
         Extracted content as string
     """
-    if not parent or not parent.content:
+    if not parent or parent.content is None:
+        return ""
+
+    if start_line > end_line:
+        logger.warning(f"Invalid line range: start_line({start_line}) > end_line({end_line}) for parent {parent.id}")
         return ""
 
     parent_lines = parent.content.split('\n')
+    parent_start = parent.start_line if parent.start_line is not None else 1
 
     # Clamp bounds to parent content
     # Indices in parent_lines are relative to parent.start_line
     # Both start_line and parent.start_line are 1-indexed
-    start_idx = max(0, start_line - parent.start_line)
-    end_idx = min(len(parent_lines), end_line - parent.start_line + 1)
+    start_idx = max(0, min(start_line - parent_start, len(parent_lines)))
+    end_idx = max(start_idx, min(len(parent_lines), end_line - parent_start + 1))
+
+    if start_idx == end_idx:
+        logger.debug(f"Empty extraction range for parent {parent.id}: {start_line}-{end_line} (lines {len(parent_lines)})")
 
     return '\n'.join(parent_lines[start_idx:end_idx])
 
@@ -189,15 +207,20 @@ def _calculate_coverage(
     Returns:
         Coverage ratio (0.0 to 1.0) based on character counts
     """
-    if not parent or not parent.content:
+    if not parent or parent.content is None:
         return 0.0
 
     parent_char_count = len(parent.content)
     if parent_char_count == 0:
+        logger.warning(f"Parent {parent.id} has empty content, coverage is 0")
         return 0.0
 
     # Sum character counts from all child items
-    child_char_count = sum(len(item.get('content', '')) for item in items)
+    child_char_count = sum(len(item.get('content', '')) for item in items if item.get('content') is not None)
+
+    # Prevent division by zero (already checked parent_char_count == 0, but being double safe)
+    if parent_char_count == 0:
+        return 0.0
 
     return child_char_count / parent_char_count
 

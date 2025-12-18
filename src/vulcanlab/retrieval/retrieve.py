@@ -77,6 +77,7 @@ class RetrievalResult:
     enrichment_percentage: float = 0.0
     average_traversal_depth: float = 0.0
     traversal_reached_root_count: int = 0
+    fallback_count: int = 0
 
 
 # Default parameters
@@ -358,7 +359,23 @@ def enrich_chunk_from_parent(
             - depth: Number of parent hops traversed
             - reached_root: Boolean indicating if traversal reached root without meeting min_word_count
     """
+    # Defensive check: Ensure chunk is valid and has content
+    if not chunk or chunk.content is None:
+        logger.warning(f"Invalid chunk or null content for chunk {getattr(chunk, 'id', 'unknown')}")
+        return {
+            'content': "",
+            'title': "Untitled",
+            'parent_id': None,
+            'enriched': False,
+            'fallback': True,
+            'depth': 0,
+            'reached_root': False,
+            'start_line': getattr(chunk, 'start_line', 0),
+            'end_line': getattr(chunk, 'end_line', 0)
+        }
+
     logger.debug(f"Enriching chunk {chunk.id} (curr word_count: {count_words(chunk.content)})")
+    
     # Check if chunk already meets minimum
     if count_words(chunk.content) >= min_word_count:
         return {
@@ -366,19 +383,26 @@ def enrich_chunk_from_parent(
             'title': extract_chunk_title(chunk),
             'parent_id': None,
             'enriched': False,
+            'fallback': False,
             'depth': 0,
             'reached_root': False,
             'start_line': chunk.start_line,
             'end_line': chunk.end_line
         }
 
-    # Check if chunk has a parent
-    if chunk.parent_id is None:
+    # Check if chunk has a parent_id (and it's a valid type)
+    if chunk.parent_id is None or not isinstance(chunk.parent_id, (int, float)):
+        is_fallback = False
+        if chunk.parent_id is not None:
+             logger.warning(f"Chunk {chunk.id} has invalid parent_id type: {type(chunk.parent_id)}")
+             is_fallback = True
+        
         return {
             'content': chunk.content,
             'title': extract_chunk_title(chunk),
             'parent_id': None,
             'enriched': False,
+            'fallback': is_fallback,
             'depth': 0,
             'reached_root': False,
             'start_line': chunk.start_line,
@@ -386,26 +410,47 @@ def enrich_chunk_from_parent(
         }
 
     # Traverse up parent hierarchy
-    current_parent_id = chunk.parent_id
+    current_parent_id = int(chunk.parent_id)
     visited_ids = {chunk.id}  # Track visited to detect circular references
     depth = 0
     max_depth = 10
     best_parent = None
+    is_circular = False
+    is_missing = False
+    has_error = False
 
     while current_parent_id is not None and depth < max_depth:
         # Prevent circular references
         if current_parent_id in visited_ids:
+            logger.warning(f"Circular reference detected at chunk {chunk.id} (parent {current_parent_id})")
+            is_circular = True
             break
 
         visited_ids.add(current_parent_id)
         depth += 1
 
         # Fetch parent chunk
-        parent = session.query(Chunk).filter_by(id=current_parent_id).first()
+        try:
+            parent = session.query(Chunk).filter_by(id=current_parent_id).first()
+        except Exception as e:
+            logger.error(f"Error fetching parent {current_parent_id} for chunk {chunk.id}: {str(e)}")
+            has_error = True
+            break
 
         if parent is None:
             # Parent missing from database
+            logger.warning(f"Parent {current_parent_id} for chunk {chunk.id} not found in database")
+            is_missing = True
             break
+            
+        # Defensive check for parent content
+        if parent.content is None:
+            logger.warning(f"Parent {parent.id} has null content")
+            # Don't break yet, we might find a grandparent with content, 
+            # but usually a null content chunk is a dead end for current logic.
+            # However, we'll keep traversing to see if we reach root.
+            current_parent_id = parent.parent_id
+            continue
 
         # Check if parent meets minimum word count
         parent_word_count = count_words(parent.content)
@@ -419,13 +464,17 @@ def enrich_chunk_from_parent(
         best_parent = parent  # Keep track of topmost parent even if doesn't meet minimum
         current_parent_id = parent.parent_id
 
-    # No suitable parent found
-    if best_parent is None:
+    if depth >= max_depth and best_parent and count_words(best_parent.content) < min_word_count:
+        logger.warning(f"Max traversal depth ({max_depth}) reached for chunk {chunk.id}")
+
+    # No suitable parent found or error occurred
+    if best_parent is None or best_parent.content is None:
         return {
             'content': chunk.content,
             'title': extract_chunk_title(chunk),
             'parent_id': None,
             'enriched': False,
+            'fallback': is_circular or is_missing or has_error or (chunk.parent_id is not None and depth > 0),
             'depth': depth,
             'reached_root': current_parent_id is None,
             'start_line': chunk.start_line,
@@ -434,6 +483,7 @@ def enrich_chunk_from_parent(
 
     # Use parent content
     parent_word_count = count_words(best_parent.content)
+    fallback_during_truncation = False
 
     if parent_word_count <= max_word_count:
         # Parent content fits within limit
@@ -443,10 +493,15 @@ def enrich_chunk_from_parent(
     else:
         # Apply sliding window truncation
         # Find original chunk position within parent content
+        # Safeguard: if chunk.content is very short, find() might be risky, but count_words already checked min
         chunk_start = best_parent.content.find(chunk.content[:50])  # Use first 50 chars to find position
         if chunk_start == -1:
             # Chunk not found in parent, use original chunk position approximation
+            # This can happen if parent content was changed or doesn't actually contain child (data corruption)
+            logger.warning(f"Original chunk {chunk.id} content not found in parent {best_parent.id}")
             chunk_start = 0
+            fallback_during_truncation = True
+        
         chunk_end = chunk_start + len(chunk.content)
 
         enriched_content, window_start, window_end = truncate_to_word_limit(
@@ -456,12 +511,12 @@ def enrich_chunk_from_parent(
             max_word_count
         )
         # Map window indices back to absolute line numbers
-        start_line = best_parent.start_line + window_start
-        end_line = best_parent.start_line + window_end
+        start_line = (best_parent.start_line or 0) + window_start
+        end_line = (best_parent.start_line or 0) + window_end
 
     reached_root = current_parent_id is None and parent_word_count < min_word_count
     if reached_root:
-        logger.warning(
+        logger.info(
             f"Chunk {chunk.id} traversal reached root (depth {depth}) without meeting "
             f"min_word_count ({min_word_count}), using topmost parent (word_count: {parent_word_count})"
         )
@@ -476,11 +531,14 @@ def enrich_chunk_from_parent(
         'title': extract_chunk_title(best_parent),
         'parent_id': best_parent.id,
         'enriched': True,
+        'fallback': fallback_during_truncation,
         'depth': depth,
         'reached_root': reached_root,
         'start_line': start_line,
         'end_line': end_line
     }
+
+
 
 
 def _rerank_chunks(
@@ -1022,6 +1080,7 @@ def retrieve(
         # Enrichment metrics tracking
         total_chunks = 0
         enriched_count = 0
+        fallback_count = 0
         total_depth = 0
         reached_root_count = 0
 
@@ -1045,6 +1104,7 @@ def retrieve(
                 enriched = enrich_result['content']
                 parent_id = enrich_result['parent_id']
                 is_enriched = enrich_result['enriched']
+                is_fallback = enrich_result.get('fallback', False)
                 depth = enrich_result['depth']
                 reached_root = enrich_result['reached_root']
                 start_line = enrich_result.get('start_line', chunk.start_line)
@@ -1053,6 +1113,8 @@ def retrieve(
                 total_chunks += 1
                 if is_enriched:
                     enriched_count += 1
+                if is_fallback:
+                    fallback_count += 1
                 total_depth += depth
                 if reached_root:
                     reached_root_count += 1
@@ -1111,12 +1173,13 @@ def retrieve(
         logger.info(
             f"Enrichment summary: {total_chunks} chunks, {enriched_count} enriched "
             f"({enrich_pct:.1f}%), avg depth {avg_depth:.1f}, "
-            f"reached root {reached_root_count} times"
+            f"reached root {reached_root_count} times, fallbacks {fallback_count}"
         )
 
         _log_retrieval_stage(query_id, "enrichment_metrics", {
             "total_chunks": total_chunks,
             "enriched_count": enriched_count,
+            "fallback_count": fallback_count,
             "enrichment_percentage": enrich_pct,
             "average_depth": avg_depth,
             "reached_root_count": reached_root_count
@@ -1206,5 +1269,6 @@ def retrieve(
             chunks=final_chunks,
             enrichment_percentage=enrich_pct,
             average_traversal_depth=avg_depth,
-            traversal_reached_root_count=reached_root_count
+            traversal_reached_root_count=reached_root_count,
+            fallback_count=fallback_count
         )
