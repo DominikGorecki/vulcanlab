@@ -57,6 +57,7 @@
 Patterns to apply:
 - Core Module Independence - Use standard Python logging, no framework-specific loggers
 - Observability - Structured logging with context
+- In addition to API logging, if LOG_TO_FILE is set, also log to file in the folder /logs with the same format as other logs
 
 Deviations (if any):
 - None

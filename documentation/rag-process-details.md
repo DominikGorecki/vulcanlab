@@ -16,18 +16,21 @@ The retrieval stage is responsible for identifying the most relevant candidates 
 *   Results from both searches are combined using **Reciprocal Rank Fusion (RRF)**.
 *   **Purpose**: RRF is a mathematical fusion that merges the "Semantic" and "Keyword" lists into a single shortlist of top candidates (typically 60-75). It is extremely fast because it only processes ranks, not text.
 
-#### Step 3: The Bridge (Preparation & Enrichment)
+#### Step 3: Preparation & Enrichment (Parent Traversal)
 Between the initial search and the final reranking, the system performs critical data preparation:
-*   **Quality Filtering**: Chunks that are too short (based on word or character count) or appear to be boilerplate (e.g., page headers or single-word lines) are dropped to save computation time in later stages. This is a secondary filter to the database-level sentence filter.
-*   **Content Enrichment**: If a retrieved chunk is short, the system reads the **local sanitized markdown file** to grab extra lines above and below the chunk. This is vital because the Reranker and the LLM need surrounding context to understand the chunk's true meaning.
+*   **Quality Filtering**: Chunks that are too short (based on `min_word_count`) or appear to be boilerplate are identified for enrichment or exclusion.
+*   **Parent Enrichment**: If a retrieved chunk is short, the system "walks up" the document hierarchy using the `parent_id` chain in the database. 
+    *   **Context Merging**: It fetches parent chunks and prepends them until the total word count reaches `min_word_count`.
+    *   **Sliding Window**: If the combined content exceeds `max_word_count`, a sliding window is applied to keep the most relevant context while preserving the parent's heading.
+    *   **Benefit**: This ensures the Reranker and LLM have structural context (headings, preceding paragraphs) without requiring local markdown files.
 
 #### Step 4: Deep Reranking (The Judge)
 *   **BGE Reranking**: The shortlist is passed to a local **Cross-Encoder** model (`bge-reranker-large`). 
-*   **Logic**: Unlike the initial searches which look at vectors or keywords in isolation, the Reranker looks at the `(Query + Enriched Chunk)` pair as a whole. It "reads" the text to determine if it actually answers the user's specific question.
-*   **Biasing**: Final scores are adjusted based on `Entity Boost` (matches for key names/theories) and `Intent Bias` (favoring specific heading levels based on query type).
+*   **Logic**: The Reranker looks at the `(Query + Enriched Chunk)` pair. It determines if the enriched text actually answers the user's specific question.
+*   **Biasing**: Final scores are adjusted based on `Entity Boost` and `Intent Bias` (favoring specific heading levels).
 
 #### Step 5: Diversity Selection (MMR)
-*   To avoid providing the LLM with repetitive information, **Maximal Marginal Relevance (MMR)** is applied. This iteratively selects chunks that are both relevant to the query and diverse compared to chunks already selected for the final set.
+*   To avoid repetitive information, **Maximal Marginal Relevance (MMR)** is applied. It iteratively selects chunks that are both relevant to the query and diverse compared to those already selected.
 
 ---
 
@@ -50,13 +53,14 @@ The retrieval behavior can be fine-tuned via the following parameters in the RAG
 ### Filtering and Quality
 *   **`min_sentence_filter_enabled`**: Boolean flag to enable/disable database-level filtering based on sentence count.
 *   **`min_sentence_count`**: The minimum number of sentences a chunk must have to be included in the database search results.
-*   **`min_word_count`**: Chunks with fewer than this many words are filtered out before reranking (default: 150).
-*   **`min_char_count`**: Chunks with fewer than this many characters are filtered out before reranking (default: 250).
+*   **`min_word_count`**: Chunks with fewer than this many words trigger the enrichment process (default: 150).
+*   **`max_word_count`**: The maximum allowed word count for an enriched chunk (default: 750). *Prevents context bloat*.
+*   **`min_char_count`**: (**Deprecated**) Use `min_word_count`.
 
-### Enrichment
-*   **`min_content_length`**: If a chunk's content is shorter than this (in characters), it triggers the enrichment process (default: 750).
-*   **`enrich_lines_above`**: The number of lines to pull from the source file above the chunk during enrichment (default: 0).
-*   **`enrich_lines_below`**: The number of lines to pull from the source file below the chunk during enrichment (default: 13).
+### Enrichment (Database-Driven)
+*   **`min_content_length`**: (**Deprecated**) Use `min_word_count`.
+*   **`enrich_lines_above`**: (**Deprecated**) Replaced by parent traversal.
+*   **`enrich_lines_below`**: (**Deprecated**) Replaced by parent traversal.
 
 ### Reranking and Scoring
 *   **`entity_boost`**: The score boost applied to a chunk for every query entity found in its content (default: 0.05).
@@ -70,16 +74,18 @@ The retrieval behavior can be fine-tuned via the following parameters in the RAG
 ---
 
 ## 3. Consolidation
-Consolidation is a structural optimization step. It transforms the list of individual retrieved chunks into a cleaner, more readable set of "Context Groups" by analyzing the document hierarchy.
+Consolidation is a structural optimization step. It transforms the list of retrieved chunks into a cleaner set of "Context Groups" by analyzing the document hierarchy.
 
 ### Process Flow:
-1.  **Hierarchical Analysis**:
-    *   The system groups retrieved chunks by their parent document (`work_id`) and their parent heading (`parent_id`).
-2.  **Merging Logic**:
-    *   **Adjacency Merging**: If two retrieved chunks are very close in the original document (separated by only a few lines), the system reads the **local markdown file** to bridge the gap and merges them into a single block.
-    *   **Parent-Level Replacement**: If a significant percentage of a section's content (the "Coverage Threshold") has been retrieved as separate pieces, the system replaces all those fragments with the **entire section** read directly from the local file.
+1.  **Hierarchical Grouping**:
+    *   The system groups retrieved chunks by their parent document (`work_id`) and their highest common ancestor chunk (`parent_id`).
+2.  **Merging & Enrichment Logic**:
+    *   **Parent Chunk Extraction**: For each group, the system fetches the full content of the parent chunk(s) from the database.
+    *   **Coverage Calculation**: It calculates how much of the parent's content is represented by the retrieved fragments: `(Sum of Fragment Chars) / (Total Parent Chars)`.
+    *   **Parent-Level Replacement**: If coverage exceeds the `coverage_threshold` (default: 0.5), the fragments are replaced by the **entire parent content**.
+    *   **Range Reconstruction**: If replacement is not triggered, fragments are merged based on their relative positions in the parent text.
 3.  **Hierarchy Preservation**:
-    *   Every consolidated group retains its "Heading Chain" (breadcrumbs). This ensures that even if a paragraph is retrieved from the middle of a book, the LLM knows exactly which chapter and sub-section it belongs to.
+    *   Every group retains its "Heading Chain" (breadcrumb path). This ensures the LLM knows the chapter and sub-section context for every piece of information.
 
 ---
 
@@ -87,35 +93,60 @@ Consolidation is a structural optimization step. It transforms the list of indiv
 The consolidation engine uses the following parameters to decide how to group and merge chunks.
 
 ### Structural Bridging
-*   **`coverage_threshold`**: The percentage of a parent section's lines that must be present in the retrieved chunks to trigger a "Parent Replacement" (default: 0.5 or 50%). If the threshold is met, all individual chunks are replaced by the full content of the parent heading.
-*   **`line_gap`**: The maximum number of lines allowed between two retrieved chunks to permit merging them into a single block (default: 7 lines).
-*   **`enrich_from_md`**: Boolean flag (default: True). If enabled, the system reads the actual text from the local markdown file to fill in gaps during merging or to fetch full parent sections. If disabled, it only concatenates the existing chunk text.
+*   **`coverage_threshold`**: The percentage of a parent section's characters that must be present in fragments to trigger a "Parent Replacement" (default: 0.5 or 50%).
+*   **`line_gap`**: (**Legacy**) Previously used for adjacency merging. Parent-based consolidation is now the preferred method.
+*   **`enrich_from_md`**: (**Deprecated**) The system now always uses parent chunks from the database.
 
 ### Final Output Quality
-*   **`min_content_length`**: The minimum character count required for a consolidated group to be included in the final context sent to the LLM (default: 350). Groups shorter than this are filtered out at the end of consolidation.
+*   **`min_group_word_count`**: The minimum word count for a consolidated group to be included in the final context (default: 100).
+*   **`min_content_length`**: (**Deprecated**) Use word-count filters.
 
 ---
 
-## 5. Augmentation
-Augmentation is the final stage where the retrieved and consolidated information is synthesized into a master prompt for the LLM.
+## 5. Simple Conversion Support
+The parent-chunk-enrichment system enables full RAG functionality for documents processed via "Simple Conversion":
+*   **No File Dependency**: Retrieval enrichment and consolidation no longer require local sanitized markdown files.
+*   **Database-Only**: All necessary context is retrieved directly from the `chunks` table using the `parent_id` hierarchy.
+*   **Reconstruction**: Structural context (headings and larger sections) is reconstructed using parent chunks stored during the initial ingestion.
+
+## 6. Examples
+
+### Example: Parent Traversal
+A small retrieved chunk $A$ (50 words) has a parent $B$ (200 words) and grandparent $C$ (400 words).
+*   With `min_word_count=150`:
+    *   System walks to Parent $B$ (250 words total).
+    *   $250 > 150$, so traversal stops.
+    *   **Result**: Context = Content of $B$ (which includes $A$).
+
+### Example: Sliding Window Truncation
+If Parent $C$ (1000 words) is added and `max_word_count=750`:
+*   The system takes the immediate parent's heading.
+*   It then takes the trailing sentences of $C$ and $B$ that fit within 750 words.
+*   **Result**: A concise context block that preserves the most recent history and the current heading.
+
+### Example: Coverage Calculation
+Parent section $P$ has 2000 characters. Three fragments $\{f1, f2, f3\}$ are retrieved with lengths 500, 300, and 400.
+*   **Coverage**: $(500+300+400) / 2000 = 0.6$ (60%).
+*   If `coverage_threshold = 0.5`: The system replaces all three fragments with the full 2000-character content of $P$.
+
+---
+
+## 7. Augmentation
+Augmentation is the final stage where information is synthesized into a master prompt for the LLM.
 
 ### Process Flow:
 1.  **Context Formatting**:
     *   The consolidated groups are formatted into distinct, cited blocks (e.g., `[S1]`, `[S2]`). 
     *   Each block includes a header showing the source title and the heading breadcrumb path.
 2.  **Prompt Engineering**:
-    *   The system loads a **RAG Template** that defines strict rules for the LLM. These include:
-        *   **Hybrid Evidence Policy**: Instructions to prioritize the provided sources but allow general academic knowledge if clearly marked.
-        *   **Citation Rules**: Requirement to use `[S#]` tags for every claim supported by the text.
-        *   **Intent-Based Guidance**: Directions to tailor the answer style based on the query's intent (e.g., "COMPARISON" prompts the LLM to use tables or bulleted differences).
+    *   The system loads a **RAG Template** with strict rules:
+        *   **Hybrid Evidence Policy**: Prioritize provided sources, allow academic knowledge if marked.
+        *   **Citation Rules**: Mandatory use of `[S#]` tags for every claim.
+        *   **Intent-Based Guidance**: Tailor answer style (e.g., tables for comparisons).
 3.  **Final Synthesis**:
-    *   The original user question, the formatted context blocks, and the metadata (entities/intent) are injected into the template. This final string is what is sent to the AI provider (OpenAI or Gemini).
+    *   The user question, formatted context, and metadata are injected into the template and sent to the AI provider.
 
 ---
 
-## Technical Note: Local File Dependency
-A critical characteristic of the current VulcanLab architecture is its dependency on **local sanitized markdown files** during the Retrieval (Enrichment) and Consolidation stages. 
-
-*   The system uses the database to **find** where information is (line numbers).
-*   It uses local files to **read** the expanded text and structural gaps.
-*   **Limitation**: For "Simple Conversion" documents where sanitized content exists only in the database, these specific structural optimizations are currently bypassed.
+## Technical Note: Database-Only Enrichment
+VulcanLab has transitioned to a **database-only enrichment model**. The system uses the `parent_id` hierarchy to "read" expanded text and structural gaps without requiring local markdown files on the server. This makes the pipeline more robust, easier to deploy, and fully compatible with all document conversion types.
