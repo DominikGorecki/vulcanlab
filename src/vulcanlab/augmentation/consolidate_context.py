@@ -153,34 +153,80 @@ def _read_content_from_file(
     return '\n'.join(lines[start_line - 1:end_line])
 
 
+def _extract_content_from_parent(
+    parent: Chunk,
+    start_line: int,
+    end_line: int
+) -> str:
+    """Extract content from parent chunk by line range.
+
+    Args:
+        parent: Parent Chunk object with content
+        start_line: Starting line number (1-indexed, inclusive)
+        end_line: Ending line number (1-indexed, inclusive)
+
+    Returns:
+        Extracted content as string
+    """
+    if not parent or not parent.content:
+        return ""
+
+    parent_lines = parent.content.split('\n')
+
+    # Clamp bounds to parent content
+    start_idx = max(0, start_line - 1)  # Convert to 0-indexed
+    end_idx = min(len(parent_lines), end_line)  # end_line is inclusive, but slicing is exclusive
+
+    return '\n'.join(parent_lines[start_idx:end_idx])
+
+
 def _calculate_coverage(
     items: list[dict],
-    parent_start: int,
-    parent_end: int
+    parent: Chunk
 ) -> float:
-    """Calculate what percentage of parent is covered by items."""
-    parent_lines = parent_end - parent_start + 1
-    if parent_lines <= 0:
+    """Calculate what percentage of parent content is covered by child items.
+
+    Uses character count instead of line count for more accurate coverage.
+
+    Args:
+        items: List of child item dictionaries with 'content' field
+        parent: Parent Chunk object with content field
+
+    Returns:
+        Coverage ratio (0.0 to 1.0) based on character counts
+    """
+    if not parent or not parent.content:
         return 0.0
 
-    # Count covered lines
-    covered = set()
-    for item in items:
-        for line in range(item['start_line'], item['end_line'] + 1):
-            covered.add(line)
+    parent_char_count = len(parent.content)
+    if parent_char_count == 0:
+        return 0.0
 
-    # Only count lines within parent range
-    covered_in_parent = covered & set(range(parent_start, parent_end + 1))
-    return len(covered_in_parent) / parent_lines
+    # Sum character counts from all child items
+    child_char_count = sum(len(item.get('content', '')) for item in items)
+
+    return child_char_count / parent_char_count
 
 
 def _merge_adjacent_items(
     items: list[dict],
-    markdown_path: Path,
+    parent: Chunk | None,
+    markdown_path: Path | None = None,
     line_gap: int = DEFAULT_LINE_GAP,
     enrich_from_md: bool = DEFAULT_ENRICH_FROM_MD
 ) -> list[dict]:
-    """Merge items that are within line_gap of each other."""
+    """Merge items that are within line_gap of each other.
+
+    Args:
+        items: List of item dictionaries to merge
+        parent: Parent Chunk object (used for content extraction when not using files)
+        markdown_path: Path to markdown file (used only if enrich_from_md=True and parent is None)
+        line_gap: Maximum line gap between items to merge them
+        enrich_from_md: Whether to read content from markdown files
+
+    Returns:
+        List of merged item dictionaries
+    """
     if not items:
         return []
 
@@ -197,22 +243,33 @@ def _merge_adjacent_items(
             current_group.append(item)
         else:
             # Finalize current group
-            merged.append(_finalize_group(current_group, markdown_path, enrich_from_md))
+            merged.append(_finalize_group(current_group, parent, markdown_path, enrich_from_md))
             current_group = [item]
 
     # Finalize last group
     if current_group:
-        merged.append(_finalize_group(current_group, markdown_path, enrich_from_md))
+        merged.append(_finalize_group(current_group, parent, markdown_path, enrich_from_md))
 
     return merged
 
 
 def _finalize_group(
     items: list[dict],
-    markdown_path: Path,
+    parent: Chunk | None,
+    markdown_path: Path | None = None,
     enrich_from_md: bool = DEFAULT_ENRICH_FROM_MD
 ) -> dict:
-    """Create a merged item from a group of items."""
+    """Create a merged item from a group of items.
+
+    Args:
+        items: List of items to merge
+        parent: Parent Chunk object (preferred for content extraction)
+        markdown_path: Path to markdown file (fallback if parent is None and enrich_from_md=True)
+        enrich_from_md: Whether to extract content from parent/file vs concatenating existing content
+
+    Returns:
+        Dictionary representing the merged item
+    """
     chunk_ids = []
     for item in items:
         if 'chunk_ids' in item:
@@ -224,10 +281,18 @@ def _finalize_group(
     end_line = max(item['end_line'] for item in items)
     score = max(item.get('score', item.get('final_score', 0)) for item in items)
 
-    # Get content: either from file or from existing items
+    # Get content: priority order is parent chunk > markdown file > existing content
+    content = ""
     if enrich_from_md:
-        # Read content from markdown file
-        content = _read_content_from_file(markdown_path, start_line, end_line)
+        if parent and parent.content:
+            # Use parent chunk content (preferred method)
+            content = _extract_content_from_parent(parent, start_line, end_line)
+        elif markdown_path and markdown_path.exists():
+            # Fallback to markdown file if parent not available
+            content = _read_content_from_file(markdown_path, start_line, end_line)
+        else:
+            # Fallback to concatenating existing content
+            content = '\n\n'.join(item['content'] for item in items if item.get('content'))
     else:
         # Use existing content from items (concatenate with newlines)
         content = '\n\n'.join(item['content'] for item in items if item.get('content'))
@@ -435,33 +500,37 @@ def consolidate_context(
 
             for (work_id, parent_id), group_items in groups.items():
                 work = works_map.get(work_id)
-                if not work or not work.files or "sanitized" not in work.files:
-                    new_items.extend(group_items)
-                    continue
 
-                md_path = resolver.resolve_work_path(work, "sanitized")
-                if not md_path.exists():
-                    new_items.extend(group_items)
-                    continue
+                # Get markdown path if available (used as fallback)
+                md_path = None
+                if work and work.files and "sanitized" in work.files:
+                    md_path = resolver.resolve_work_path(work, "sanitized")
+                    if not md_path.exists():
+                        md_path = None
 
-                # Check if parent exists
+                # Get parent chunk if available
+                parent = None
                 if parent_id and parent_id in parents_map:
                     parent = parents_map[parent_id]
 
-                    # Calculate coverage
-                    coverage = _calculate_coverage(
-                        group_items,
-                        parent.start_line,
-                        parent.end_line
-                    )
+                    # Calculate coverage using character counts
+                    coverage = _calculate_coverage(group_items, parent)
 
-                    if coverage >= coverage_threshold and enrich_from_md:
-                        # Replace with parent content (only if enrich_from_md is True)
-                        content = _read_content_from_file(
-                            md_path,
-                            parent.start_line,
-                            parent.end_line
-                        )
+                    if coverage >= coverage_threshold:
+                        # Replace with parent content
+                        # Priority: parent.content > markdown file (if enrich_from_md)
+                        if parent.content:
+                            content = parent.content
+                        elif enrich_from_md and md_path:
+                            content = _read_content_from_file(
+                                md_path,
+                                parent.start_line,
+                                parent.end_line
+                            )
+                        else:
+                            # Fallback: concatenate child content
+                            content = '\n\n'.join(item['content'] for item in group_items if item.get('content'))
+
                         score = max(item['score'] for item in group_items)
                         chunk_ids = []
                         for item in group_items:
@@ -482,7 +551,7 @@ def consolidate_context(
 
                         if verbose:
                             print(f"  Replaced {len(group_items)} items with parent {parent_id} ({coverage:.0%} coverage)")
-                        
+
                         if load_config().logging.enabled:
                             iteration_log["operations"].append({
                                 "type": "replace_with_parent",
@@ -493,13 +562,13 @@ def consolidate_context(
                                 "new_item": _serialize_item_for_log(new_item)
                             })
                     else:
-                        # Merge adjacent items
-                        merged = _merge_adjacent_items(group_items, md_path, line_gap, enrich_from_md)
+                        # Merge adjacent items using parent chunk
+                        merged = _merge_adjacent_items(group_items, parent, md_path, line_gap, enrich_from_md)
                         if len(merged) < len(group_items):
                             processed = True
                             if verbose:
                                 print(f"  Merged {len(group_items)} items into {len(merged)} (parent {parent_id})")
-                            
+
                             if load_config().logging.enabled:
                                 iteration_log["operations"].append({
                                     "type": "merge_adjacent",
@@ -511,10 +580,10 @@ def consolidate_context(
                         new_items.extend(merged)
                 else:
                     # No parent, just merge adjacent
-                    merged = _merge_adjacent_items(group_items, md_path, line_gap, enrich_from_md)
+                    merged = _merge_adjacent_items(group_items, None, md_path, line_gap, enrich_from_md)
                     if len(merged) < len(group_items):
                         processed = True
-                        
+
                         if load_config().logging.enabled:
                             iteration_log["operations"].append({
                                 "type": "merge_adjacent_no_parent",

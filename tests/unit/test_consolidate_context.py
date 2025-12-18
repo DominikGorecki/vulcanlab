@@ -68,85 +68,96 @@ class TestGetLevelOrder:
 
 
 class TestCalculateCoverage:
-    """Tests for _calculate_coverage() function."""
+    """Tests for _calculate_coverage() function (character-based)."""
 
     def test_full_coverage(self):
         """Test coverage calculation when items fully cover parent."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "1234567890"  # 10 chars
+
         items = [
-            {'start_line': 10, 'end_line': 20},
-            {'start_line': 21, 'end_line': 30},
+            {'content': "1234567890"},  # 10 chars - full coverage
         ]
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
+
+        coverage = _calculate_coverage(items, parent)
         assert coverage == 1.0
 
     def test_partial_coverage(self):
         """Test coverage calculation with partial coverage."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "1234567890"  # 10 chars
+
         items = [
-            {'start_line': 10, 'end_line': 15},
+            {'content': "12345"},  # 5 chars - 50% coverage
         ]
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
-        assert coverage == pytest.approx(6 / 21, rel=1e-2)  # 6 lines / 21 total lines
+
+        coverage = _calculate_coverage(items, parent)
+        assert coverage == 0.5
 
     def test_no_coverage(self):
-        """Test coverage when items don't overlap parent."""
+        """Test coverage when items have no content."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "1234567890"
+
         items = [
-            {'start_line': 50, 'end_line': 60},
+            {'content': ""},
         ]
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
+
+        coverage = _calculate_coverage(items, parent)
         assert coverage == 0.0
 
     def test_overlapping_items(self):
-        """Test coverage with overlapping items."""
+        """Test coverage with multiple items."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "1234567890"  # 10 chars
+
         items = [
-            {'start_line': 10, 'end_line': 20},
-            {'start_line': 15, 'end_line': 25},  # Overlaps with first
+            {'content': "123"},  # 3 chars
+            {'content': "45"},   # 2 chars
         ]
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
-        # Should count unique lines: 10-25 = 16 lines, parent = 21 lines
-        assert coverage == pytest.approx(16 / 21, rel=1e-2)
+
+        coverage = _calculate_coverage(items, parent)
+        assert coverage == 0.5  # 5 chars / 10 chars
 
     def test_items_extend_beyond_parent(self):
-        """Test coverage when items extend beyond parent boundaries."""
+        """Test coverage when items exceed parent content."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "12345"  # 5 chars
+
         items = [
-            {'start_line': 5, 'end_line': 35},  # Extends beyond parent
+            {'content': "1234567890"},  # 10 chars - exceeds parent
         ]
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
-        # Only count lines within parent: 10-30 = 21 lines
-        assert coverage == 1.0
+
+        coverage = _calculate_coverage(items, parent)
+        assert coverage == 2.0  # Can exceed 1.0
 
     def test_empty_items(self):
         """Test coverage with empty items list."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "1234567890"
+
         items = []
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
+
+        coverage = _calculate_coverage(items, parent)
         assert coverage == 0.0
 
     def test_zero_length_parent(self):
         """Test coverage with zero-length parent."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = ""
+
         items = [
-            {'start_line': 10, 'end_line': 20},
+            {'content': "some content"},
         ]
-        parent_start = 10
-        parent_end = 9  # Invalid range
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
+
+        coverage = _calculate_coverage(items, parent)
         assert coverage == 0.0
 
 
@@ -270,13 +281,13 @@ class TestMergeAdjacentItems:
         with TemporaryDirectory() as tmpdir:
             md_path = Path(tmpdir) / "test.md"
             md_path.write_text("\n".join([f"Line {i}" for i in range(1, 21)]), encoding='utf-8')
-            
+
             items = [
                 {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
                 {'id': 2, 'chunk_ids': [2], 'start_line': 17, 'end_line': 20, 'work_id': 1, 'content': 'Content 2'},
             ]
-            
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 1
             assert merged[0]['start_line'] == 10
             assert merged[0]['end_line'] == 20
@@ -288,13 +299,13 @@ class TestMergeAdjacentItems:
         with TemporaryDirectory() as tmpdir:
             md_path = Path(tmpdir) / "test.md"
             md_path.write_text("\n".join([f"Line {i}" for i in range(1, 31)]), encoding='utf-8')
-            
+
             items = [
                 {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
                 {'id': 2, 'chunk_ids': [2], 'start_line': 25, 'end_line': 30, 'work_id': 1, 'content': 'Content 2'},
             ]
-            
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 2
             assert merged[0]['start_line'] == 10
             assert merged[1]['start_line'] == 25
@@ -305,7 +316,7 @@ class TestMergeAdjacentItems:
             md_path = Path(tmpdir) / "test.md"
             md_path.write_text("", encoding='utf-8')
             
-            merged = _merge_adjacent_items([], md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items([], None, md_path, line_gap=7, enrich_from_md=True)
             assert merged == []
 
     def test_merge_adjacent_items_single_item(self):
@@ -318,7 +329,7 @@ class TestMergeAdjacentItems:
                 {'id': 1, 'chunk_ids': [1], 'start_line': 1, 'end_line': 3, 'work_id': 1, 'content': 'Content 1'},
             ]
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 1
             assert merged[0]['start_line'] == 1
             assert merged[0]['end_line'] == 3
@@ -336,7 +347,7 @@ class TestMergeAdjacentItems:
                 {'id': 4, 'chunk_ids': [4], 'start_line': 37, 'end_line': 40, 'work_id': 1, 'content': 'Content 4'},
             ]
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 2
             assert merged[0]['start_line'] == 10
             assert merged[0]['end_line'] == 20
@@ -354,7 +365,7 @@ class TestMergeAdjacentItems:
                 {'id': 1, 'chunk_ids': [1], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1'},
             ]
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 1
             assert merged[0]['start_line'] == 10
 
@@ -369,7 +380,7 @@ class TestMergeAdjacentItems:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 3, 'end_line': 3, 'work_id': 1, 'content': 'Content 2'},
             ]
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=False)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=False)
             assert len(merged) == 1
             assert merged[0]['content'] == 'Content 1\n\nContent 2'
 
@@ -388,7 +399,7 @@ class TestFinalizeGroup:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 3, 'end_line': 5, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': 10},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             assert result['start_line'] == 1
             assert result['end_line'] == 5
             assert result['score'] == 0.9
@@ -410,7 +421,7 @@ class TestFinalizeGroup:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': None},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             assert result['score'] == 0.9
 
     def test_finalize_group_with_heading_breadcrumbs(self):
@@ -424,7 +435,7 @@ class TestFinalizeGroup:
                  'heading_breadcrumbs': 'Chapter 1 > Section A', 'level': 'H2'},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             assert result['content'].startswith('## Section A')
             assert 'Line 1' in result['content']
 
@@ -439,7 +450,7 @@ class TestFinalizeGroup:
                  'heading_breadcrumbs': 'Chapter 1 > Section A', 'level': 'H2'},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             # Should not duplicate the heading
             assert result['content'].count('## Section A') == 1
 
@@ -454,7 +465,7 @@ class TestFinalizeGroup:
                  'heading_breadcrumbs': ['Chapter 1', 'Section A'], 'level': 'H2'},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             assert result['content'].startswith('## Section A')
 
     def test_finalize_group_without_enrich(self):
@@ -468,7 +479,7 @@ class TestFinalizeGroup:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9, 'parent_id': None},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=False)
+            result = _finalize_group(items, None, md_path, enrich_from_md=False)
             assert result['content'] == 'Content 1\n\nContent 2'
 
 
@@ -595,6 +606,8 @@ class TestConsolidateContext:
         chunk.end_line = 25
         chunk.level = "H2"
         chunk.heading_breadcrumbs = "Chapter 1 > Section A"
+        # Add content for character-based coverage calculation
+        chunk.content = "Parent content here with enough characters to calculate coverage"
         return chunk
 
     @patch('vulcanlab.augmentation.consolidate_context.compute_file_hash')
@@ -910,7 +923,7 @@ class TestDeduplicationAndMerging:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 13, 'end_line': 18, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
             ]
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 1
             assert merged[0]['start_line'] == 10
             assert merged[0]['end_line'] == 18
@@ -927,7 +940,7 @@ class TestDeduplicationAndMerging:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 10, 'end_line': 15, 'work_id': 1, 'content': 'Content 1', 'score': 0.9},
             ]
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 1
             assert merged[0]['start_line'] == 10
             assert merged[0]['end_line'] == 15
@@ -936,28 +949,31 @@ class TestDeduplicationAndMerging:
 
     def test_coverage_threshold_replacement(self):
         """Test that items with high coverage are replaced with parent."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "1234567890"  # 10 chars
+
         items = [
-            {'start_line': 10, 'end_line': 15},
-            {'start_line': 16, 'end_line': 20},
-            {'start_line': 21, 'end_line': 25},
+            {'content': "12345"},   # 5 chars
+            {'content': "678"},     # 3 chars
         ]
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
-        # 16 lines covered out of 21 total = ~76% coverage
+
+        coverage = _calculate_coverage(items, parent)
+        # 8 chars out of 10 = 80% coverage
         assert coverage >= 0.5  # Should exceed threshold
 
     def test_coverage_below_threshold_no_replacement(self):
         """Test that items below coverage threshold are not replaced."""
+        from unittest.mock import Mock
+        parent = Mock()
+        parent.content = "1234567890"  # 10 chars
+
         items = [
-            {'start_line': 10, 'end_line': 12},
+            {'content': "123"},  # 3 chars = 30% coverage
         ]
-        parent_start = 10
-        parent_end = 30
-        
-        coverage = _calculate_coverage(items, parent_start, parent_end)
-        # 3 lines covered out of 21 total = ~14% coverage
+
+        coverage = _calculate_coverage(items, parent)
+        # 3 chars out of 10 = 30% coverage
         assert coverage < 0.5  # Should be below threshold
 
     def test_merge_adjacent_exact_gap(self):
@@ -973,7 +989,7 @@ class TestDeduplicationAndMerging:
             # Gap = 22 - 15 - 1 = 6 lines, but check is: start_line - end_line <= gap
             # So: 22 - 15 = 7, which equals line_gap (7), so they should merge
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 1
             assert merged[0]['start_line'] == 10
             assert merged[0]['end_line'] == 25
@@ -990,7 +1006,7 @@ class TestDeduplicationAndMerging:
             ]
             # Gap = 24 - 15 - 1 = 8 lines (one over threshold)
             
-            merged = _merge_adjacent_items(items, md_path, line_gap=7, enrich_from_md=True)
+            merged = _merge_adjacent_items(items, None, md_path, line_gap=7, enrich_from_md=True)
             assert len(merged) == 2
 
     def test_finalize_group_with_multiple_chunk_ids(self):
@@ -1004,7 +1020,7 @@ class TestDeduplicationAndMerging:
                 {'id': 2, 'chunk_ids': [3, 4], 'start_line': 3, 'end_line': 3, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             assert set(result['chunk_ids']) == {1, 2, 3, 4}
 
     def test_finalize_group_mixed_chunk_ids(self):
@@ -1018,7 +1034,7 @@ class TestDeduplicationAndMerging:
                 {'id': 3, 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'score': 0.9},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             assert 1 in result['chunk_ids']
             assert 2 in result['chunk_ids']
             assert 3 in result['chunk_ids']
@@ -1034,7 +1050,7 @@ class TestDeduplicationAndMerging:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': 'Content 2', 'final_score': 0.9},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=True)
+            result = _finalize_group(items, None, md_path, enrich_from_md=True)
             assert result['score'] == 0.9
 
     def test_finalize_group_no_content_items(self):
@@ -1048,7 +1064,7 @@ class TestDeduplicationAndMerging:
                 {'id': 2, 'chunk_ids': [2], 'start_line': 2, 'end_line': 2, 'work_id': 1, 'content': '', 'score': 0.9},
             ]
             
-            result = _finalize_group(items, md_path, enrich_from_md=False)
+            result = _finalize_group(items, None, md_path, enrich_from_md=False)
             # Should only include content from items that have it
             assert result['content'] == ''
 
