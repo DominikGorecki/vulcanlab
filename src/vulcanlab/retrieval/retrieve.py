@@ -174,9 +174,18 @@ def _meets_minimum_requirements(
 def _dense_search(
     session,
     embedding: list,
-    limit: int = DEFAULT_DENSE_LIMIT
+    limit: int = DEFAULT_DENSE_LIMIT,
+    sentence_filter_enabled: bool = False,
+    min_sentence_count: int = 5
 ) -> list[tuple[int, int]]:
     """Perform dense vector search.
+
+    Args:
+        session: Database session
+        embedding: Query embedding vector
+        limit: Maximum number of results
+        sentence_filter_enabled: Whether to filter by sentence count
+        min_sentence_count: Minimum sentence count threshold (if filter enabled)
 
     Returns list of (chunk_id, rank) tuples.
     """
@@ -185,15 +194,25 @@ def _dense_search(
         embedding = embedding.tolist()
     embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
 
+    # Build WHERE clause conditionally
+    where_clauses = ["embedding IS NOT NULL"]
+    params = {"embedding": embedding_str, "limit": limit}
+
+    if sentence_filter_enabled:
+        where_clauses.append("(sentence_count IS NOT NULL AND sentence_count >= :min_sentence_count)")
+        params["min_sentence_count"] = min_sentence_count
+
+    where_clause = " AND ".join(where_clauses)
+
     result = session.execute(
-        text("""
+        text(f"""
             SELECT id
             FROM chunks
-            WHERE embedding IS NOT NULL
+            WHERE {where_clause}
             ORDER BY embedding <=> :embedding
             LIMIT :limit
         """),
-        {"embedding": embedding_str, "limit": limit}
+        params
     )
     return [(row[0], i + 1) for i, row in enumerate(result.fetchall())]
 
@@ -201,7 +220,9 @@ def _dense_search(
 def _lexical_search(
     session,
     query_text: str,
-    limit: int = DEFAULT_LEXICAL_LIMIT
+    limit: int = DEFAULT_LEXICAL_LIMIT,
+    sentence_filter_enabled: bool = False,
+    min_sentence_count: int = 5
 ) -> list[tuple[int, int]]:
     """Perform lexical full-text search with phrase support.
 
@@ -213,20 +234,40 @@ def _lexical_search(
     Uses ts_rank_cd which considers document structure and proximity,
     providing better ranking than basic ts_rank.
 
+    Args:
+        session: Database session
+        query_text: Query text for full-text search
+        limit: Maximum number of results
+        sentence_filter_enabled: Whether to filter by sentence count
+        min_sentence_count: Minimum sentence count threshold (if filter enabled)
+
     Returns list of (chunk_id, rank) tuples.
     """
     # Use websearch_to_tsquery for phrase and negation support
     # ts_rank_cd considers cover density (proximity) for better ranking
+
+    # Build WHERE clause conditionally
+    where_clauses = [
+        "content_tsvector @@ websearch_to_tsquery('english', :query)",
+        "vector_status = 'vec'"
+    ]
+    params = {"query": query_text, "limit": limit}
+
+    if sentence_filter_enabled:
+        where_clauses.append("(sentence_count IS NOT NULL AND sentence_count >= :min_sentence_count)")
+        params["min_sentence_count"] = min_sentence_count
+
+    where_clause = " AND ".join(where_clauses)
+
     result = session.execute(
-        text("""
+        text(f"""
             SELECT id
             FROM chunks
-            WHERE content_tsvector @@ websearch_to_tsquery('english', :query)
-                AND vector_status = 'vec'
+            WHERE {where_clause}
             ORDER BY ts_rank_cd(content_tsvector, websearch_to_tsquery('english', :query)) DESC
             LIMIT :limit
         """),
-        {"query": query_text, "limit": limit}
+        params
     )
     return [(row[0], i + 1) for i, row in enumerate(result.fetchall())]
 
@@ -706,9 +747,17 @@ def retrieve(
     reranker_batch_size = retrieval_params["reranker_batch_size"]
     reranker_max_length = retrieval_params["reranker_max_length"]
 
+    # Sentence filter settings
+    min_sentence_filter_enabled = retrieval_params.get("min_sentence_filter_enabled", False)
+    min_sentence_count = retrieval_params.get("min_sentence_count", 5)
+
     if verbose:
         print(f"Using RAG config preset: {config_preset or 'default'}")
         print(f"  dense_limit={dense_limit}, lexical_limit={lexical_limit}, top_n_final={top_n_final}")
+        if min_sentence_filter_enabled:
+            print(f"  Sentence filter active: min_count={min_sentence_count}")
+        else:
+            print(f"  Sentence filter disabled")
 
     # Initialize logging
     log_data = {
@@ -725,6 +774,8 @@ def retrieve(
             "min_word_count": min_word_count,
             "min_char_count": min_char_count,
             "mmr_lambda": mmr_lambda,
+            "min_sentence_filter_enabled": min_sentence_filter_enabled,
+            "min_sentence_count": min_sentence_count,
         },
         "stages": {}
     }
@@ -776,7 +827,11 @@ def retrieve(
         num_original = 1 if query.embedding_original is not None else 0
         num_mqe = len(mqe_embeddings)
         for idx, emb in enumerate(embeddings):
-            results = _dense_search(session, emb, dense_limit)
+            results = _dense_search(
+                session, emb, dense_limit,
+                sentence_filter_enabled=min_sentence_filter_enabled,
+                min_sentence_count=min_sentence_count
+            )
             dense_results.append(results)
             if load_config().logging.enabled:
                 # Determine query type based on position
@@ -806,7 +861,11 @@ def retrieve(
         # Lexical retrieval (not using HyDE)
         lexical_results = []
         for idx, text in enumerate(query_texts):
-            results = _lexical_search(session, text, lexical_limit)
+            results = _lexical_search(
+                session, text, lexical_limit,
+                sentence_filter_enabled=min_sentence_filter_enabled,
+                min_sentence_count=min_sentence_count
+            )
             lexical_results.append(results)
             if load_config().logging.enabled:
                 log_data.setdefault("lexical_queries", []).append({
