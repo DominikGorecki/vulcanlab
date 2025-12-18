@@ -439,8 +439,15 @@ export function RagConfigTab() {
                       const typedKey = key as keyof RetrievalParams;
                       const value = currentConfig.retrieval[typedKey];
 
-                      // Skip sentence filter fields (handled separately below)
-                      if (key === 'min_sentence_filter_enabled' || key === 'min_sentence_count') {
+                      // Skip sentence filter fields and deprecated fields
+                      if (
+                        key === "min_sentence_filter_enabled" ||
+                        key === "min_sentence_count" ||
+                        key === "min_char_count" ||
+                        key === "min_content_length" ||
+                        key === "enrich_lines_above" ||
+                        key === "enrich_lines_below"
+                      ) {
                         return null;
                       }
 
@@ -472,29 +479,33 @@ export function RagConfigTab() {
                       }
 
                       // Integer parameters use number input
-                      return (
-                        <div key={key} className="space-y-2">
-                          <Label htmlFor={`retrieval-${key}`}>
-                            {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                          </Label>
-                          <Input
-                            id={`retrieval-${key}`}
-                            type="number"
-                            min={constraint.min}
-                            max={constraint.max}
-                            value={value ?? ""}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              if (!isNaN(val)) {
-                                updateRetrievalParam(typedKey, val as never);
-                              }
-                            }}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {constraint.description}
-                          </p>
-                        </div>
-                      );
+                      if ("min" in constraint && "max" in constraint) {
+                        return (
+                          <div key={key} className="space-y-2">
+                            <Label htmlFor={`retrieval-${key}`}>
+                              {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                            </Label>
+                            <Input
+                              id={`retrieval-${key}`}
+                              type="number"
+                              min={constraint.min}
+                              max={constraint.max}
+                              value={(value as number | undefined) ?? ""}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) {
+                                  updateRetrievalParam(typedKey, val as never);
+                                }
+                              }}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              {constraint.description}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return null;
                     })}
 
                     {/* Sentence Filter Section */}
@@ -602,46 +613,9 @@ export function RagConfigTab() {
                       </p>
                     </div>
 
-                    {/* min_content_length */}
-                    <div className="space-y-2">
-                      <Label>Min Content Length</Label>
-                      <Input
-                        type="number"
-                        min={PARAM_CONSTRAINTS.consolidation.min_content_length.min}
-                        max={PARAM_CONSTRAINTS.consolidation.min_content_length.max}
-                        value={currentConfig.consolidation.min_content_length ?? ""}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val)) {
-                            updateConsolidationParam("min_content_length", val);
-                          }
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {PARAM_CONSTRAINTS.consolidation.min_content_length.description}
-                      </p>
                     </div>
-
-                    {/* enrich_from_md - toggle */}
-                    <div className="space-y-2 col-span-2">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>Enrich From Markdown</Label>
-                          <p className="text-xs text-muted-foreground">
-                            {PARAM_CONSTRAINTS.consolidation.enrich_from_md.description}
-                          </p>
-                        </div>
-                        <Switch
-                          checked={currentConfig.consolidation.enrich_from_md}
-                          onCheckedChange={(checked) =>
-                            updateConsolidationParam("enrich_from_md", checked)
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
+                  </AccordionContent>
+                </AccordionItem>
 
               {/* Augmentation Section */}
               <AccordionItem value="augmentation">

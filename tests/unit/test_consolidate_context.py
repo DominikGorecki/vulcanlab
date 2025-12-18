@@ -234,6 +234,7 @@ class TestMergeAdjacentItems:
         ]
         parent = Mock()
         parent.content = "\n".join([f"Line {i}" for i in range(1, 21)])
+        parent.start_line = 1
 
         merged = _merge_adjacent_items(items, parent, line_gap=7, enrich_from_parent=True)
         assert len(merged) == 1
@@ -320,6 +321,7 @@ class TestFinalizeGroup:
         ]
         parent = Mock()
         parent.content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+        parent.start_line = 1
         
         result = _finalize_group(items, parent, enrich_from_parent=True)
         assert result['start_line'] == 1
@@ -350,6 +352,7 @@ class TestFinalizeGroup:
         ]
         parent = Mock()
         parent.content = "Line 1\nLine 2"
+        parent.start_line = 1
         
         result = _finalize_group(items, parent, enrich_from_parent=True)
         assert result['content'].startswith('## Section A')
@@ -363,6 +366,7 @@ class TestFinalizeGroup:
         ]
         parent = Mock()
         parent.content = "## Section A\nLine 1\nLine 2"
+        parent.start_line = 1
         
         result = _finalize_group(items, parent, enrich_from_parent=True)
         # Should not duplicate the heading
@@ -376,6 +380,7 @@ class TestFinalizeGroup:
         ]
         parent = Mock()
         parent.content = "Line 1\nLine 2"
+        parent.start_line = 1
         
         result = _finalize_group(items, parent, enrich_from_parent=True)
         assert result['content'].startswith('## Section A')
@@ -755,6 +760,7 @@ class TestDeduplicationAndMerging:
         ]
         parent = Mock()
         parent.content = "\n".join([f"Line {i}" for i in range(1, 21)])
+        parent.start_line = 1
         
         merged = _merge_adjacent_items(items, parent, line_gap=7, enrich_from_parent=True)
         assert len(merged) == 1

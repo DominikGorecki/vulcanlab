@@ -166,8 +166,10 @@ def _extract_content_from_parent(
     parent_lines = parent.content.split('\n')
 
     # Clamp bounds to parent content
-    start_idx = max(0, start_line - 1)  # Convert to 0-indexed
-    end_idx = min(len(parent_lines), end_line)  # end_line is inclusive, but slicing is exclusive
+    # Indices in parent_lines are relative to parent.start_line
+    # Both start_line and parent.start_line are 1-indexed
+    start_idx = max(0, start_line - parent.start_line)
+    end_idx = min(len(parent_lines), end_line - parent.start_line + 1)
 
     return '\n'.join(parent_lines[start_idx:end_idx])
 
@@ -271,15 +273,21 @@ def _finalize_group(
 
     # Get content: priority order is parent chunk > existing content
     content = ""
-    if enrich_from_parent:
-        if parent and parent.content:
-            # Use parent chunk content (no file I/O)
-            content = _extract_content_from_parent(parent, start_line, end_line)
+    if enrich_from_parent and parent and parent.content:
+        # Re-extract from parent to ensure continuity between merged fragments
+        extracted = _extract_content_from_parent(parent, start_line, end_line)
+        
+        # Defensive check: if extracted content is empty or significantly shorter than 
+        # what we already have, fall back to joining the children.
+        # This handles cases where parent metadata or content doesn't align perfectly.
+        original_joined = '\n\n'.join(item['content'] for item in items if item.get('content'))
+        
+        if len(extracted.strip()) > 0:
+            content = extracted
         else:
-            # Fallback to concatenating existing content
-            content = '\n\n'.join(item['content'] for item in items if item.get('content'))
+            content = original_joined
     else:
-        # Use existing content from items (concatenate with newlines)
+        # Basic concatenation
         content = '\n\n'.join(item['content'] for item in items if item.get('content'))
 
     # Get heading from first item's heading_breadcrumbs
@@ -426,15 +434,15 @@ def consolidate_context(
         items = []
         for ctx in query.retrieved_context:
             items.append({
-                'id': ctx['id'],
+                'id': ctx.get('id'),
                 'chunk_ids': [ctx['id']],
                 'parent_id': ctx.get('parent_id'),
-                'work_id': ctx['work_id'],
-                'content': ctx.get('content', ''),
+                'work_id': ctx.get('work_id'),
+                'content': ctx.get('enriched_content') or ctx.get('content', ''),
                 'start_line': ctx['start_line'],
                 'end_line': ctx['end_line'],
                 'score': ctx.get('final_score', 0),
-                'level': ctx.get('level', 'chunk')
+                'level': ctx.get('level')
             })
         
         if load_config().logging.enabled:
@@ -510,6 +518,11 @@ def consolidate_context(
                         if verbose:
                             print(f"  Replaced {len(group_items)} items with parent {parent_id} ({coverage:.0%} coverage)")
 
+                        logger.info(
+                            f"Consolidation group parent_id={parent_id}: coverage {coverage:.2f} "
+                            f"({coverage*100:.1f}%), threshold {coverage_threshold}, replacing with parent"
+                        )
+
                         if load_config().logging.enabled:
                             iteration_log["operations"].append({
                                 "type": "replace_with_parent",
@@ -527,6 +540,11 @@ def consolidate_context(
                             if verbose:
                                 print(f"  Merged {len(group_items)} items into {len(merged)} (parent {parent_id})")
 
+                            logger.debug(
+                                f"Merged {len(group_items)} adjacent items into {len(merged)} for parent {parent_id}. "
+                                f"Chunk IDs: {[item.get('id') or item.get('chunk_ids') for item in group_items]}"
+                            )
+
                             if load_config().logging.enabled:
                                 iteration_log["operations"].append({
                                     "type": "merge_adjacent",
@@ -541,6 +559,11 @@ def consolidate_context(
                     merged = _merge_adjacent_items(group_items, None, line_gap, enrich_from_parent)
                     if len(merged) < len(group_items):
                         processed = True
+                        
+                        logger.debug(
+                            f"Merged {len(group_items)} adjacent items into {len(merged)} (no parent). "
+                            f"Chunk IDs: {[item.get('id') or item.get('chunk_ids') for item in group_items]}"
+                        )
 
                         if load_config().logging.enabled:
                             iteration_log["operations"].append({
@@ -579,25 +602,13 @@ def consolidate_context(
         # Sort by score descending
         groups.sort(key=lambda x: x.score, reverse=True)
 
-        # Filter out groups with content shorter than minimum length
-        pre_filter_count = len(groups)
-        filtered_groups = [g for g in groups if len(g.content) < min_content_length]
-        groups = [g for g in groups if len(g.content) >= min_content_length]
-
         if verbose:
             print(f"  Consolidated count: {len(groups)}")
-            if pre_filter_count > len(groups):
-                filtered_count = pre_filter_count - len(groups)
-                print(f"  Filtered out {filtered_count} items with content < {min_content_length} characters")
         
         if load_config().logging.enabled:
             log_data["final_groups"] = [_serialize_group_for_log(group) for group in groups]
-            log_data["filtered_groups"] = [_serialize_group_for_log(group) for group in filtered_groups]
             log_data["filtering"] = {
-                "before_count": pre_filter_count,
-                "after_count": len(groups),
-                "filtered_count": len(filtered_groups),
-                "min_content_length": min_content_length
+                "final_count": len(groups)
             }
 
         # Save to database

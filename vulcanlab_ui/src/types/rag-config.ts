@@ -36,6 +36,7 @@ export interface RetrievalParams {
   reranker_max_length: number;
   min_sentence_filter_enabled: boolean;
   min_sentence_count: number;
+  max_word_count: number;
 }
 
 export interface ConsolidationParams {
@@ -81,6 +82,7 @@ export const PARAM_CONSTRAINTS = {
     reranker_max_length: { min: 128, max: 1024, default: 512, description: "Max token length for reranker" },
     min_sentence_filter_enabled: { default: false, description: "Enable minimum sentence filter" },
     min_sentence_count: { min: 1, max: 100, default: 5, description: "Minimum sentences in chunk" },
+    max_word_count: { min: 0, max: 2000, default: 1000, description: "Maximum words in enriched chunk" },
   },
   consolidation: {
     coverage_threshold: { min: 0.0, max: 1.0, default: 0.5, step: 0.05, description: "Percentage of parent section required before replacing fragments (0.0-1.0). Higher values require more content overlap before consolidating to parent." },
@@ -113,6 +115,7 @@ export function getDefaultConfig(): RagConfigParams {
       reranker_max_length: PARAM_CONSTRAINTS.retrieval.reranker_max_length.default,
       min_sentence_filter_enabled: PARAM_CONSTRAINTS.retrieval.min_sentence_filter_enabled.default,
       min_sentence_count: PARAM_CONSTRAINTS.retrieval.min_sentence_count.default,
+      max_word_count: PARAM_CONSTRAINTS.retrieval.max_word_count.default,
     },
     consolidation: {
       coverage_threshold: PARAM_CONSTRAINTS.consolidation.coverage_threshold.default,

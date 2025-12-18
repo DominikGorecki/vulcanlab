@@ -9,7 +9,7 @@ This module provides pure functions for:
 """
 
 import re
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 def count_words(text: str) -> int:
@@ -77,7 +77,7 @@ def truncate_to_word_limit(
     original_chunk_start: int,
     original_chunk_end: int,
     max_word_count: int
-) -> str:
+) -> Tuple[str, int, int]:
     """
     Truncate content using a sliding window centered on the original chunk.
 
@@ -93,14 +93,17 @@ def truncate_to_word_limit(
         max_word_count: Maximum number of words to include
 
     Returns:
-        Truncated content within word limit
+        A tuple containing:
+        - Truncated content within word limit
+        - The starting line index of the truncated window
+        - The ending line index of the truncated window
     """
     if not content:
-        return ""
+        return "", 0, 0
 
     # If content is already within limit, return as-is
     if count_words(content) <= max_word_count:
-        return content
+        return content, 0, len(content.split('\n')) - 1
 
     lines = content.split('\n')
 
@@ -200,7 +203,7 @@ def truncate_to_word_limit(
                 # Can't expand in either direction
                 break
 
-    return current_content
+    return current_content, window_start, window_end
 
 
 def _find_sentence_boundary_up(lines: List[str], current_start: int, proposed_start: int) -> int:

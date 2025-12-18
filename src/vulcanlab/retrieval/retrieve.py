@@ -73,6 +73,11 @@ class RetrievalResult:
     final_count: int
     chunks: list[RetrievedChunk]
 
+    # Enrichment metrics
+    enrichment_percentage: float = 0.0
+    average_traversal_depth: float = 0.0
+    traversal_reached_root_count: int = 0
+
 
 # Default parameters
 DEFAULT_DENSE_LIMIT = 19
@@ -351,7 +356,9 @@ def enrich_chunk_from_parent(
             - parent_id: ID of parent used for enrichment (None if no enrichment)
             - enriched: Boolean indicating if enrichment occurred
             - depth: Number of parent hops traversed
+            - reached_root: Boolean indicating if traversal reached root without meeting min_word_count
     """
+    logger.debug(f"Enriching chunk {chunk.id} (curr word_count: {count_words(chunk.content)})")
     # Check if chunk already meets minimum
     if count_words(chunk.content) >= min_word_count:
         return {
@@ -359,7 +366,10 @@ def enrich_chunk_from_parent(
             'title': extract_chunk_title(chunk),
             'parent_id': None,
             'enriched': False,
-            'depth': 0
+            'depth': 0,
+            'reached_root': False,
+            'start_line': chunk.start_line,
+            'end_line': chunk.end_line
         }
 
     # Check if chunk has a parent
@@ -369,7 +379,10 @@ def enrich_chunk_from_parent(
             'title': extract_chunk_title(chunk),
             'parent_id': None,
             'enriched': False,
-            'depth': 0
+            'depth': 0,
+            'reached_root': False,
+            'start_line': chunk.start_line,
+            'end_line': chunk.end_line
         }
 
     # Traverse up parent hierarchy
@@ -396,6 +409,8 @@ def enrich_chunk_from_parent(
 
         # Check if parent meets minimum word count
         parent_word_count = count_words(parent.content)
+        logger.debug(f"  Traversing chunk {chunk.id} to parent {parent.id} (depth {depth}, word_count {parent_word_count})")
+        
         if parent_word_count >= min_word_count:
             best_parent = parent
             break
@@ -411,7 +426,10 @@ def enrich_chunk_from_parent(
             'title': extract_chunk_title(chunk),
             'parent_id': None,
             'enriched': False,
-            'depth': depth
+            'depth': depth,
+            'reached_root': current_parent_id is None,
+            'start_line': chunk.start_line,
+            'end_line': chunk.end_line
         }
 
     # Use parent content
@@ -420,6 +438,8 @@ def enrich_chunk_from_parent(
     if parent_word_count <= max_word_count:
         # Parent content fits within limit
         enriched_content = best_parent.content
+        start_line = best_parent.start_line
+        end_line = best_parent.end_line
     else:
         # Apply sliding window truncation
         # Find original chunk position within parent content
@@ -429,19 +449,37 @@ def enrich_chunk_from_parent(
             chunk_start = 0
         chunk_end = chunk_start + len(chunk.content)
 
-        enriched_content = truncate_to_word_limit(
+        enriched_content, window_start, window_end = truncate_to_word_limit(
             best_parent.content,
             chunk_start,
             chunk_end,
             max_word_count
         )
+        # Map window indices back to absolute line numbers
+        start_line = best_parent.start_line + window_start
+        end_line = best_parent.start_line + window_end
+
+    reached_root = current_parent_id is None and parent_word_count < min_word_count
+    if reached_root:
+        logger.warning(
+            f"Chunk {chunk.id} traversal reached root (depth {depth}) without meeting "
+            f"min_word_count ({min_word_count}), using topmost parent (word_count: {parent_word_count})"
+        )
+    
+    logger.info(
+        f"Enrichment completed for chunk {chunk.id}: depth {depth}, "
+        f"final parent {best_parent.id} (word_count: {parent_word_count})"
+    )
 
     return {
         'content': enriched_content,
         'title': extract_chunk_title(best_parent),
         'parent_id': best_parent.id,
         'enriched': True,
-        'depth': depth
+        'depth': depth,
+        'reached_root': reached_root,
+        'start_line': start_line,
+        'end_line': end_line
     }
 
 
@@ -972,33 +1010,20 @@ def retrieve(
         # Fetch chunk data
         chunks_data = session.query(Chunk).filter(Chunk.id.in_(top_ids)).all()
 
-        # Filter out chunks that don't meet minimum requirements
-        filtered_chunks = [
-            c for c in chunks_data
-            if _meets_minimum_requirements(c.content, min_word_count, min_char_count)
-        ]
-        filtered_out_ids = [c.id for c in chunks_data if c not in filtered_chunks]
-
-        if verbose and len(filtered_chunks) < len(chunks_data):
-            filtered_count = len(chunks_data) - len(filtered_chunks)
-            print(f"  Filtered out {filtered_count} chunks below minimum length requirements")
-        
-        _log_retrieval_stage(query_id, "filtering", {
-            "before_count": len(chunks_data),
-            "after_count": len(filtered_chunks),
-            "filtered_out_chunk_ids": filtered_out_ids,
-            "min_word_count": min_word_count,
-            "min_char_count": min_char_count
-        }, log_data)
-
         # Build maps with embeddings for MMR diversity
-        chunks_map = {c.id: c for c in filtered_chunks}
-        embeddings_map = {c.id: c.embedding for c in filtered_chunks}
+        chunks_map = {c.id: c for c in chunks_data}
+        embeddings_map = {c.id: c.embedding for c in chunks_data}
 
         # Get work data for enrichment
-        work_ids = {c.work_id for c in filtered_chunks}
+        work_ids = {c.work_id for c in chunks_data}
         works = session.query(Work).filter(Work.id.in_(work_ids)).all()
         works_map = {w.id: w for w in works}
+
+        # Enrichment metrics tracking
+        total_chunks = 0
+        enriched_count = 0
+        total_depth = 0
+        reached_root_count = 0
 
         # Build RetrievedChunk objects (with embeddings for MMR)
         retrieved_chunks = []
@@ -1020,11 +1045,30 @@ def retrieve(
                 enriched = enrich_result['content']
                 parent_id = enrich_result['parent_id']
                 is_enriched = enrich_result['enriched']
+                depth = enrich_result['depth']
+                reached_root = enrich_result['reached_root']
+                start_line = enrich_result.get('start_line', chunk.start_line)
+                end_line = enrich_result.get('end_line', chunk.end_line)
+
+                total_chunks += 1
+                if is_enriched:
+                    enriched_count += 1
+                total_depth += depth
+                if reached_root:
+                    reached_root_count += 1
+
+                logger.debug(
+                    f"Chunk {chunk.id} enrichment decision: enriched={is_enriched}, "
+                    f"depth={depth}, reached_root={reached_root}"
+                )
             except Exception as e:
                 logger.error(f"Enrichment failed for chunk {chunk.id}: {e}")
                 enriched = chunk.content
                 parent_id = chunk.parent_id
                 is_enriched = False
+                total_chunks += 1
+                start_line = chunk.start_line
+                end_line = chunk.end_line
 
             # Option B: Keep breadcrumbs separate, reranker sees content only
             # Breadcrumbs are stored in heading_breadcrumbs field and saved context
@@ -1041,8 +1085,8 @@ def retrieve(
                 work_id=chunk.work_id,
                 content=chunk.content,
                 enriched_content=enriched,
-                start_line=chunk.start_line,
-                end_line=chunk.end_line,
+                start_line=start_line,
+                end_line=end_line,
                 level=chunk.level,
                 heading_breadcrumbs=chunk.heading_breadcrumbs,
                 rrf_score=rrf_scores[chunk_id],
@@ -1060,6 +1104,24 @@ def retrieve(
             max_length=reranker_max_length
         )
         
+        # Calculate enrichment metrics
+        avg_depth = total_depth / total_chunks if total_chunks > 0 else 0
+        enrich_pct = (enriched_count / total_chunks * 100) if total_chunks > 0 else 0
+        
+        logger.info(
+            f"Enrichment summary: {total_chunks} chunks, {enriched_count} enriched "
+            f"({enrich_pct:.1f}%), avg depth {avg_depth:.1f}, "
+            f"reached root {reached_root_count} times"
+        )
+
+        _log_retrieval_stage(query_id, "enrichment_metrics", {
+            "total_chunks": total_chunks,
+            "enriched_count": enriched_count,
+            "enrichment_percentage": enrich_pct,
+            "average_depth": avg_depth,
+            "reached_root_count": reached_root_count
+        }, log_data)
+
         _log_retrieval_stage(query_id, "reranking", {
             "num_candidates": len(retrieved_chunks),
             "chunks": [_serialize_chunk_for_log(chunk) for chunk in retrieved_chunks]
@@ -1141,5 +1203,8 @@ def retrieve(
             total_lexical_candidates=total_lexical,
             rrf_candidates=len(rrf_scores),
             final_count=len(final_chunks),
-            chunks=final_chunks
+            chunks=final_chunks,
+            enrichment_percentage=enrich_pct,
+            average_traversal_depth=avg_depth,
+            traversal_reached_root_count=reached_root_count
         )
