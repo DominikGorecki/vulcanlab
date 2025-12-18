@@ -23,23 +23,27 @@ downgrade = migration_019.downgrade
 
 
 class TestGetSentences:
-    """Tests for _get_sentences helper function."""
+    """Tests for _get_sentences helper function with improved validation logic."""
 
-    def test_get_sentences_single_sentence(self):
-        """Test sentence extraction for single sentence."""
-        text = "This is a single sentence."
+    def test_get_sentences_single_valid_sentence(self):
+        """Test sentence extraction for single valid sentence (7+ tokens)."""
+        text = "This is a properly structured sentence with sufficient length."
         result = _get_sentences(text)
         assert len(result) == 1
-        assert result[0] == "This is a single sentence."
+        assert result[0] == "This is a properly structured sentence with sufficient length."
 
-    def test_get_sentences_multiple_sentences(self):
-        """Test sentence extraction for multiple sentences."""
-        text = "First sentence. Second sentence. Third sentence."
+    def test_get_sentences_multiple_valid_sentences(self):
+        """Test sentence extraction for multiple valid sentences (7+ tokens each)."""
+        text = "The first sentence has enough tokens to be valid. The second sentence also meets the minimum requirements. The third sentence contains sufficient words as well."
         result = _get_sentences(text)
         assert len(result) == 3
-        assert result[0] == "First sentence."
-        assert result[1] == "Second sentence."
-        assert result[2] == "Third sentence."
+
+    def test_get_sentences_filters_short_sentences(self):
+        """Test that sentences with fewer than 7 tokens are filtered out."""
+        text = "Too short. This sentence has enough words to pass validation criteria."
+        result = _get_sentences(text)
+        # Only the second sentence should pass
+        assert len(result) == 1
 
     def test_get_sentences_empty_text(self):
         """Test sentence extraction for empty text."""
@@ -54,18 +58,19 @@ class TestGetSentences:
         assert len(result) == 0
 
     def test_get_sentences_with_newlines(self):
-        """Test sentence extraction across newlines."""
-        text = "First sentence.\nSecond sentence.\n\nThird sentence."
+        """Test sentence extraction across newlines with valid sentences."""
+        text = "The first sentence appears on the first line with adequate length.\nThe second sentence follows on a new line.\n\nThe third sentence comes after a blank line."
         result = _get_sentences(text)
         assert len(result) == 3
 
     def test_get_sentences_strips_whitespace(self):
-        """Test that sentences are stripped of whitespace."""
-        text = "  First.  \n  Second.  "
+        """Test that valid sentences are stripped of whitespace."""
+        text = "  This sentence has proper whitespace and enough tokens to be valid.  \n  Another sentence with leading and trailing spaces also meets requirements.  "
         result = _get_sentences(text)
         assert len(result) == 2
-        assert result[0] == "First."
-        assert result[1] == "Second."
+        # Check that whitespace is stripped
+        assert result[0].startswith("This") and not result[0].startswith(" ")
+        assert result[1].startswith("Another") and not result[1].startswith(" ")
 
 
 class TestUpgradeMigration:
@@ -80,11 +85,11 @@ class TestUpgradeMigration:
         mock_count_result = Mock()
         mock_count_result.scalar.return_value = 2
 
-        # Mock the chunks query
+        # Mock the chunks query (using valid sentences with 7+ tokens)
         mock_chunks_result = Mock()
         mock_chunks_result.fetchall.return_value = [
-            (101, "First sentence. Second sentence."),
-            (102, "Third sentence.")
+            (101, "The first sentence has enough tokens to be valid. The second sentence also meets requirements."),
+            (102, "The third sentence contains sufficient words to pass validation criteria.")
         ]
 
         # Setup execute to return different results based on query
@@ -141,8 +146,8 @@ class TestUpgradeMigration:
         mock_count_result.scalar.return_value = 1
 
         mock_chunks_result = Mock()
-        # Content with known sentence count
-        mock_chunks_result.fetchall.return_value = [(101, "First sentence. Second sentence. Third sentence.")]
+        # Content with known sentence count (using valid sentences with 7+ tokens)
+        mock_chunks_result.fetchall.return_value = [(101, "The first sentence contains enough tokens to be valid. The second sentence also meets requirements. The third sentence has sufficient length.")]
 
         call_count = {'fetch': 0}
 
@@ -218,13 +223,13 @@ class TestUpgradeMigration:
         mock_count_result = Mock()
         mock_count_result.scalar.return_value = 150
 
-        # First batch: 100 chunks
+        # First batch: 100 chunks (using valid sentences with 7+ tokens)
         mock_chunks_batch1 = Mock()
-        mock_chunks_batch1.fetchall.return_value = [(i, f"Sentence {i}.") for i in range(100)]
+        mock_chunks_batch1.fetchall.return_value = [(i, f"This is a properly structured sentence number {i} with sufficient length.") for i in range(100)]
 
         # Second batch: 50 chunks
         mock_chunks_batch2 = Mock()
-        mock_chunks_batch2.fetchall.return_value = [(i, f"Sentence {i}.") for i in range(100, 150)]
+        mock_chunks_batch2.fetchall.return_value = [(i, f"This is a properly structured sentence number {i} with sufficient length.") for i in range(100, 150)]
 
         # Third call: empty
         mock_chunks_empty = Mock()
@@ -260,7 +265,7 @@ class TestUpgradeMigration:
         mock_count_result.scalar.return_value = 100
 
         mock_chunks_result = Mock()
-        mock_chunks_result.fetchall.return_value = [(i, f"Sentence {i}.") for i in range(100)]
+        mock_chunks_result.fetchall.return_value = [(i, f"This is a properly structured sentence number {i} with sufficient length.") for i in range(100)]
 
         call_count = {'fetch': 0}
 

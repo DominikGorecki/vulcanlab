@@ -38,7 +38,38 @@ It may seem redundant to rank twice, but it is a standard practice for high-perf
 
 ---
 
-## 2. Consolidation
+## 2. Retrieval Settings Reference
+The retrieval behavior can be fine-tuned via the following parameters in the RAG configuration.
+
+### Search and Fusion
+*   **`dense_limit`**: Maximum number of results to fetch from the vector similarity search (default: 19).
+*   **`lexical_limit`**: Maximum number of results to fetch from the full-text keyword search (default: 5).
+*   **`rrf_k`**: The constant used in the Reciprocal Rank Fusion formula (default: 50). It controls how much weight is given to lower-ranked items.
+*   **`top_k_rrf`**: The number of top candidates to keep after merging dense and lexical results via RRF (default: 75).
+
+### Filtering and Quality
+*   **`min_sentence_filter_enabled`**: Boolean flag to enable/disable database-level filtering based on sentence count.
+*   **`min_sentence_count`**: The minimum number of sentences a chunk must have to be included in the database search results.
+*   **`min_word_count`**: Chunks with fewer than this many words are filtered out before reranking (default: 150).
+*   **`min_char_count`**: Chunks with fewer than this many characters are filtered out before reranking (default: 250).
+
+### Enrichment
+*   **`min_content_length`**: If a chunk's content is shorter than this (in characters), it triggers the enrichment process (default: 750).
+*   **`enrich_lines_above`**: The number of lines to pull from the source file above the chunk during enrichment (default: 0).
+*   **`enrich_lines_below`**: The number of lines to pull from the source file below the chunk during enrichment (default: 13).
+
+### Reranking and Scoring
+*   **`entity_boost`**: The score boost applied to a chunk for every query entity found in its content (default: 0.05).
+*   **`reranker_batch_size`**: The number of query-chunk pairs processed by the BGE reranker at once (default: 8).
+*   **`reranker_max_length`**: The maximum token length allowed for the reranker's input (default: 512).
+
+### Final Selection
+*   **`top_n_final`**: The final number of chunks to send to the consolidation and augmentation stages (default: 17).
+*   **`mmr_lambda`**: The diversity vs. relevance balance for MMR selection (default: 0.7). A higher value (closer to 1.0) prioritizes relevance; a lower value prioritizes diversity.
+
+---
+
+## 3. Consolidation
 Consolidation is a structural optimization step. It transforms the list of individual retrieved chunks into a cleaner, more readable set of "Context Groups" by analyzing the document hierarchy.
 
 ### Process Flow:
@@ -52,7 +83,7 @@ Consolidation is a structural optimization step. It transforms the list of indiv
 
 ---
 
-## 3. Augmentation
+## 4. Augmentation
 Augmentation is the final stage where the retrieved and consolidated information is synthesized into a master prompt for the LLM.
 
 ### Process Flow:
