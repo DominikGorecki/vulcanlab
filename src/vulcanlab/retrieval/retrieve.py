@@ -28,6 +28,7 @@ from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
 from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name
 from vulcanlab.config.app_config import load_config
 from vulcanlab.retrieval.reranker import get_reranker
+from vulcanlab.retrieval.content_utils import count_words, truncate_to_word_limit
 
 
 # Initialize path resolver
@@ -354,6 +355,155 @@ def _enrich_content(
         parts.append('\n'.join(below_lines))
 
     return '\n'.join(parts)
+
+
+def extract_chunk_title(chunk: Chunk) -> str:
+    """Extract title from chunk based on its type.
+
+    Args:
+        chunk: The chunk to extract title from
+
+    Returns:
+        Title string extracted from heading_breadcrumbs or first line
+    """
+    # For content chunks: parse heading_breadcrumbs (JSON array of headings)
+    if chunk.heading_breadcrumbs:
+        try:
+            breadcrumbs = json.loads(chunk.heading_breadcrumbs)
+            if breadcrumbs and isinstance(breadcrumbs, list):
+                # Return the last (most specific) heading
+                return breadcrumbs[-1]
+        except (json.JSONDecodeError, TypeError):
+            # Fall through to first line extraction
+            pass
+
+    # For heading chunks or if breadcrumbs parsing failed: use first line of content
+    if chunk.content:
+        first_line = chunk.content.split('\n')[0].strip()
+        # Remove markdown heading markers if present
+        if first_line.startswith('#'):
+            return first_line.lstrip('#').strip()
+        return first_line
+
+    return "Untitled"
+
+
+def enrich_chunk_from_parent(
+    chunk: Chunk,
+    session,
+    min_word_count: int = DEFAULT_MIN_WORD_COUNT,
+    max_word_count: int = 1000
+) -> dict:
+    """Enrich a chunk by traversing up the parent hierarchy.
+
+    Walks up the parent_id chain until finding a parent with sufficient word count.
+    Applies sliding window truncation if parent content exceeds max_word_count.
+
+    Args:
+        chunk: The chunk to enrich
+        session: Database session for queries
+        min_word_count: Minimum word count threshold for parent
+        max_word_count: Maximum word count for returned content
+
+    Returns:
+        Dict with keys:
+            - content: Enriched content (or original if no suitable parent)
+            - title: Title extracted from parent chunk
+            - parent_id: ID of parent used for enrichment (None if no enrichment)
+            - enriched: Boolean indicating if enrichment occurred
+            - depth: Number of parent hops traversed
+    """
+    # Check if chunk already meets minimum
+    if count_words(chunk.content) >= min_word_count:
+        return {
+            'content': chunk.content,
+            'title': extract_chunk_title(chunk),
+            'parent_id': None,
+            'enriched': False,
+            'depth': 0
+        }
+
+    # Check if chunk has a parent
+    if chunk.parent_id is None:
+        return {
+            'content': chunk.content,
+            'title': extract_chunk_title(chunk),
+            'parent_id': None,
+            'enriched': False,
+            'depth': 0
+        }
+
+    # Traverse up parent hierarchy
+    current_parent_id = chunk.parent_id
+    visited_ids = {chunk.id}  # Track visited to detect circular references
+    depth = 0
+    max_depth = 10
+    best_parent = None
+
+    while current_parent_id is not None and depth < max_depth:
+        # Prevent circular references
+        if current_parent_id in visited_ids:
+            break
+
+        visited_ids.add(current_parent_id)
+        depth += 1
+
+        # Fetch parent chunk
+        parent = session.query(Chunk).filter_by(id=current_parent_id).first()
+
+        if parent is None:
+            # Parent missing from database
+            break
+
+        # Check if parent meets minimum word count
+        parent_word_count = count_words(parent.content)
+        if parent_word_count >= min_word_count:
+            best_parent = parent
+            break
+
+        # Continue to next level
+        best_parent = parent  # Keep track of topmost parent even if doesn't meet minimum
+        current_parent_id = parent.parent_id
+
+    # No suitable parent found
+    if best_parent is None:
+        return {
+            'content': chunk.content,
+            'title': extract_chunk_title(chunk),
+            'parent_id': None,
+            'enriched': False,
+            'depth': depth
+        }
+
+    # Use parent content
+    parent_word_count = count_words(best_parent.content)
+
+    if parent_word_count <= max_word_count:
+        # Parent content fits within limit
+        enriched_content = best_parent.content
+    else:
+        # Apply sliding window truncation
+        # Find original chunk position within parent content
+        chunk_start = best_parent.content.find(chunk.content[:50])  # Use first 50 chars to find position
+        if chunk_start == -1:
+            # Chunk not found in parent, use original chunk position approximation
+            chunk_start = 0
+        chunk_end = chunk_start + len(chunk.content)
+
+        enriched_content = truncate_to_word_limit(
+            best_parent.content,
+            chunk_start,
+            chunk_end,
+            max_word_count
+        )
+
+    return {
+        'content': enriched_content,
+        'title': extract_chunk_title(best_parent),
+        'parent_id': best_parent.id,
+        'enriched': True,
+        'depth': depth
+    }
 
 
 def _rerank_chunks(
