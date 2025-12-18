@@ -83,7 +83,20 @@ Consolidation is a structural optimization step. It transforms the list of indiv
 
 ---
 
-## 4. Augmentation
+## 4. Consolidation Settings Reference
+The consolidation engine uses the following parameters to decide how to group and merge chunks.
+
+### Structural Bridging
+*   **`coverage_threshold`**: The percentage of a parent section's lines that must be present in the retrieved chunks to trigger a "Parent Replacement" (default: 0.5 or 50%). If the threshold is met, all individual chunks are replaced by the full content of the parent heading.
+*   **`line_gap`**: The maximum number of lines allowed between two retrieved chunks to permit merging them into a single block (default: 7 lines).
+*   **`enrich_from_md`**: Boolean flag (default: True). If enabled, the system reads the actual text from the local markdown file to fill in gaps during merging or to fetch full parent sections. If disabled, it only concatenates the existing chunk text.
+
+### Final Output Quality
+*   **`min_content_length`**: The minimum character count required for a consolidated group to be included in the final context sent to the LLM (default: 350). Groups shorter than this are filtered out at the end of consolidation.
+
+---
+
+## 5. Augmentation
 Augmentation is the final stage where the retrieved and consolidated information is synthesized into a master prompt for the LLM.
 
 ### Process Flow:
