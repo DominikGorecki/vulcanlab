@@ -83,7 +83,7 @@ export const PARAM_CONSTRAINTS = {
     min_sentence_count: { min: 1, max: 100, default: 5, description: "Minimum sentences in chunk" },
   },
   consolidation: {
-    coverage_threshold: { min: 0.0, max: 1.0, default: 0.5, step: 0.01, description: "% of parent coverage to replace with parent" },
+    coverage_threshold: { min: 0.0, max: 1.0, default: 0.5, step: 0.05, description: "Percentage of parent section required before replacing fragments (0.0-1.0). Higher values require more content overlap before consolidating to parent." },
     line_gap: { min: 0, max: 50, default: 7, description: "Max lines between chunks to merge them" },
     min_content_length: { min: 0, max: 5000, default: 350, description: "Min characters for final output inclusion" },
     enrich_from_md: { default: true, description: "Read content from markdown during consolidation" },

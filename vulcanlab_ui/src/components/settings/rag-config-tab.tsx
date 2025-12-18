@@ -560,12 +560,12 @@ export function RagConfigTab() {
                   <div className="grid grid-cols-2 gap-4">
                     {/* coverage_threshold - slider */}
                     <div className="space-y-2 col-span-2">
-                      <div className="flex justify-between">
-                        <Label>Coverage Threshold</Label>
-                        <span className="text-sm text-muted-foreground">
+                      <div className="flex justify-between items-center">
+                        <Label>Parent Coverage Threshold</Label>
+                        <span className="text-sm font-medium">
                           {typeof currentConfig.consolidation.coverage_threshold === "number"
-                            ? currentConfig.consolidation.coverage_threshold.toFixed(2)
-                            : "0.00"}
+                            ? `${(currentConfig.consolidation.coverage_threshold * 100).toFixed(0)}%`
+                            : "0%"}
                         </span>
                       </div>
                       <Slider
