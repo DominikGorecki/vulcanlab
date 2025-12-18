@@ -155,6 +155,108 @@ describe('NavBar', () => {
     });
   });
 
+  describe('MD Import/Export Navigation Item', () => {
+    it('includes MD Import/Export nav item', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      render(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('MD Import/Export');
+      expect(screen.getByTestId('nav-item-md-import/export')).toBeInTheDocument();
+    });
+
+    it('MD Import/Export nav item is always visible (not filtered by advanced mode)', async () => {
+      // Test with advanced mode OFF
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      const { rerender } = render(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('MD Import/Export');
+      expect(screen.getByTestId('nav-item-md-import/export')).toBeInTheDocument();
+
+      // Test with advanced mode ON
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: true,
+        }),
+      });
+
+      rerender(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('MD Import/Export');
+      expect(screen.getByTestId('nav-item-md-import/export')).toBeInTheDocument();
+    });
+
+    it('MD Import/Export nav item links to /markdown/export', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      render(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('MD Import/Export');
+      const navItem = screen.getByTestId('nav-item-md-import/export');
+      expect(navItem).toHaveAttribute('href', '/markdown/export');
+    });
+
+    it('MD Import/Export nav item uses FileUp icon', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      render(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('MD Import/Export');
+      const navItem = screen.getByTestId('nav-item-md-import/export');
+
+      // Check that the icon is rendered (lucide icons render as SVG)
+      const icon = navItem.querySelector('svg');
+      expect(icon).toBeInTheDocument();
+    });
+  });
+
   describe('Always Visible Items', () => {
     it('shows Simple Conversion nav item regardless of toggle state', async () => {
       // Test with OFF
@@ -342,6 +444,7 @@ describe('NavBar', () => {
       // Expected order from navItems array
       expect(labels).toEqual([
         'Corpus',
+        'MD Import/Export',
         'Simple Conversion',
         'Conversion',
         'Sanitization',
@@ -375,6 +478,7 @@ describe('NavBar', () => {
       // Expected order without advanced items
       expect(labels).toEqual([
         'Corpus',
+        'MD Import/Export',
         'Simple Conversion',
         'Vectorization',
         'RAG',
