@@ -60,10 +60,10 @@
 
 ## Acceptance criteria (checklist)
 
-* [ ] RAG run list uses `DataTable` and `StatusBadge`.
-* [ ] RAG creation forms use `FormField` and `react-hook-form`.
-* [ ] RAG result detail uses `StickyDetailHeader`.
-* [ ] All RAG functional domain unit tests pass.
+* [x] RAG run list uses `DataTable` and `StatusBadge`.
+* [x] RAG creation forms use `FormField` and `react-hook-form`.
+* [x] RAG result detail uses `StickyDetailHeader`.
+* [x] All RAG functional domain unit tests pass.
 
 ## Manual verification
 

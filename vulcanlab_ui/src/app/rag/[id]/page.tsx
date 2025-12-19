@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertCircle,
-  ChevronLeft,
   Copy,
   Loader2Icon,
   PlayCircle,
@@ -36,6 +35,12 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { TextStats } from "@/components/text-stats";
+import {
+  PageLoadingState,
+  PageErrorState,
+  StickyDetailHeader,
+} from "@/components";
+import { usePageData } from "@/hooks/use-page-data";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -46,22 +51,23 @@ interface AugmentPromptResponse {
   context_count: number;
 }
 
+interface QueryDetails {
+  clean_retrieval_context?: any[];
+}
+
 export default function GeneratePage() {
   const params = useParams();
   const router = useRouter();
   const queryId = params.id as string;
 
   // Content states
-  const [promptData, setPromptData] = useState<AugmentPromptResponse | null>(null);
   const [generatedResponse, setGeneratedResponse] = useState<string | null>(null);
 
   // Loading states
-  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Error states
-  const [error, setError] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationSuccess, setOperationSuccess] = useState<string | null>(null);
 
@@ -82,36 +88,43 @@ export default function GeneratePage() {
   // Results state
   const [hasResults, setHasResults] = useState(false);
 
-  useEffect(() => {
-    fetchAvailableSourceCount();
-    fetchPrompt();
-    fetchResultsCount();
+  // Fetch query details to get available source count
+  const fetchQueryDetails = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/rag/queries/${queryId}`);
+
+    if (!response.ok) {
+      throw new Error("Failed to load query details");
+    }
+
+    const data: QueryDetails = await response.json();
+    return data;
   }, [queryId]);
 
-  const fetchAvailableSourceCount = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/rag/queries/${queryId}`);
+  // Fetch prompt data
+  const fetchPrompt = useCallback(async () => {
+    const response = await fetch(
+      `${API_BASE_URL}/rag/queries/${queryId}/augment/prompt?top_n=${selectedSourceCount}`
+    );
 
-      if (!response.ok) {
-        throw new Error("Failed to load query details");
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error("Query not found or not ready for generation.");
       }
-
-      const data = await response.json();
-      const contextLength = data.clean_retrieval_context?.length || 0;
-      setAvailableSourceCount(contextLength);
-
-      // Adjust selected count if it exceeds available
-      if (selectedSourceCount > contextLength) {
-        setSelectedSourceCount(Math.min(5, contextLength));
-      }
-    } catch (err) {
-      console.error("Failed to fetch source count:", err);
-      // Non-critical error - use fallback
-      setAvailableSourceCount(5);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to load prompt: ${response.statusText}`);
     }
-  };
 
-  const fetchResultsCount = async () => {
+    const data: AugmentPromptResponse = await response.json();
+    return data;
+  }, [queryId, selectedSourceCount]);
+
+  // Memoize error handler to prevent infinite loops in usePageData
+  const handleFetchError = useCallback((err: Error) => {
+    console.error("Failed to fetch prompt:", err);
+  }, []);
+
+  // Fetch results count
+  const fetchResultsCount = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/rag/queries/${queryId}/results`);
 
@@ -126,33 +139,42 @@ export default function GeneratePage() {
       console.error("Failed to fetch results count:", err);
       setHasResults(false);
     }
-  };
+  }, [queryId]);
 
-  const fetchPrompt = async (topN: number = selectedSourceCount) => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Use usePageData for fetching
+  const { data: promptData, loading, error, refetch } = usePageData<AugmentPromptResponse>(fetchPrompt, {
+    onError: handleFetchError,
+  });
 
-      const response = await fetch(
-        `${API_BASE_URL}/rag/queries/${queryId}/augment/prompt?top_n=${topN}`
-      );
+  // Fetch query details
+  const { data: queryDetails } = usePageData<QueryDetails>(fetchQueryDetails);
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Query not found or not ready for generation.");
-        }
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to load prompt: ${response.statusText}`);
+  // Update source counts when query details load
+  useEffect(() => {
+    if (queryDetails) {
+      const contextLength = queryDetails.clean_retrieval_context?.length || 0;
+      setAvailableSourceCount(contextLength);
+
+      // Adjust selected count if it exceeds available
+      if (selectedSourceCount > contextLength) {
+        setSelectedSourceCount(Math.min(5, contextLength));
       }
-
-      const data: AugmentPromptResponse = await response.json();
-      setPromptData(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load prompt");
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [queryDetails]); // We specifically don't put selectedSourceCount here to avoid loops, wait, we need it inside logic?
+  // Actually logic `selectedSourceCount > contextLength` needs current `selectedSourceCount`.
+  // If we add `selectedSourceCount` to dependency, we re-run this effect on every change.
+  // But strictly `fetchQueryDetails` is not re-running.
+  // This is safe. But actually, we only need to "cap" it when data arrives.
+  // If data doesn't change, we don't need to re-cap.
+  // So `[queryDetails]` is sufficient?
+  // If `selectedSourceCount` changes via user input, we don't need this effect to cap it (the UI handles it? Or we should cap it?)
+  // The UI Select maxes out at `availableSourceCount`.
+  // So this effect is only for Initial Load.
+
+  // Fetch results count separately using useEffect
+  useEffect(() => {
+    fetchResultsCount();
+  }, [fetchResultsCount]);
 
   const handleSourceCountChange = async (value: string) => {
     const newCount = parseInt(value, 10);
@@ -161,7 +183,7 @@ export default function GeneratePage() {
     setOperationError(null);
 
     try {
-      await fetchPrompt(newCount);
+      await refetch();
     } catch (err) {
       setOperationError("Failed to regenerate prompt with new source count");
     } finally {
@@ -268,25 +290,23 @@ export default function GeneratePage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageLoadingState />;
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center space-y-4">
-          <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
-          <p className="text-destructive">{error}</p>
-          <div className="flex gap-3 justify-center">
-            <Button onClick={() => fetchPrompt()}>Retry</Button>
-            <Button variant="outline" onClick={() => router.push("/rag")}>
-              Back
-            </Button>
-          </div>
+      <div className="space-y-4">
+        <PageErrorState
+          error={error}
+          onRetry={refetch}
+        />
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/rag")}
+          >
+            Back to Queries
+          </Button>
         </div>
       </div>
     );
@@ -295,75 +315,57 @@ export default function GeneratePage() {
   return (
     <div className="flex flex-col h-screen">
       {/* Header with controls */}
-      <div className="border-b bg-card p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {/* Back button */}
-          <Button
-            onClick={() => router.push("/rag")}
-            variant="ghost"
-            size="sm"
-            className="gap-1"
-            disabled={running}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-
-          <div className="border-l h-8" />
-
-          <div>
-            <h1 className="text-2xl font-bold">Generate Response</h1>
-            <p className="text-sm text-muted-foreground max-w-lg truncate">
-              {promptData?.original_query}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          {/* Inspect Query */}
-           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/rag/${queryId}/inspect`)}
-            className="gap-1"
-          >
-            <Eye className="h-4 w-4" />
-            Inspect
-          </Button>
-
-          {/* Results */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/rag/${queryId}/results`)}
-            className="gap-1"
-            disabled={!hasResults}
-          >
-            <List className="h-4 w-4" />
-            Results
-          </Button>
-
-          {/* View toggle */}
-          {generatedResponse && (
-          <div className="flex gap-2">
+      <StickyDetailHeader
+        title="Generate Response"
+        subtitle={promptData?.original_query}
+        backUrl="/rag"
+        actions={
+          <>
+            {/* Inspect Query */}
             <Button
-              variant={viewMode === "prompt" ? "default" : "outline"}
+              variant="outline"
               size="sm"
-              onClick={() => setViewMode("prompt")}
+              onClick={() => router.push(`/rag/${queryId}/inspect`)}
+              className="gap-1"
             >
-              Prompt
+              <Eye className="h-4 w-4" />
+              Inspect
             </Button>
+
+            {/* Results */}
             <Button
-              variant={viewMode === "response" ? "default" : "outline"}
+              variant="outline"
               size="sm"
-              onClick={() => setViewMode("response")}
+              onClick={() => router.push(`/rag/${queryId}/results`)}
+              className="gap-1"
+              disabled={!hasResults}
             >
-              Response
+              <List className="h-4 w-4" />
+              Results
             </Button>
-          </div>
-        )}
-        </div>
-      </div>
+
+            {/* View toggle */}
+            {generatedResponse && (
+              <div className="flex gap-2">
+                <Button
+                  variant={viewMode === "prompt" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("prompt")}
+                >
+                  Prompt
+                </Button>
+                <Button
+                  variant={viewMode === "response" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("response")}
+                >
+                  Response
+                </Button>
+              </div>
+            )}
+          </>
+        }
+      />
 
       {/* Success/Error Messages */}
       {operationSuccess && (
@@ -606,4 +608,3 @@ export default function GeneratePage() {
     </div>
   );
 }
-

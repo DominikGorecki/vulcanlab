@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * Options for configuring the usePageData hook
@@ -43,39 +43,19 @@ export interface UsePageDataReturn<TData> {
  * @param fetchFn - Async function that fetches the data
  * @param options - Configuration options
  * @returns Object containing data, loading state, error state, and refetch function
- *
- * @example
- * ```tsx
- * function UserProfile({ userId }: { userId: string }) {
- *   const { data, loading, error, refetch } = usePageData(
- *     async () => {
- *       const response = await fetch(`/api/users/${userId}`);
- *       if (!response.ok) throw new Error('Failed to fetch user');
- *       return response.json();
- *     },
- *     {
- *       onError: (err) => console.error('User fetch failed:', err),
- *     }
- *   );
- *
- *   if (loading) return <div>Loading...</div>;
- *   if (error) return <div>Error: {error.message}</div>;
- *   if (!data) return null;
- *
- *   return (
- *     <div>
- *       <h1>{data.name}</h1>
- *       <button onClick={refetch}>Refresh</button>
- *     </div>
- *   );
- * }
- * ```
  */
 export function usePageData<TData>(
   fetchFn: () => Promise<TData>,
   options: UsePageDataOptions = {}
 ): UsePageDataReturn<TData> {
   const { autoFetch = true, onError } = options;
+
+  // Use a ref for onError to avoid unnecessary refetch recreations
+  // when an inline function is passed to options.
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   const [data, setData] = useState<TData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -91,13 +71,13 @@ export function usePageData<TData>(
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
-      if (onError) {
-        onError(error);
+      if (onErrorRef.current) {
+        onErrorRef.current(error);
       }
     } finally {
       setLoading(false);
     }
-  }, [fetchFn, onError]);
+  }, [fetchFn]); // No longer depends on onError
 
   useEffect(() => {
     if (autoFetch) {

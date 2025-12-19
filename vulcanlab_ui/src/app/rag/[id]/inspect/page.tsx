@@ -1,24 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ChevronLeft,
   Loader2Icon,
   Save,
   Trash2,
   ArrowUp,
   ArrowDown,
   Plus,
+  Check,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { UpdateRetrieveConsolidateButton } from "@/components/rag/update-button";
 import { Badge } from "@/components/ui/badge";
+import {
+  PageLoadingState,
+  PageErrorState,
+  StickyDetailHeader,
+} from "@/components";
+import { usePageData } from "@/hooks/use-page-data";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -43,61 +49,62 @@ interface QueryDetail {
 
 export default function InspectPage() {
   const params = useParams();
-  const router = useRouter();
   const queryId = params.id as string;
 
-  const [query, setQuery] = useState<QueryDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // Form states
+  // Form states (local state for editing)
   const [expandedQueries, setExpandedQueries] = useState<string[]>([]);
   const [hydeAnswer, setHydeAnswer] = useState("");
   const [intent, setIntent] = useState("");
   const [entities, setEntities] = useState<string[]>([]);
   const [retrievalContext, setRetrievalContext] = useState<RetrievalContextItem[]>([]);
 
-  useEffect(() => {
-    fetchQuery();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Fetch query details
+  const fetchQuery = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/rag/queries/${queryId}`);
+
+    if (!response.ok) {
+      throw new Error("Failed to load query details");
+    }
+
+    const data: QueryDetail = await response.json();
+    return data;
   }, [queryId]);
 
-  const fetchQuery = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(`${API_BASE_URL}/rag/queries/${queryId}`);
+  // Use usePageData
+  const { data: query, loading, error, refetch } = usePageData<QueryDetail>(fetchQuery);
 
-      if (!response.ok) {
-        throw new Error("Failed to load query details");
-      }
+  // Initialize form fields when data loads
+  const [initialized, setInitialized] = useState(false);
 
-      const data: QueryDetail = await response.json();
-      setQuery(data);
-
-      // Initialize form fields
-      setExpandedQueries(data.expanded_queries || []);
-      setHydeAnswer(data.hyde_answer || "");
-      setIntent(data.intent || "");
-      setEntities(data.entities || []);
-      setRetrievalContext(data.clean_retrieval_context || []);
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (query && !initialized) {
+      setExpandedQueries(query.expanded_queries || []);
+      setHydeAnswer(query.hyde_answer || "");
+      setIntent(query.intent || "");
+      setEntities(query.entities || []);
+      setRetrievalContext(query.clean_retrieval_context || []);
+      setInitialized(true);
     }
+  }, [query, initialized]);
+
+  // Refetch wrapper that also resets initialization
+  const handleRefresh = async () => {
+    setInitialized(false);
+    await refetch();
   };
 
   const handleSave = async () => {
     setSaving(true);
     setSuccessMessage(null);
-    setError(null);
+    setSaveError(null);
 
     // Validate context length
     if (retrievalContext.length < 3) {
-      setError("At least 3 items are required in Clean Retrieval Data");
+      setSaveError("At least 3 items are required in Clean Retrieval Data");
       setSaving(false);
       return;
     }
@@ -120,14 +127,20 @@ export default function InspectPage() {
       }
 
       const updatedData = await response.json();
-      setQuery(updatedData);
+      // Update local state with returned data to ensure sync
+      setExpandedQueries(updatedData.expanded_queries || []);
+      setHydeAnswer(updatedData.hyde_answer || "");
+      setIntent(updatedData.intent || "");
+      setEntities(updatedData.entities || []);
+      setRetrievalContext(updatedData.clean_retrieval_context || []);
+      
       setSuccessMessage("Changes saved successfully");
       
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(null), 3000);
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save changes");
+      setSaveError(err instanceof Error ? err.message : "Failed to save changes");
     } finally {
       setSaving(false);
     }
@@ -174,9 +187,13 @@ export default function InspectPage() {
   };
 
   if (loading) {
+    return <PageLoadingState />;
+  }
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-4">
+        <PageErrorState error={error} onRetry={refetch} />
       </div>
     );
   }
@@ -185,46 +202,33 @@ export default function InspectPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Header */}
-      <div className="border-b bg-card p-4 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => router.push(`/rag/${queryId}`)}
-            variant="ghost"
-            size="sm"
-            className="gap-1"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <div className="border-l h-8" />
-          <div>
-            <h1 className="text-2xl font-bold">Inspect Query #{query.id}</h1>
-            <p className="text-sm text-muted-foreground max-w-lg truncate">
-              {query.original_query}
-            </p>
+      <StickyDetailHeader
+        title={`Inspect Query #${query.id}`}
+        subtitle={query.original_query}
+        backUrl={`/rag/${queryId}`}
+        actions={
+          <div className="flex gap-2">
+             <UpdateRetrieveConsolidateButton 
+               queryId={query.id} 
+               onSuccess={handleRefresh}
+             />
+             <Button onClick={handleSave} disabled={saving} className="gap-2">
+              {saving ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save Changes
+            </Button>
           </div>
-        </div>
-        <div className="flex gap-2">
-           <UpdateRetrieveConsolidateButton 
-             queryId={query.id} 
-             onSuccess={fetchQuery}
-           />
-           <Button onClick={handleSave} disabled={saving} className="gap-2">
-            {saving ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Changes
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="p-6 space-y-6">
-        {error && (
+        {saveError && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{saveError}</AlertDescription>
           </Alert>
         )}
         {successMessage && (
           <Alert className="bg-green-50 text-green-800 border-green-200">
+            <Check className="h-4 w-4 mr-2" />
             <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
@@ -344,7 +348,7 @@ export default function InspectPage() {
                   >
                     <ArrowUp className="h-4 w-4" />
                   </Button>
-                   <Button 
+                  <Button 
                     size="icon" 
                     variant="ghost" 
                     disabled={idx === retrievalContext.length - 1}
@@ -386,4 +390,3 @@ export default function InspectPage() {
     </div>
   );
 }
-

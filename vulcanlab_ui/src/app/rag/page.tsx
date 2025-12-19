@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,19 +17,21 @@ import {
   PlayCircle,
   Plus,
   FastForward,
-  RefreshCw,
   Files,
 } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UpdateRetrieveConsolidateButton } from "@/components/rag/update-button";
+import {
+  PageHeader,
+  PageLoadingState,
+  PageErrorState,
+  DataTable,
+  StatusBadge,
+  StatsCardGrid,
+  type DataTableColumn,
+  type StatusConfig,
+} from "@/components";
+import { usePageData } from "@/hooks/use-page-data";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -48,54 +50,56 @@ interface QueryListResponse {
   total: number;
 }
 
+// Status configuration for RAG queries
+const ragStatusConfig: Record<string, StatusConfig> = {
+  needs_embeddings: {
+    label: "Needs Embeddings",
+    variant: "secondary",
+    icon: Zap,
+  },
+  needs_retrieval: {
+    label: "Needs Retrieval",
+    variant: "outline",
+    icon: Search,
+  },
+  needs_consolidation: {
+    label: "Needs Consolidation",
+    variant: "outline",
+    icon: Layers,
+  },
+  ready: {
+    label: "Ready",
+    variant: "default",
+    icon: CheckCircle2,
+  },
+};
+
 export default function RAGPage() {
   const router = useRouter();
-  const [queries, setQueries] = useState<QueryListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [newQuery, setNewQuery] = useState("");
-  const [stats, setStats] = useState({ total: 0, ready: 0, pending: 0 });
 
   // Operation states
   const [operatingId, setOperatingId] = useState<number | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationSuccess, setOperationSuccess] = useState<string | null>(null);
-  
+
   // Run All states
   const [runAllId, setRunAllId] = useState<number | null>(null);
   const [runAllStep, setRunAllStep] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchQueries();
+  // Fetch queries using usePageData
+  const fetchFn = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/rag/queries`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to load queries: ${response.statusText}`);
+    }
+
+    const data: QueryListResponse = await response.json();
+    return data;
   }, []);
 
-  const fetchQueries = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(`${API_BASE_URL}/rag/queries`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to load queries: ${response.statusText}`);
-      }
-
-      const data: QueryListResponse = await response.json();
-      setQueries(data.queries);
-
-      // Calculate stats
-      const ready = data.queries.filter(q => q.status === "ready").length;
-      setStats({
-        total: data.total,
-        ready,
-        pending: data.total - ready
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load queries");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, loading, error, refetch } = usePageData<QueryListResponse>(fetchFn);
 
   const handleNewQuery = () => {
     if (!newQuery.trim()) return;
@@ -125,7 +129,7 @@ export default function RAGPage() {
       }
 
       setOperationSuccess("Embeddings generated successfully");
-      await fetchQueries();
+      await refetch();
     } catch (err) {
       setOperationError(err instanceof Error ? err.message : "Failed to embed query");
     } finally {
@@ -148,9 +152,9 @@ export default function RAGPage() {
         throw new Error(errorData.detail || "Failed to retrieve");
       }
 
-      const data = await response.json();
-      setOperationSuccess(`Retrieved ${data.final_count} chunks`);
-      await fetchQueries();
+      const responseData = await response.json();
+      setOperationSuccess(`Retrieved ${responseData.final_count} chunks`);
+      await refetch();
     } catch (err) {
       setOperationError(err instanceof Error ? err.message : "Failed to retrieve");
     } finally {
@@ -173,9 +177,9 @@ export default function RAGPage() {
         throw new Error(errorData.detail || "Failed to consolidate");
       }
 
-      const data = await response.json();
-      setOperationSuccess(data.message);
-      await fetchQueries();
+      const responseData = await response.json();
+      setOperationSuccess(responseData.message);
+      await refetch();
     } catch (err) {
       setOperationError(err instanceof Error ? err.message : "Failed to consolidate");
     } finally {
@@ -195,7 +199,7 @@ export default function RAGPage() {
     try {
       // Determine which steps to run based on current status
       const steps: { name: string; label: string; endpoint: string }[] = [];
-      
+
       if (currentStatus === "needs_embeddings") {
         steps.push({ name: "embed", label: "Embedding", endpoint: `/rag/queries/${queryId}/embed` });
       }
@@ -222,53 +226,13 @@ export default function RAGPage() {
       }
 
       setOperationSuccess("All steps completed successfully - query is ready for generation");
-      await fetchQueries();
+      await refetch();
     } catch (err) {
       setOperationError(err instanceof Error ? err.message : "Failed during run all");
-      await fetchQueries(); // Refresh to show current status
+      await refetch(); // Refresh to show current status
     } finally {
       setRunAllId(null);
       setRunAllStep(null);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "needs_embeddings":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-            <Zap className="h-3 w-3" />
-            Needs Embeddings
-          </span>
-        );
-      case "needs_retrieval":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            <Search className="h-3 w-3" />
-            Needs Retrieval
-          </span>
-        );
-      case "needs_consolidation":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-            <Layers className="h-3 w-3" />
-            Needs Consolidation
-          </span>
-        );
-      case "ready":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            <CheckCircle2 className="h-3 w-3" />
-            Ready
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            <Clock className="h-3 w-3" />
-            {status}
-          </span>
-        );
     }
   };
 
@@ -339,7 +303,7 @@ export default function RAGPage() {
     // Helper to get the "Run All" button for non-ready statuses
     const getRunAllButton = () => {
       if (query.status === "ready") return null;
-      
+
       return (
         <Button
           size="sm"
@@ -379,7 +343,7 @@ export default function RAGPage() {
           {/* Update R & C */}
           <UpdateRetrieveConsolidateButton
             queryId={query.id}
-            onSuccess={fetchQueries}
+            onSuccess={refetch}
             disabled={isDisabled}
             className="gap-1"
           />
@@ -415,48 +379,72 @@ export default function RAGPage() {
     });
   };
 
+  // Calculate stats
+  const stats = data ? {
+    total: data.total,
+    ready: data.queries.filter(q => q.status === "ready").length,
+    pending: data.total - data.queries.filter(q => q.status === "ready").length
+  } : { total: 0, ready: 0, pending: 0 };
+
+  // Define columns for DataTable
+  const columns: DataTableColumn<QueryListItem>[] = [
+    {
+      key: "original_query",
+      header: "Query",
+      cell: (query) => (
+        <div className="font-medium max-w-md" style={{ wordBreak: "break-word", whiteSpace: "normal" }}>
+          {query.original_query}
+        </div>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Date Created",
+      cell: (query) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDate(query.created_at)}
+        </span>
+      ),
+      sortable: true,
+    },
+    {
+      key: "updated_at",
+      header: "Date Modified",
+      cell: (query) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {query.updated_at ? formatDate(query.updated_at) : "-"}
+        </span>
+      ),
+      sortable: true,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (query) => <StatusBadge status={query.status} statusConfig={ragStatusConfig} />,
+      sortable: true,
+    },
+    {
+      key: "id",
+      header: "Actions",
+      cell: (query) => getActionButton(query),
+      className: "text-right",
+    },
+  ];
+
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">RAG Queries</h2>
-          <p className="text-muted-foreground">Manage queries through the RAG pipeline.</p>
-        </div>
-        <div className="flex items-center justify-center h-64">
-          <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    );
+    return <PageLoadingState />;
   }
 
   if (error) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">RAG Queries</h2>
-          <p className="text-muted-foreground">Manage queries through the RAG pipeline.</p>
-        </div>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              <p>{error}</p>
-            </div>
-            <Button onClick={fetchQueries} variant="outline" className="mt-4">
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <PageErrorState error={error} onRetry={refetch} />;
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">RAG Queries</h2>
-        <p className="text-muted-foreground">Manage queries through the RAG pipeline.</p>
-      </div>
+      <PageHeader
+        title="RAG Queries"
+        description="Manage queries through the RAG pipeline."
+      />
 
       {/* Success/Error Messages */}
       {operationSuccess && (
@@ -474,35 +462,25 @@ export default function RAGPage() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Queries</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ready</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.ready}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-amber-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">{stats.pending}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <StatsCardGrid
+        stats={[
+          {
+            label: "Total Queries",
+            value: stats.total,
+            icon: MessageSquare,
+          },
+          {
+            label: "Ready",
+            value: stats.ready,
+            icon: CheckCircle2,
+          },
+          {
+            label: "Pending",
+            value: stats.pending,
+            icon: Clock,
+          },
+        ]}
+      />
 
       {/* New Query Input */}
       <Card>
@@ -552,49 +530,15 @@ export default function RAGPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {queries.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No queries found.</p>
-              <p className="text-sm mt-2">Create a new query above to get started.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50%]">Query</TableHead>
-                  <TableHead>Date Created</TableHead>
-                  <TableHead>Date Modified</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {queries.map((query) => (
-                  <TableRow key={query.id}>
-                    <TableCell
-                      className="font-medium max-w-md"
-                      style={{ wordBreak: "break-word", whiteSpace: "normal" }}
-                    >
-                      {query.original_query}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {formatDate(query.created_at)}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {query.updated_at ? formatDate(query.updated_at) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(query.status)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {getActionButton(query)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <DataTable
+            data={data?.queries || []}
+            columns={columns}
+            emptyState={{
+              title: "No queries found",
+              description: "Create a new query above to get started.",
+              icon: MessageSquare,
+            }}
+          />
         </CardContent>
       </Card>
     </div>

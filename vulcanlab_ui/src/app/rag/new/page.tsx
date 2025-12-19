@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,24 +21,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  PageLoadingState,
+  PageErrorState,
+  StickyDetailHeader,
+} from "@/components";
+import { usePageData } from "@/hooks/use-page-data";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface PromptResponse {
+  prompt: string;
+}
 
 function NewQueryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryText = searchParams.get("q") || "";
 
-  // Content states
-  const [prompt, setPrompt] = useState("");
-
   // Loading states
-  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Error states
-  const [error, setError] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationSuccess, setOperationSuccess] = useState<string | null>(null);
 
@@ -48,44 +53,35 @@ function NewQueryPageContent() {
   const [pastedResponse, setPastedResponse] = useState("");
   const [copySuccess, setCopySuccess] = useState(false);
 
-  useEffect(() => {
-    if (queryText) {
-      fetchPrompt();
-    } else {
-      setError("No query provided. Please go back and enter a query.");
-      setLoading(false);
+  // Fetch prompt using usePageData
+  const fetchPrompt = useCallback(async () => {
+    if (!queryText) {
+      throw new Error("No query provided. Please go back and enter a query.");
     }
+
+    const response = await fetch(`${API_BASE_URL}/rag/expansion/prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: queryText,
+        n: 3
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to generate prompt: ${response.statusText}`);
+    }
+
+    const data: PromptResponse = await response.json();
+    return data.prompt;
   }, [queryText]);
 
-  const fetchPrompt = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(`${API_BASE_URL}/rag/expansion/prompt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: queryText,
-          n: 3
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to generate prompt: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      setPrompt(data.prompt);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate prompt");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: prompt, loading, error, refetch } = usePageData<string>(fetchPrompt);
 
   const handleCopyPrompt = async () => {
+    if (!prompt) return;
+
     try {
       await navigator.clipboard.writeText(prompt);
       setCopySuccess(true);
@@ -172,25 +168,23 @@ function NewQueryPageContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageLoadingState />;
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center space-y-4">
-          <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
-          <p className="text-destructive">{error}</p>
-          <div className="flex gap-3 justify-center">
-            <Button onClick={fetchPrompt} disabled={!queryText}>Retry</Button>
-            <Button variant="outline" onClick={() => router.push("/rag")}>
-              Back
-            </Button>
-          </div>
+      <div className="space-y-4">
+        <PageErrorState
+          error={error}
+          onRetry={refetch}
+        />
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/rag")}
+          >
+            Back to Queries
+          </Button>
         </div>
       </div>
     );
@@ -199,30 +193,11 @@ function NewQueryPageContent() {
   return (
     <div className="flex flex-col h-screen">
       {/* Header with controls */}
-      <div className="border-b bg-card p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {/* Back button */}
-          <Button
-            onClick={() => router.push("/rag")}
-            variant="ghost"
-            size="sm"
-            className="gap-1"
-            disabled={running}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-
-          <div className="border-l h-8" />
-
-          <div>
-            <h1 className="text-2xl font-bold">Query Expansion</h1>
-            <p className="text-sm text-muted-foreground max-w-lg truncate">
-              {queryText}
-            </p>
-          </div>
-        </div>
-      </div>
+      <StickyDetailHeader
+        title="Query Expansion"
+        subtitle={queryText}
+        backUrl="/rag"
+      />
 
       {/* Success/Error Messages */}
       {operationSuccess && (
@@ -247,7 +222,7 @@ function NewQueryPageContent() {
       <div className="flex-1 flex overflow-hidden" style={{ maxHeight: "calc(100vh - 220px)" }}>
         <div className="w-full flex flex-col p-4">
           <Textarea
-            value={prompt}
+            value={prompt || ""}
             readOnly
             className="flex-1 font-mono text-sm resize-none select-text"
             placeholder="Loading prompt..."
@@ -390,13 +365,8 @@ function NewQueryPageContent() {
 
 export default function NewQueryPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-screen">
-        <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    }>
+    <Suspense fallback={<PageLoadingState />}>
       <NewQueryPageContent />
     </Suspense>
   );
 }
-
