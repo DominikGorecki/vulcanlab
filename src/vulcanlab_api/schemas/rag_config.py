@@ -32,6 +32,8 @@ class RetrievalParams(BaseModel):
     mmr_lambda: float = Field(0.7, ge=0.0, le=1.0, description="MMR balance: relevance (1.0) vs diversity (0.0)")
     reranker_batch_size: int = Field(8, ge=1, le=32, description="Batch size for BGE reranker inference")
     reranker_max_length: int = Field(512, ge=128, le=1024, description="Max token length for reranker")
+    min_sentence_filter_enabled: bool = Field(False, description="Enable filtering chunks by minimum sentence count")
+    min_sentence_count: int = Field(5, ge=1, description="Minimum sentences required in chunk (if filter enabled)")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -49,7 +51,9 @@ class RetrievalParams(BaseModel):
                 "enrich_lines_below": 13,
                 "mmr_lambda": 0.7,
                 "reranker_batch_size": 8,
-                "reranker_max_length": 512
+                "reranker_max_length": 512,
+                "min_sentence_filter_enabled": False,
+                "min_sentence_count": 5
             }
         }
     )
@@ -149,7 +153,9 @@ class RagConfigCreate(BaseModel):
                         "enrich_lines_below": 13,
                         "mmr_lambda": 0.7,
                         "reranker_batch_size": 8,
-                        "reranker_max_length": 512
+                        "reranker_max_length": 512,
+                        "min_sentence_filter_enabled": False,
+                        "min_sentence_count": 5
                     },
                     "consolidation": {"coverage_threshold": 0.5, "line_gap": 7, "min_content_length": 350, "enrich_from_md": True},
                     "augmentation": {"top_n_contexts": 3}
@@ -181,7 +187,9 @@ class RagConfigUpdate(BaseModel):
                         "enrich_lines_below": 13,
                         "mmr_lambda": 0.7,
                         "reranker_batch_size": 8,
-                        "reranker_max_length": 512
+                        "reranker_max_length": 512,
+                        "min_sentence_filter_enabled": False,
+                        "min_sentence_count": 5
                     },
                     "consolidation": {"coverage_threshold": 0.5, "line_gap": 10, "min_content_length": 350, "enrich_from_md": True},
                     "augmentation": {"top_n_contexts": 7}

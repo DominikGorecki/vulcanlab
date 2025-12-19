@@ -371,6 +371,140 @@ class TestChunkCRUD:
         assert Chunk.__tablename__ == "chunks"
 
 
+class TestChunkSentenceCount:
+    """Test sentence_count field handling."""
+
+    def test_chunk_has_sentence_count_attribute(self):
+        """Test that Chunk model has sentence_count attribute."""
+        chunk = Chunk(
+            work_id=1,
+            level="chunk",
+            content="Test content with multiple sentences. This is sentence two.",
+            start_line=1,
+            end_line=10,
+            vector_status="no_vec"
+        )
+
+        # Verify attribute exists
+        assert hasattr(chunk, 'sentence_count')
+
+    def test_sentence_count_nullable(self):
+        """Test that sentence_count field can be None."""
+        chunk = Chunk(
+            work_id=1,
+            level="H1",
+            content="Heading content",
+            start_line=1,
+            end_line=10,
+            vector_status="no_vec",
+            sentence_count=None
+        )
+
+        assert chunk.sentence_count is None
+
+    def test_sentence_count_accepts_integer(self):
+        """Test that sentence_count accepts integer values."""
+        chunk = Chunk(
+            work_id=1,
+            level="chunk",
+            content="Content chunk with sentences.",
+            start_line=1,
+            end_line=10,
+            vector_status="no_vec",
+            sentence_count=5
+        )
+
+        assert chunk.sentence_count == 5
+        assert isinstance(chunk.sentence_count, int)
+
+    def test_create_chunk_with_sentence_count_none(self):
+        """Test model instantiation with sentence_count=None works."""
+        chunk = Chunk(
+            work_id=1,
+            level="H1",
+            content="Heading",
+            start_line=1,
+            end_line=5,
+            vector_status="no_vec",
+            sentence_count=None
+        )
+
+        assert chunk.sentence_count is None
+        assert chunk.work_id == 1
+        assert chunk.level == "H1"
+
+    def test_create_chunk_with_sentence_count_value(self):
+        """Test model instantiation with sentence_count=5 works."""
+        chunk = Chunk(
+            work_id=1,
+            level="chunk",
+            content="This is a content chunk. It has multiple sentences.",
+            start_line=10,
+            end_line=20,
+            vector_status="no_vec",
+            sentence_count=2
+        )
+
+        assert chunk.sentence_count == 2
+        assert chunk.work_id == 1
+        assert chunk.level == "chunk"
+
+    def test_sentence_count_default_is_none(self):
+        """Test that sentence_count defaults to None when not specified."""
+        chunk = Chunk(
+            work_id=1,
+            level="H2",
+            content="Heading content",
+            start_line=1,
+            end_line=10,
+            vector_status="no_vec"
+        )
+
+        # When not specified, should be None
+        assert chunk.sentence_count is None
+
+    def test_sentence_count_various_values(self):
+        """Test sentence_count with various integer values."""
+        test_values = [1, 3, 10, 25, 100]
+
+        for value in test_values:
+            chunk = Chunk(
+                work_id=1,
+                level="chunk",
+                content=f"Chunk with {value} sentences",
+                start_line=1,
+                end_line=10,
+                vector_status="no_vec",
+                sentence_count=value
+            )
+            assert chunk.sentence_count == value
+
+    @patch('vulcanlab.data.database.get_session')
+    def test_update_chunk_sentence_count(self, mock_get_session):
+        """Test updating sentence_count on an existing chunk."""
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        with mock_get_session() as session:
+            chunk = Chunk(
+                work_id=1,
+                level="chunk",
+                content="Original content",
+                start_line=1,
+                end_line=10,
+                vector_status="no_vec",
+                sentence_count=None
+            )
+            chunk.id = 1
+
+            # Update sentence_count
+            chunk.sentence_count = 7
+            session.commit()
+
+            assert chunk.sentence_count == 7
+            session.commit.assert_called_once()
+
+
 # NOTE: The following tests have been moved to integration tests as they require
 # a real database to test database-level behavior. See documentation/integration-tests-needed.md
 #

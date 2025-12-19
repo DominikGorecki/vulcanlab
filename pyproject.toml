@@ -63,6 +63,7 @@ dev = [
     "pytest-asyncio",
     "pytest-markdown-docs",
     "pytest-html",
+    "pytest-cov",
     "ruff",
 ]
 

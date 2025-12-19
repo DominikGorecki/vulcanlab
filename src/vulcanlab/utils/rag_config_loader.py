@@ -11,12 +11,48 @@ Example:
     >>> dense_limit = config["retrieval"]["dense_limit"]
 """
 
-from typing import Optional
+import logging
+from typing import Optional, Any
 
 from sqlalchemy.orm import Session
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.rag_config import RagConfig
+
+logger = logging.getLogger(__name__)
+
+
+def get_config_value(config: dict, section: str, key: str, fallback: Any) -> Any:
+    """
+    Get config value from current or deprecated location.
+
+    Checks:
+    1. config[section][key]
+    2. config[section]['_deprecated'][key]
+    3. fallback
+
+    Args:
+        config: The configuration dictionary.
+        section: The section name (e.g., 'retrieval').
+        key: The parameter key (e.g., 'min_word_count').
+        fallback: The value to return if not found.
+
+    Returns:
+        The configuration value.
+    """
+    section_config = config.get(section, {})
+
+    # Check current location
+    if key in section_config:
+        return section_config[key]
+
+    # Check deprecated location
+    deprecated = section_config.get('_deprecated', {})
+    if key in deprecated:
+        logger.warning(f"Using deprecated config key: {section}.{key}. Please update your RAG config preset.")
+        return deprecated[key]
+
+    return fallback
 
 
 def get_default_config() -> dict:

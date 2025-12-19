@@ -20,6 +20,7 @@ Raises:
     HashMismatchError: If file hashes don't match stored values.
 """
 
+import logging
 import re
 from pathlib import Path
 from typing import Optional
@@ -30,6 +31,9 @@ from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Work
 from vulcanlab.sanitization.extract_titles import HashMismatchError
 from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 # Initialize path resolver
@@ -77,10 +81,67 @@ def _count_words(text: str) -> int:
     return len(words)
 
 
+def _is_valid_sentence(sent) -> bool:
+    """Check if a spaCy sentence meets validity criteria.
+
+    A valid sentence must have:
+    - At least 7 tokens (excluding punctuation)
+    AND at least ONE of:
+    1. Has verb (VERB/AUX) AND has noun (NOUN/PROPN)
+    2. Root token is a verb (VERB/AUX)
+    3. Has noun (NOUN/PROPN) AND has subject dependency (any dep containing 'subj')
+
+    Args:
+        sent: spaCy Span object representing a sentence.
+
+    Returns:
+        True if sentence meets validity criteria, False otherwise.
+    """
+    # Count tokens excluding punctuation
+    tokens = [token for token in sent if not token.is_punct and not token.is_space]
+
+    if len(tokens) < 7:
+        return False
+
+    # Check for linguistic features
+    has_verb = any(token.pos_ in ['VERB', 'AUX'] for token in tokens)
+    has_noun = any(token.pos_ in ['NOUN', 'PROPN'] for token in tokens)
+    has_subject = any('subj' in token.dep_ for token in tokens)
+
+    # Find root token
+    root_is_verb = False
+    for token in tokens:
+        if token.dep_ == 'ROOT' and token.pos_ in ['VERB', 'AUX']:
+            root_is_verb = True
+            break
+
+    # Check validity conditions
+    condition_1 = has_verb and has_noun
+    condition_2 = root_is_verb
+    condition_3 = has_noun and has_subject
+
+    return condition_1 or condition_2 or condition_3
+
+
 def _get_sentences(text: str) -> list[str]:
-    """Split text into sentences using spaCy."""
+    """Split text into valid sentences using spaCy.
+
+    Returns only sentences that meet linguistic validity criteria:
+    - At least 7 tokens (excluding punctuation)
+    - Contains appropriate grammatical structure (verb+noun, root verb, or noun+subject)
+
+    Args:
+        text: Text to split into sentences.
+
+    Returns:
+        List of valid sentence strings.
+    """
+    if not text:
+        return []
+
     doc = nlp(text)
-    return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
+    return [sent.text.strip() for sent in doc.sents
+            if sent.text.strip() and _is_valid_sentence(sent)]
 
 
 def _convert_bullets_to_sentences(text: str) -> str:
@@ -777,6 +838,18 @@ def chunk_content(work_id: int, verbose: bool = False, min_chunk_words: int = MI
             level = chunk_data['level']
             level_str = f"H{level}-chunk" if level else "chunk"
 
+            # Count sentences for 'chunk' level chunks only (e.g., "H1-chunk", "H2-chunk", "chunk")
+            sentence_count = None
+            if level_str.endswith('-chunk') or level_str == 'chunk':
+                try:
+                    sentences = _get_sentences(chunk_data['content'])
+                    sentence_count = len(sentences)
+                    if verbose:
+                        logger.info(f"Counted {sentence_count} sentences for chunk at lines {chunk_data['start_line']}-{chunk_data['end_line']}")
+                except Exception as e:
+                    logger.warning(f"Failed to count sentences for chunk at lines {chunk_data['start_line']}-{chunk_data['end_line']}: {e}")
+                    sentence_count = None
+
             chunk = Chunk(
                 parent_id=parent_id,
                 work_id=work_id,
@@ -786,7 +859,8 @@ def chunk_content(work_id: int, verbose: bool = False, min_chunk_words: int = MI
                 embedding=None,
                 start_line=chunk_data['start_line'],
                 end_line=chunk_data['end_line'],
-                vector_status=chunk_data['vector_status']
+                vector_status=chunk_data['vector_status'],
+                sentence_count=sentence_count
             )
 
             session.add(chunk)

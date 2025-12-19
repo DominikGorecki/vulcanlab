@@ -715,19 +715,17 @@ def create_default_rag_config(verbose: bool = False) -> None:
                     "top_n_final": 17,
                     "entity_boost": 0.05,
                     "min_word_count": 150,
-                    "min_char_count": 250,
-                    "min_content_length": 750,
-                    "enrich_lines_above": 0,
-                    "enrich_lines_below": 13,
+                    "max_word_count": 750,
                     "mmr_lambda": 0.7,
                     "reranker_batch_size": 8,
-                    "reranker_max_length": 512
+                    "reranker_max_length": 512,
+                    "min_sentence_filter_enabled": false,
+                    "min_sentence_count": 5
                 },
                 "consolidation": {
                     "coverage_threshold": 0.5,
                     "line_gap": 7,
-                    "min_content_length": 350,
-                    "enrich_from_md": true
+                    "min_content_length": 350
                 },
                 "augmentation": {
                     "top_n_contexts": 5

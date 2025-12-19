@@ -29,6 +29,7 @@ class Chunk(Base):
         start_line: Line number where chunk begins in markdown.
         end_line: Line number where chunk ends in markdown.
         vector_status: Vectorization status (no_vec, to_vec, vec, vec_err).
+        sentence_count: Number of sentences in the chunk (NULL for non-content chunks or errors).
     """
 
     __tablename__ = "chunks"
@@ -59,6 +60,11 @@ class Chunk(Base):
         String(10),
         nullable=False,
         default="no_vec",
+        index=True
+    )
+    sentence_count: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
         index=True
     )
 

@@ -18,20 +18,22 @@ from datetime import datetime
 from pathlib import Path
 import json
 
+import logging
 import numpy as np
 import torch
 from sqlalchemy import text
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Query, Work
-from vulcanlab.utils.file_utils import compute_file_hash, get_path_resolver
-from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name
+from vulcanlab.utils.rag_config_loader import get_default_config, get_config_by_name, get_config_value
 from vulcanlab.config.app_config import load_config
+from vulcanlab.retrieval.reranker import get_reranker
+from vulcanlab.retrieval.content_utils import count_words, truncate_to_word_limit
 
 
-# Initialize path resolver
-resolver = get_path_resolver()
+logger = logging.getLogger(__name__)
+
+
 
 
 
@@ -71,6 +73,12 @@ class RetrievalResult:
     final_count: int
     chunks: list[RetrievedChunk]
 
+    # Enrichment metrics
+    enrichment_percentage: float = 0.0
+    average_traversal_depth: float = 0.0
+    traversal_reached_root_count: int = 0
+    fallback_count: int = 0
+
 
 # Default parameters
 DEFAULT_DENSE_LIMIT = 19
@@ -78,12 +86,10 @@ DEFAULT_LEXICAL_LIMIT = 5
 DEFAULT_RRF_K = 50                  #60
 DEFAULT_TOP_K_RRF = 75              #60
 DEFAULT_TOP_N_FINAL = 17
-DEFAULT_ENTITY_BOOST = 0.05   #0.05
-DEFAULT_MIN_CONTENT_LENGTH = 750    # characters (for enrichment)
-DEFAULT_ENRICH_LINES_ABOVE = 0      # lines to add above chunk when enriching
-DEFAULT_ENRICH_LINES_BELOW = 13     # lines to add below chunk when enriching
-DEFAULT_MIN_WORD_COUNT = 150         # minimum words in chunk.content to be included
-DEFAULT_MIN_CHAR_COUNT = 250        # minimum characters in chunk.content to be included
+DEFAULT_ENTITY_BOOST = 0.05
+DEFAULT_MIN_WORD_COUNT = 150
+DEFAULT_MAX_WORD_COUNT = 1000
+DEFAULT_MIN_CHAR_COUNT = 250
 # Default MMR parameters
 DEFAULT_MMR_LAMBDA = 0.7  #0.7 Balance between relevance (1.0) and diversity (0.0)
 
@@ -174,9 +180,18 @@ def _meets_minimum_requirements(
 def _dense_search(
     session,
     embedding: list,
-    limit: int = DEFAULT_DENSE_LIMIT
+    limit: int = DEFAULT_DENSE_LIMIT,
+    sentence_filter_enabled: bool = False,
+    min_sentence_count: int = 5
 ) -> list[tuple[int, int]]:
     """Perform dense vector search.
+
+    Args:
+        session: Database session
+        embedding: Query embedding vector
+        limit: Maximum number of results
+        sentence_filter_enabled: Whether to filter by sentence count
+        min_sentence_count: Minimum sentence count threshold (if filter enabled)
 
     Returns list of (chunk_id, rank) tuples.
     """
@@ -185,15 +200,25 @@ def _dense_search(
         embedding = embedding.tolist()
     embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
 
+    # Build WHERE clause conditionally
+    where_clauses = ["embedding IS NOT NULL"]
+    params = {"embedding": embedding_str, "limit": limit}
+
+    if sentence_filter_enabled:
+        where_clauses.append("(sentence_count IS NOT NULL AND sentence_count >= :min_sentence_count)")
+        params["min_sentence_count"] = min_sentence_count
+
+    where_clause = " AND ".join(where_clauses)
+
     result = session.execute(
-        text("""
+        text(f"""
             SELECT id
             FROM chunks
-            WHERE embedding IS NOT NULL
+            WHERE {where_clause}
             ORDER BY embedding <=> :embedding
             LIMIT :limit
         """),
-        {"embedding": embedding_str, "limit": limit}
+        params
     )
     return [(row[0], i + 1) for i, row in enumerate(result.fetchall())]
 
@@ -201,7 +226,9 @@ def _dense_search(
 def _lexical_search(
     session,
     query_text: str,
-    limit: int = DEFAULT_LEXICAL_LIMIT
+    limit: int = DEFAULT_LEXICAL_LIMIT,
+    sentence_filter_enabled: bool = False,
+    min_sentence_count: int = 5
 ) -> list[tuple[int, int]]:
     """Perform lexical full-text search with phrase support.
 
@@ -213,20 +240,40 @@ def _lexical_search(
     Uses ts_rank_cd which considers document structure and proximity,
     providing better ranking than basic ts_rank.
 
+    Args:
+        session: Database session
+        query_text: Query text for full-text search
+        limit: Maximum number of results
+        sentence_filter_enabled: Whether to filter by sentence count
+        min_sentence_count: Minimum sentence count threshold (if filter enabled)
+
     Returns list of (chunk_id, rank) tuples.
     """
     # Use websearch_to_tsquery for phrase and negation support
     # ts_rank_cd considers cover density (proximity) for better ranking
+
+    # Build WHERE clause conditionally
+    where_clauses = [
+        "content_tsvector @@ websearch_to_tsquery('english', :query)",
+        "vector_status = 'vec'"
+    ]
+    params = {"query": query_text, "limit": limit}
+
+    if sentence_filter_enabled:
+        where_clauses.append("(sentence_count IS NOT NULL AND sentence_count >= :min_sentence_count)")
+        params["min_sentence_count"] = min_sentence_count
+
+    where_clause = " AND ".join(where_clauses)
+
     result = session.execute(
-        text("""
+        text(f"""
             SELECT id
             FROM chunks
-            WHERE content_tsvector @@ websearch_to_tsquery('english', :query)
-                AND vector_status = 'vec'
+            WHERE {where_clause}
             ORDER BY ts_rank_cd(content_tsvector, websearch_to_tsquery('english', :query)) DESC
             LIMIT :limit
         """),
-        {"query": query_text, "limit": limit}
+        params
     )
     return [(row[0], i + 1) for i, row in enumerate(result.fetchall())]
 
@@ -253,87 +300,245 @@ def _compute_rrf_scores(
     return scores
 
 
-def _enrich_content(
-    chunk: Chunk,
-    work: Work,
-    lines_above: int = DEFAULT_ENRICH_LINES_ABOVE,
-    lines_below: int = DEFAULT_ENRICH_LINES_BELOW,
-    min_length: int = DEFAULT_MIN_CONTENT_LENGTH
-) -> str:
-    """Enrich short chunks with surrounding context from markdown file.
+
+
+def extract_chunk_title(chunk: Chunk) -> str:
+    """Extract title from chunk based on its type.
 
     Args:
-        chunk: The chunk to potentially enrich
-        work: The work containing markdown_path
-        lines_above: Number of lines to add above chunk (default 0)
-        lines_below: Number of lines to add below chunk (default 13)
-        min_length: Minimum content length before enrichment (default 350)
+        chunk: The chunk to extract title from
 
     Returns:
-        Enriched content or original content
+        Title string extracted from heading_breadcrumbs or first line
     """
-    if len(chunk.content) >= min_length:
-        return chunk.content
+    # For content chunks: parse heading_breadcrumbs (JSON array of headings)
+    if chunk.heading_breadcrumbs:
+        try:
+            breadcrumbs = json.loads(chunk.heading_breadcrumbs)
+            if breadcrumbs and isinstance(breadcrumbs, list):
+                # Return the last (most specific) heading
+                return breadcrumbs[-1]
+        except (json.JSONDecodeError, TypeError):
+            # Fall through to first line extraction
+            pass
 
-    # Check if work has sanitized markdown file
-    if not work.files or "sanitized" not in work.files:
-        return chunk.content
+    # For heading chunks or if breadcrumbs parsing failed: use first line of content
+    if chunk.content:
+        first_line = chunk.content.split('\n')[0].strip()
+        # Remove markdown heading markers if present
+        if first_line.startswith('#'):
+            return first_line.lstrip('#').strip()
+        return first_line
 
-    markdown_path = resolver.resolve_work_path(work, "sanitized")
-    if not markdown_path.exists():
-        return chunk.content
-
-    # Verify file hasn't changed
-    if work.content_hash:
-        current_hash = compute_file_hash(markdown_path)
-        if current_hash != work.content_hash:
-            return chunk.content
-
-    # Read markdown file
-    try:
-        lines = markdown_path.read_text(encoding='utf-8').splitlines()
-    except Exception:
-        return chunk.content
-
-    # Get context lines (0-indexed)
-    start_idx = max(0, chunk.start_line - 1 - lines_above)
-    end_idx = min(len(lines), chunk.end_line + lines_below)
-
-    # Build enriched content
-    above_lines = lines[start_idx:chunk.start_line - 1] if lines_above > 0 and chunk.start_line > 1 else []
-    below_lines = lines[chunk.end_line:end_idx] if lines_below > 0 and chunk.end_line < len(lines) else []
-
-    parts = []
-    if above_lines:
-        parts.append('\n'.join(above_lines))
-        parts.append('')  # Blank line
-    parts.append(chunk.content)
-    if below_lines:
-        parts.append('')  # Blank line
-        parts.append('\n'.join(below_lines))
-
-    return '\n'.join(parts)
+    return "Untitled"
 
 
-def _load_reranker():
-    """Load BGE reranker model with GPU fallback to CPU."""
-    model_name = "BAAI/bge-reranker-large"
+def enrich_chunk_from_parent(
+    chunk: Chunk,
+    session,
+    min_word_count: int = DEFAULT_MIN_WORD_COUNT,
+    max_word_count: int = 1000
+) -> dict:
+    """Enrich a chunk by traversing up the parent hierarchy.
 
-    # Try GPU first
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    Walks up the parent_id chain until finding a parent with sufficient word count.
+    Applies sliding window truncation if parent content exceeds max_word_count.
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    Args:
+        chunk: The chunk to enrich
+        session: Database session for queries
+        min_word_count: Minimum word count threshold for parent
+        max_word_count: Maximum word count for returned content
 
-    if device == "cuda":
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16
-        ).to(device)
+    Returns:
+        Dict with keys:
+            - content: Enriched content (or original if no suitable parent)
+            - title: Title extracted from parent chunk
+            - parent_id: ID of parent used for enrichment (None if no enrichment)
+            - enriched: Boolean indicating if enrichment occurred
+            - depth: Number of parent hops traversed
+            - reached_root: Boolean indicating if traversal reached root without meeting min_word_count
+    """
+    # Defensive check: Ensure chunk is valid and has content
+    if not chunk or chunk.content is None:
+        logger.warning(f"Invalid chunk or null content for chunk {getattr(chunk, 'id', 'unknown')}")
+        return {
+            'content': "",
+            'title': "Untitled",
+            'parent_id': None,
+            'enriched': False,
+            'fallback': True,
+            'depth': 0,
+            'reached_root': False,
+            'start_line': getattr(chunk, 'start_line', 0),
+            'end_line': getattr(chunk, 'end_line', 0)
+        }
+
+    logger.debug(f"Enriching chunk {chunk.id} (curr word_count: {count_words(chunk.content)})")
+    
+    # Check if chunk already meets minimum
+    if count_words(chunk.content) >= min_word_count:
+        return {
+            'content': chunk.content,
+            'title': extract_chunk_title(chunk),
+            'parent_id': None,
+            'enriched': False,
+            'fallback': False,
+            'depth': 0,
+            'reached_root': False,
+            'start_line': chunk.start_line,
+            'end_line': chunk.end_line
+        }
+
+    # Check if chunk has a parent_id (and it's a valid type)
+    if chunk.parent_id is None or not isinstance(chunk.parent_id, (int, float)):
+        is_fallback = False
+        if chunk.parent_id is not None:
+             logger.warning(f"Chunk {chunk.id} has invalid parent_id type: {type(chunk.parent_id)}")
+             is_fallback = True
+        
+        return {
+            'content': chunk.content,
+            'title': extract_chunk_title(chunk),
+            'parent_id': None,
+            'enriched': False,
+            'fallback': is_fallback,
+            'depth': 0,
+            'reached_root': False,
+            'start_line': chunk.start_line,
+            'end_line': chunk.end_line
+        }
+
+    # Traverse up parent hierarchy
+    current_parent_id = int(chunk.parent_id)
+    visited_ids = {chunk.id}  # Track visited to detect circular references
+    depth = 0
+    max_depth = 10
+    best_parent = None
+    is_circular = False
+    is_missing = False
+    has_error = False
+
+    while current_parent_id is not None and depth < max_depth:
+        # Prevent circular references
+        if current_parent_id in visited_ids:
+            logger.warning(f"Circular reference detected at chunk {chunk.id} (parent {current_parent_id})")
+            is_circular = True
+            break
+
+        visited_ids.add(current_parent_id)
+        depth += 1
+
+        # Fetch parent chunk
+        try:
+            parent = session.query(Chunk).filter_by(id=current_parent_id).first()
+        except Exception as e:
+            logger.error(f"Error fetching parent {current_parent_id} for chunk {chunk.id}: {str(e)}")
+            has_error = True
+            break
+
+        if parent is None:
+            # Parent missing from database
+            logger.warning(f"Parent {current_parent_id} for chunk {chunk.id} not found in database")
+            is_missing = True
+            break
+            
+        # Defensive check for parent content
+        if parent.content is None:
+            logger.warning(f"Parent {parent.id} has null content")
+            # Don't break yet, we might find a grandparent with content, 
+            # but usually a null content chunk is a dead end for current logic.
+            # However, we'll keep traversing to see if we reach root.
+            current_parent_id = parent.parent_id
+            continue
+
+        # Check if parent meets minimum word count
+        parent_word_count = count_words(parent.content)
+        logger.debug(f"  Traversing chunk {chunk.id} to parent {parent.id} (depth {depth}, word_count {parent_word_count})")
+        
+        if parent_word_count >= min_word_count:
+            best_parent = parent
+            break
+
+        # Continue to next level
+        best_parent = parent  # Keep track of topmost parent even if doesn't meet minimum
+        current_parent_id = parent.parent_id
+
+    if depth >= max_depth and best_parent and count_words(best_parent.content) < min_word_count:
+        logger.warning(f"Max traversal depth ({max_depth}) reached for chunk {chunk.id}")
+
+    # No suitable parent found or error occurred
+    if best_parent is None or best_parent.content is None:
+        return {
+            'content': chunk.content,
+            'title': extract_chunk_title(chunk),
+            'parent_id': None,
+            'enriched': False,
+            'fallback': is_circular or is_missing or has_error or (chunk.parent_id is not None and depth > 0),
+            'depth': depth,
+            'reached_root': current_parent_id is None,
+            'start_line': chunk.start_line,
+            'end_line': chunk.end_line
+        }
+
+    # Use parent content
+    parent_word_count = count_words(best_parent.content)
+    fallback_during_truncation = False
+
+    if parent_word_count <= max_word_count:
+        # Parent content fits within limit
+        enriched_content = best_parent.content
+        start_line = best_parent.start_line
+        end_line = best_parent.end_line
     else:
-        model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
+        # Apply sliding window truncation
+        # Find original chunk position within parent content
+        # Safeguard: if chunk.content is very short, find() might be risky, but count_words already checked min
+        chunk_start = best_parent.content.find(chunk.content[:50])  # Use first 50 chars to find position
+        if chunk_start == -1:
+            # Chunk not found in parent, use original chunk position approximation
+            # This can happen if parent content was changed or doesn't actually contain child (data corruption)
+            logger.warning(f"Original chunk {chunk.id} content not found in parent {best_parent.id}")
+            chunk_start = 0
+            fallback_during_truncation = True
+        
+        chunk_end = chunk_start + len(chunk.content)
 
-    model.eval()
-    return tokenizer, model, device
+        enriched_content, window_start, window_end = truncate_to_word_limit(
+            best_parent.content,
+            chunk_start,
+            chunk_end,
+            max_word_count
+        )
+        # Map window indices back to absolute line numbers
+        start_line = (best_parent.start_line or 0) + window_start
+        end_line = (best_parent.start_line or 0) + window_end
+
+    reached_root = current_parent_id is None and parent_word_count < min_word_count
+    if reached_root:
+        logger.info(
+            f"Chunk {chunk.id} traversal reached root (depth {depth}) without meeting "
+            f"min_word_count ({min_word_count}), using topmost parent (word_count: {parent_word_count})"
+        )
+    
+    logger.info(
+        f"Enrichment completed for chunk {chunk.id}: depth {depth}, "
+        f"final parent {best_parent.id} (word_count: {parent_word_count})"
+    )
+
+    return {
+        'content': enriched_content,
+        'title': extract_chunk_title(best_parent),
+        'parent_id': best_parent.id,
+        'enriched': True,
+        'fallback': fallback_during_truncation,
+        'depth': depth,
+        'reached_root': reached_root,
+        'start_line': start_line,
+        'end_line': end_line
+    }
+
+
 
 
 def _rerank_chunks(
@@ -356,7 +561,7 @@ def _rerank_chunks(
     if not chunks:
         return chunks
 
-    tokenizer, model, device = _load_reranker()
+    tokenizer, model, device = get_reranker()
 
     # Prepare pairs
     pairs = [(query, chunk.enriched_content) for chunk in chunks]
@@ -690,25 +895,32 @@ def retrieve(
 
     retrieval_params = config["retrieval"]
 
-    # Use provided parameters or fall back to config
-    dense_limit = dense_limit if dense_limit is not None else retrieval_params["dense_limit"]
-    lexical_limit = lexical_limit if lexical_limit is not None else retrieval_params["lexical_limit"]
-    rrf_k = rrf_k if rrf_k is not None else retrieval_params["rrf_k"]
-    top_k_rrf = top_k_rrf if top_k_rrf is not None else retrieval_params["top_k_rrf"]
-    top_n_final = top_n_final if top_n_final is not None else retrieval_params["top_n_final"]
-    entity_boost = entity_boost if entity_boost is not None else retrieval_params["entity_boost"]
-    min_word_count = min_word_count if min_word_count is not None else retrieval_params["min_word_count"]
-    min_char_count = min_char_count if min_char_count is not None else retrieval_params["min_char_count"]
-    min_content_length = retrieval_params["min_content_length"]
-    enrich_lines_above = retrieval_params["enrich_lines_above"]
-    enrich_lines_below = retrieval_params["enrich_lines_below"]
-    mmr_lambda = retrieval_params["mmr_lambda"]
-    reranker_batch_size = retrieval_params["reranker_batch_size"]
-    reranker_max_length = retrieval_params["reranker_max_length"]
+    # Use provided parameters or fall back to config (with backwards compatibility)
+    dense_limit = dense_limit if dense_limit is not None else get_config_value(config, "retrieval", "dense_limit", DEFAULT_DENSE_LIMIT)
+    lexical_limit = lexical_limit if lexical_limit is not None else get_config_value(config, "retrieval", "lexical_limit", DEFAULT_LEXICAL_LIMIT)
+    rrf_k = rrf_k if rrf_k is not None else get_config_value(config, "retrieval", "rrf_k", DEFAULT_RRF_K)
+    top_k_rrf = top_k_rrf if top_k_rrf is not None else get_config_value(config, "retrieval", "top_k_rrf", DEFAULT_TOP_K_RRF)
+    top_n_final = top_n_final if top_n_final is not None else get_config_value(config, "retrieval", "top_n_final", DEFAULT_TOP_N_FINAL)
+    entity_boost = entity_boost if entity_boost is not None else get_config_value(config, "retrieval", "entity_boost", DEFAULT_ENTITY_BOOST)
+    min_word_count = min_word_count if min_word_count is not None else get_config_value(config, "retrieval", "min_word_count", DEFAULT_MIN_WORD_COUNT)
+    max_word_count = get_config_value(config, "retrieval", "max_word_count", DEFAULT_MAX_WORD_COUNT)
+    min_char_count = min_char_count if min_char_count is not None else get_config_value(config, "retrieval", "min_char_count", DEFAULT_MIN_CHAR_COUNT)
+    
+    mmr_lambda = get_config_value(config, "retrieval", "mmr_lambda", DEFAULT_MMR_LAMBDA)
+    reranker_batch_size = get_config_value(config, "retrieval", "reranker_batch_size", 8)
+    reranker_max_length = get_config_value(config, "retrieval", "reranker_max_length", 512)
+
+    # Sentence filter settings
+    min_sentence_filter_enabled = get_config_value(config, "retrieval", "min_sentence_filter_enabled", False)
+    min_sentence_count = get_config_value(config, "retrieval", "min_sentence_count", 5)
 
     if verbose:
         print(f"Using RAG config preset: {config_preset or 'default'}")
         print(f"  dense_limit={dense_limit}, lexical_limit={lexical_limit}, top_n_final={top_n_final}")
+        if min_sentence_filter_enabled:
+            print(f"  Sentence filter active: min_count={min_sentence_count}")
+        else:
+            print(f"  Sentence filter disabled")
 
     # Initialize logging
     log_data = {
@@ -725,6 +937,8 @@ def retrieve(
             "min_word_count": min_word_count,
             "min_char_count": min_char_count,
             "mmr_lambda": mmr_lambda,
+            "min_sentence_filter_enabled": min_sentence_filter_enabled,
+            "min_sentence_count": min_sentence_count,
         },
         "stages": {}
     }
@@ -776,7 +990,11 @@ def retrieve(
         num_original = 1 if query.embedding_original is not None else 0
         num_mqe = len(mqe_embeddings)
         for idx, emb in enumerate(embeddings):
-            results = _dense_search(session, emb, dense_limit)
+            results = _dense_search(
+                session, emb, dense_limit,
+                sentence_filter_enabled=min_sentence_filter_enabled,
+                min_sentence_count=min_sentence_count
+            )
             dense_results.append(results)
             if load_config().logging.enabled:
                 # Determine query type based on position
@@ -806,7 +1024,11 @@ def retrieve(
         # Lexical retrieval (not using HyDE)
         lexical_results = []
         for idx, text in enumerate(query_texts):
-            results = _lexical_search(session, text, lexical_limit)
+            results = _lexical_search(
+                session, text, lexical_limit,
+                sentence_filter_enabled=min_sentence_filter_enabled,
+                min_sentence_count=min_sentence_count
+            )
             lexical_results.append(results)
             if load_config().logging.enabled:
                 log_data.setdefault("lexical_queries", []).append({
@@ -846,33 +1068,21 @@ def retrieve(
         # Fetch chunk data
         chunks_data = session.query(Chunk).filter(Chunk.id.in_(top_ids)).all()
 
-        # Filter out chunks that don't meet minimum requirements
-        filtered_chunks = [
-            c for c in chunks_data
-            if _meets_minimum_requirements(c.content, min_word_count, min_char_count)
-        ]
-        filtered_out_ids = [c.id for c in chunks_data if c not in filtered_chunks]
-
-        if verbose and len(filtered_chunks) < len(chunks_data):
-            filtered_count = len(chunks_data) - len(filtered_chunks)
-            print(f"  Filtered out {filtered_count} chunks below minimum length requirements")
-        
-        _log_retrieval_stage(query_id, "filtering", {
-            "before_count": len(chunks_data),
-            "after_count": len(filtered_chunks),
-            "filtered_out_chunk_ids": filtered_out_ids,
-            "min_word_count": min_word_count,
-            "min_char_count": min_char_count
-        }, log_data)
-
         # Build maps with embeddings for MMR diversity
-        chunks_map = {c.id: c for c in filtered_chunks}
-        embeddings_map = {c.id: c.embedding for c in filtered_chunks}
+        chunks_map = {c.id: c for c in chunks_data}
+        embeddings_map = {c.id: c.embedding for c in chunks_data}
 
         # Get work data for enrichment
-        work_ids = {c.work_id for c in filtered_chunks}
+        work_ids = {c.work_id for c in chunks_data}
         works = session.query(Work).filter(Work.id.in_(work_ids)).all()
         works_map = {w.id: w for w in works}
+
+        # Enrichment metrics tracking
+        total_chunks = 0
+        enriched_count = 0
+        fallback_count = 0
+        total_depth = 0
+        reached_root_count = 0
 
         # Build RetrievedChunk objects (with embeddings for MMR)
         retrieved_chunks = []
@@ -883,13 +1093,44 @@ def retrieve(
             chunk = chunks_map[chunk_id]
             work = works_map.get(chunk.work_id)
 
-            # Enrich content
-            enriched = _enrich_content(
-                chunk, work,
-                lines_above=enrich_lines_above,
-                lines_below=enrich_lines_below,
-                min_length=min_content_length
-            ) if work else chunk.content
+            # Enrich content from parent hierarchy (no file I/O)
+            try:
+                enrich_result = enrich_chunk_from_parent(
+                    chunk,
+                    session,
+                    min_word_count=min_word_count,
+                    max_word_count=max_word_count
+                )
+                enriched = enrich_result['content']
+                parent_id = enrich_result['parent_id']
+                is_enriched = enrich_result['enriched']
+                is_fallback = enrich_result.get('fallback', False)
+                depth = enrich_result['depth']
+                reached_root = enrich_result['reached_root']
+                start_line = enrich_result.get('start_line', chunk.start_line)
+                end_line = enrich_result.get('end_line', chunk.end_line)
+
+                total_chunks += 1
+                if is_enriched:
+                    enriched_count += 1
+                if is_fallback:
+                    fallback_count += 1
+                total_depth += depth
+                if reached_root:
+                    reached_root_count += 1
+
+                logger.debug(
+                    f"Chunk {chunk.id} enrichment decision: enriched={is_enriched}, "
+                    f"depth={depth}, reached_root={reached_root}"
+                )
+            except Exception as e:
+                logger.error(f"Enrichment failed for chunk {chunk.id}: {e}")
+                enriched = chunk.content
+                parent_id = chunk.parent_id
+                is_enriched = False
+                total_chunks += 1
+                start_line = chunk.start_line
+                end_line = chunk.end_line
 
             # Option B: Keep breadcrumbs separate, reranker sees content only
             # Breadcrumbs are stored in heading_breadcrumbs field and saved context
@@ -902,12 +1143,12 @@ def retrieve(
 
             retrieved_chunks.append(RetrievedChunk(
                 id=chunk.id,
-                parent_id=chunk.parent_id,
+                parent_id=parent_id if is_enriched else chunk.parent_id,
                 work_id=chunk.work_id,
                 content=chunk.content,
                 enriched_content=enriched,
-                start_line=chunk.start_line,
-                end_line=chunk.end_line,
+                start_line=start_line,
+                end_line=end_line,
                 level=chunk.level,
                 heading_breadcrumbs=chunk.heading_breadcrumbs,
                 rrf_score=rrf_scores[chunk_id],
@@ -925,6 +1166,25 @@ def retrieve(
             max_length=reranker_max_length
         )
         
+        # Calculate enrichment metrics
+        avg_depth = total_depth / total_chunks if total_chunks > 0 else 0
+        enrich_pct = (enriched_count / total_chunks * 100) if total_chunks > 0 else 0
+        
+        logger.info(
+            f"Enrichment summary: {total_chunks} chunks, {enriched_count} enriched "
+            f"({enrich_pct:.1f}%), avg depth {avg_depth:.1f}, "
+            f"reached root {reached_root_count} times, fallbacks {fallback_count}"
+        )
+
+        _log_retrieval_stage(query_id, "enrichment_metrics", {
+            "total_chunks": total_chunks,
+            "enriched_count": enriched_count,
+            "fallback_count": fallback_count,
+            "enrichment_percentage": enrich_pct,
+            "average_depth": avg_depth,
+            "reached_root_count": reached_root_count
+        }, log_data)
+
         _log_retrieval_stage(query_id, "reranking", {
             "num_candidates": len(retrieved_chunks),
             "chunks": [_serialize_chunk_for_log(chunk) for chunk in retrieved_chunks]
@@ -1006,5 +1266,9 @@ def retrieve(
             total_lexical_candidates=total_lexical,
             rrf_candidates=len(rrf_scores),
             final_count=len(final_chunks),
-            chunks=final_chunks
+            chunks=final_chunks,
+            enrichment_percentage=enrich_pct,
+            average_traversal_depth=avg_depth,
+            traversal_reached_root_count=reached_root_count,
+            fallback_count=fallback_count
         )

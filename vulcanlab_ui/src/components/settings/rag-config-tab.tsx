@@ -439,6 +439,18 @@ export function RagConfigTab() {
                       const typedKey = key as keyof RetrievalParams;
                       const value = currentConfig.retrieval[typedKey];
 
+                      // Skip sentence filter fields and deprecated fields
+                      if (
+                        key === "min_sentence_filter_enabled" ||
+                        key === "min_sentence_count" ||
+                        key === "min_char_count" ||
+                        key === "min_content_length" ||
+                        key === "enrich_lines_above" ||
+                        key === "enrich_lines_below"
+                      ) {
+                        return null;
+                      }
+
                       // Float parameters use slider + input
                       if ("step" in constraint && constraint.step) {
                         return (
@@ -467,30 +479,85 @@ export function RagConfigTab() {
                       }
 
                       // Integer parameters use number input
-                      return (
-                        <div key={key} className="space-y-2">
-                          <Label htmlFor={`retrieval-${key}`}>
-                            {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      if ("min" in constraint && "max" in constraint) {
+                        return (
+                          <div key={key} className="space-y-2">
+                            <Label htmlFor={`retrieval-${key}`}>
+                              {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                            </Label>
+                            <Input
+                              id={`retrieval-${key}`}
+                              type="number"
+                              min={constraint.min}
+                              max={constraint.max}
+                              value={(value as number | undefined) ?? ""}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) {
+                                  updateRetrievalParam(typedKey, val as never);
+                                }
+                              }}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              {constraint.description}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })}
+
+                    {/* Sentence Filter Section */}
+                    <div className="col-span-2 pt-4 border-t">
+                      <h4 className="text-sm font-medium mb-4">Sentence-Based Filtering</h4>
+
+                      {/* Enable Sentence Filter Toggle */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="min-sentence-filter-enabled">Enable Minimum Sentence Filter</Label>
+                            <p className="text-xs text-muted-foreground">
+                              {PARAM_CONSTRAINTS.retrieval.min_sentence_filter_enabled.description}
+                            </p>
+                          </div>
+                          <Switch
+                            id="min-sentence-filter-enabled"
+                            checked={currentConfig.retrieval.min_sentence_filter_enabled}
+                            onCheckedChange={(checked) =>
+                              updateRetrievalParam("min_sentence_filter_enabled", checked)
+                            }
+                          />
+                        </div>
+
+                        {/* Minimum Sentence Count Input */}
+                        <div className="space-y-2">
+                          <Label
+                            htmlFor="min-sentence-count"
+                            className={!currentConfig.retrieval.min_sentence_filter_enabled ? "text-muted-foreground" : ""}
+                          >
+                            Minimum Sentences
                           </Label>
                           <Input
-                            id={`retrieval-${key}`}
+                            id="min-sentence-count"
                             type="number"
-                            min={constraint.min}
-                            max={constraint.max}
-                            value={value ?? ""}
+                            min={PARAM_CONSTRAINTS.retrieval.min_sentence_count.min}
+                            max={PARAM_CONSTRAINTS.retrieval.min_sentence_count.max}
+                            value={currentConfig.retrieval.min_sentence_count ?? ""}
+                            disabled={!currentConfig.retrieval.min_sentence_filter_enabled}
                             onChange={(e) => {
                               const val = parseInt(e.target.value);
-                              if (!isNaN(val)) {
-                                updateRetrievalParam(typedKey, val as never);
+                              if (!isNaN(val) && val >= PARAM_CONSTRAINTS.retrieval.min_sentence_count.min) {
+                                updateRetrievalParam("min_sentence_count", val);
                               }
                             }}
                           />
                           <p className="text-xs text-muted-foreground">
-                            {constraint.description}
+                            {PARAM_CONSTRAINTS.retrieval.min_sentence_count.description}
                           </p>
                         </div>
-                      );
-                    })}
+                      </div>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -504,12 +571,12 @@ export function RagConfigTab() {
                   <div className="grid grid-cols-2 gap-4">
                     {/* coverage_threshold - slider */}
                     <div className="space-y-2 col-span-2">
-                      <div className="flex justify-between">
-                        <Label>Coverage Threshold</Label>
-                        <span className="text-sm text-muted-foreground">
+                      <div className="flex justify-between items-center">
+                        <Label>Parent Coverage Threshold</Label>
+                        <span className="text-sm font-medium">
                           {typeof currentConfig.consolidation.coverage_threshold === "number"
-                            ? currentConfig.consolidation.coverage_threshold.toFixed(2)
-                            : "0.00"}
+                            ? `${(currentConfig.consolidation.coverage_threshold * 100).toFixed(0)}%`
+                            : "0%"}
                         </span>
                       </div>
                       <Slider
@@ -546,46 +613,9 @@ export function RagConfigTab() {
                       </p>
                     </div>
 
-                    {/* min_content_length */}
-                    <div className="space-y-2">
-                      <Label>Min Content Length</Label>
-                      <Input
-                        type="number"
-                        min={PARAM_CONSTRAINTS.consolidation.min_content_length.min}
-                        max={PARAM_CONSTRAINTS.consolidation.min_content_length.max}
-                        value={currentConfig.consolidation.min_content_length ?? ""}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val)) {
-                            updateConsolidationParam("min_content_length", val);
-                          }
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {PARAM_CONSTRAINTS.consolidation.min_content_length.description}
-                      </p>
                     </div>
-
-                    {/* enrich_from_md - toggle */}
-                    <div className="space-y-2 col-span-2">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>Enrich From Markdown</Label>
-                          <p className="text-xs text-muted-foreground">
-                            {PARAM_CONSTRAINTS.consolidation.enrich_from_md.description}
-                          </p>
-                        </div>
-                        <Switch
-                          checked={currentConfig.consolidation.enrich_from_md}
-                          onCheckedChange={(checked) =>
-                            updateConsolidationParam("enrich_from_md", checked)
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
+                  </AccordionContent>
+                </AccordionItem>
 
               {/* Augmentation Section */}
               <AccordionItem value="augmentation">

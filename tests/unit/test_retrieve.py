@@ -924,9 +924,10 @@ class TestRetrievalLogging:
     @patch('vulcanlab.retrieval.retrieve.get_default_config')
     @patch('vulcanlab.retrieval.retrieve._dense_search')
     @patch('vulcanlab.retrieval.retrieve._lexical_search')
+    @patch('vulcanlab.retrieval.retrieve.enrich_chunk_from_parent')
     @patch('vulcanlab.retrieval.retrieve._rerank_chunks')
     def test_retrieve_logging_disabled(
-        self, mock_rerank, mock_lexical, mock_dense, mock_get_default, mock_get_session, mock_save_log, mock_load_config
+        self, mock_rerank, mock_enrich, mock_lexical, mock_dense, mock_get_default, mock_get_session, mock_save_log, mock_load_config
     ):
         """Test that logging is NOT called when disabled."""
         # Setup logging config
@@ -969,8 +970,9 @@ class TestRetrievalLogging:
     @patch('vulcanlab.retrieval.retrieve._lexical_search')
     @patch('vulcanlab.retrieval.retrieve.get_session')
     @patch('vulcanlab.retrieval.retrieve.get_default_config')
+    @patch('vulcanlab.retrieval.retrieve.enrich_chunk_from_parent')
     def test_retrieve_with_mqe_queries(
-        self, mock_get_config, mock_get_session, mock_lexical_search,
+        self, mock_enrich, mock_get_config, mock_get_session, mock_lexical_search,
         mock_dense_search, mock_rerank_chunks, mock_session
     ):
         """Test retrieval with MQE expanded queries."""
@@ -1036,8 +1038,9 @@ class TestRetrievalLogging:
     @patch('vulcanlab.retrieval.retrieve._lexical_search')
     @patch('vulcanlab.retrieval.retrieve.get_session')
     @patch('vulcanlab.retrieval.retrieve.get_default_config')
+    @patch('vulcanlab.retrieval.retrieve.enrich_chunk_from_parent')
     def test_retrieve_filters_short_chunks(
-        self, mock_get_config, mock_get_session, mock_lexical_search,
+        self, mock_enrich, mock_get_config, mock_get_session, mock_lexical_search,
         mock_dense_search, mock_rerank_chunks, mock_session
     ):
         """Test that chunks below minimum requirements are filtered out."""
@@ -1297,3 +1300,221 @@ class TestLexicalSearch:
             # In real usage, this would call PostgreSQL full-text search
             # For testing, we verify the function exists and has correct signature
             assert callable(_lexical_search)
+
+
+class TestSentenceFiltering:
+    """Test sentence filtering functionality in retrieval."""
+
+    def test_dense_search_with_sentence_filter_disabled(self):
+        """Test that dense search returns all chunks when sentence filter is disabled."""
+        mock_session = MagicMock()
+
+        # Mock query result with chunks of varying sentence counts
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(1,), (2,), (3,), (4,)]
+        mock_session.execute.return_value = mock_result
+
+        embedding = [0.1] * 768
+        results = _dense_search(
+            mock_session,
+            embedding,
+            limit=10,
+            sentence_filter_enabled=False,
+            min_sentence_count=5
+        )
+
+        # Should return all chunks regardless of sentence_count
+        assert len(results) == 4
+        assert results == [(1, 1), (2, 2), (3, 3), (4, 4)]
+
+        # Verify the SQL query doesn't include sentence_count filter
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "sentence_count" not in sql_query
+
+    def test_dense_search_with_sentence_filter_enabled(self):
+        """Test that dense search filters by sentence_count when enabled."""
+        mock_session = MagicMock()
+
+        # Mock query result with chunks meeting sentence threshold
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(1,), (2,)]
+        mock_session.execute.return_value = mock_result
+
+        embedding = [0.1] * 768
+        results = _dense_search(
+            mock_session,
+            embedding,
+            limit=10,
+            sentence_filter_enabled=True,
+            min_sentence_count=5
+        )
+
+        # Should return only chunks with sentence_count >= 5
+        assert len(results) == 2
+        assert results == [(1, 1), (2, 2)]
+
+        # Verify the SQL query includes sentence_count filter
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "sentence_count" in sql_query
+        assert "sentence_count IS NOT NULL" in sql_query
+        assert "sentence_count >= :min_sentence_count" in sql_query
+
+        # Verify min_sentence_count parameter was passed
+        params = call_args[0][1]
+        assert params["min_sentence_count"] == 5
+
+    def test_dense_search_excludes_null_sentence_count_when_filter_enabled(self):
+        """Test that chunks with NULL sentence_count are excluded when filter is enabled."""
+        mock_session = MagicMock()
+
+        # Mock query result (NULL sentence_count chunks already filtered by query)
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(1,), (2,)]
+        mock_session.execute.return_value = mock_result
+
+        embedding = [0.1] * 768
+        results = _dense_search(
+            mock_session,
+            embedding,
+            limit=10,
+            sentence_filter_enabled=True,
+            min_sentence_count=5
+        )
+
+        # Verify SQL query checks for IS NOT NULL
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "sentence_count IS NOT NULL" in sql_query
+
+    def test_lexical_search_with_sentence_filter_disabled(self):
+        """Test that lexical search returns all chunks when sentence filter is disabled."""
+        mock_session = MagicMock()
+
+        # Mock query result
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(1,), (2,), (3,)]
+        mock_session.execute.return_value = mock_result
+
+        query_text = "test query"
+        results = _lexical_search(
+            mock_session,
+            query_text,
+            limit=10,
+            sentence_filter_enabled=False,
+            min_sentence_count=5
+        )
+
+        # Should return all chunks
+        assert len(results) == 3
+        assert results == [(1, 1), (2, 2), (3, 3)]
+
+        # Verify the SQL query doesn't include sentence_count filter
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "sentence_count" not in sql_query
+
+    def test_lexical_search_with_sentence_filter_enabled(self):
+        """Test that lexical search filters by sentence_count when enabled."""
+        mock_session = MagicMock()
+
+        # Mock query result with chunks meeting sentence threshold
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(1,), (2,)]
+        mock_session.execute.return_value = mock_result
+
+        query_text = "test query"
+        results = _lexical_search(
+            mock_session,
+            query_text,
+            limit=10,
+            sentence_filter_enabled=True,
+            min_sentence_count=5
+        )
+
+        # Should return filtered chunks
+        assert len(results) == 2
+
+        # Verify the SQL query includes sentence_count filter
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "sentence_count" in sql_query
+        assert "sentence_count IS NOT NULL" in sql_query
+        assert "sentence_count >= :min_sentence_count" in sql_query
+
+        # Verify min_sentence_count parameter was passed
+        params = call_args[0][1]
+        assert params["min_sentence_count"] == 5
+
+    def test_lexical_search_excludes_null_sentence_count_when_filter_enabled(self):
+        """Test that chunks with NULL sentence_count are excluded when filter is enabled."""
+        mock_session = MagicMock()
+
+        # Mock query result
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(1,)]
+        mock_session.execute.return_value = mock_result
+
+        query_text = "test query"
+        results = _lexical_search(
+            mock_session,
+            query_text,
+            limit=10,
+            sentence_filter_enabled=True,
+            min_sentence_count=5
+        )
+
+        # Verify SQL query checks for IS NOT NULL
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "sentence_count IS NOT NULL" in sql_query
+
+    def test_sentence_filter_with_custom_threshold(self):
+        """Test sentence filtering with custom threshold value."""
+        mock_session = MagicMock()
+
+        # Mock query result
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(1,), (2,), (3,)]
+        mock_session.execute.return_value = mock_result
+
+        embedding = [0.1] * 768
+        results = _dense_search(
+            mock_session,
+            embedding,
+            limit=10,
+            sentence_filter_enabled=True,
+            min_sentence_count=10
+        )
+
+        # Verify custom threshold was passed
+        call_args = mock_session.execute.call_args
+        params = call_args[0][1]
+        assert params["min_sentence_count"] == 10
+
+    def test_sentence_filter_parameters_prevent_sql_injection(self):
+        """Test that sentence filter uses parameterized queries."""
+        mock_session = MagicMock()
+
+        # Mock query result
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_session.execute.return_value = mock_result
+
+        embedding = [0.1] * 768
+        _dense_search(
+            mock_session,
+            embedding,
+            limit=10,
+            sentence_filter_enabled=True,
+            min_sentence_count=5
+        )
+
+        # Verify parameters are passed separately, not interpolated into SQL
+        call_args = mock_session.execute.call_args
+        params = call_args[0][1]
+
+        # Should have separate parameters
+        assert "min_sentence_count" in params
+        assert isinstance(params["min_sentence_count"], int)
