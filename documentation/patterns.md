@@ -96,6 +96,24 @@ VulcanLab follows a decoupled, three-tier architecture designed for modularity a
     - Use existing components whenever possible for things like buttons, cards, etc. as they are available in `vulcanlab_ui/src/components/ui/`.
     - Create new components when necessary and add them to `vulcanlab_ui/src/components/ui/`.
     - Navigation and higher level components like navigation is in `vulcanlab_ui/src/components/`.
+    - **Shared Component Library**: Use shared components from `vulcanlab_ui/src/components/` for common patterns:
+        - **PageLoadingState** - Standardized loading displays
+        - **PageErrorState** - Standardized error displays with retry
+        - **DataTable** - Generic tables with configurable columns and sorting
+        - **StatusBadge** - Universal status indicators
+        - **EmptyState** - Standardized empty states
+        - **PageHeader** / **StickyDetailHeader** - Consistent page headers
+        - **FormField** - Form fields with react-hook-form integration
+        - **ConfirmDialog** - Generic confirmation dialogs
+        - See `documentation/work/ui-component-standardization.spec.md` for complete component reference
+-   **Custom Hooks**: Use shared hooks from `vulcanlab_ui/src/hooks/` for common patterns:
+    - **usePageData** - Data fetching with loading/error/retry states
+    - **useTable** - Table state management (sorting, selection)
+    - **useModal** - Modal open/close state management
+-   **Forms**: Use **react-hook-form** for form validation following shadcn/ui patterns
+    - Keep validation lightweight - basic required/pattern checks
+    - Use FormField component wrapper for consistent styling and error display
+    - Reference: https://ui.shadcn.com/docs/components/form
 -   **State Management**:
     -   Prefer **React Server Components (RSC)** for initial data fetching.
     -   Use **Client Components** (`"use client"`) only for interactivity (forms, buttons, real-time updates).
