@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,9 +74,72 @@ const ragStatusConfig: Record<string, StatusConfig> = {
   },
 };
 
+/**
+ * Component for creating a new query.
+ * Managed locally to avoid re-rendering the entire page on every keystroke.
+ */
+function NewQueryCard({ 
+  onAuto, 
+  onManual 
+}: { 
+  onAuto: (q: string) => void; 
+  onManual: (q: string) => void; 
+}) {
+  const [newQuery, setNewQuery] = useState("");
+
+  const handleAuto = () => {
+    if (!newQuery.trim()) return;
+    onAuto(newQuery.trim());
+  };
+
+  const handleManual = () => {
+    if (!newQuery.trim()) return;
+    onManual(newQuery.trim());
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>New Query</CardTitle>
+        <CardDescription>
+          Enter a new query to expand and process through the RAG pipeline.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-3">
+          <Textarea
+            value={newQuery}
+            onChange={(e) => setNewQuery(e.target.value)}
+            placeholder="Enter your query here... (e.g., What is working memory?)"
+            className="flex-1 min-h-[80px] resize-none"
+          />
+          <div className="flex flex-col gap-2 self-end">
+            <Button
+              onClick={handleAuto}
+              disabled={!newQuery.trim()}
+              className="gap-2"
+            >
+              <Zap className="h-4 w-4" />
+              Auto
+            </Button>
+            <Button
+              onClick={handleManual}
+              disabled={!newQuery.trim()}
+              variant="outline"
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Manual
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function RAGPage() {
   const router = useRouter();
-  const [newQuery, setNewQuery] = useState("");
 
   // Operation states
   const [operatingId, setOperatingId] = useState<number | null>(null);
@@ -101,19 +164,17 @@ export default function RAGPage() {
 
   const { data, loading, error, refetch } = usePageData<QueryListResponse>(fetchFn);
 
-  const handleNewQuery = () => {
-    if (!newQuery.trim()) return;
-    router.push(`/rag/new?q=${encodeURIComponent(newQuery.trim())}`);
-  };
+  const handleNewQuery = useCallback((query: string) => {
+    router.push(`/rag/new?q=${encodeURIComponent(query)}`);
+  }, [router]);
 
-  const handleAutoQuery = () => {
-    if (!newQuery.trim()) return;
+  const handleAutoQuery = useCallback((query: string) => {
     // Store query in sessionStorage for the auto page
-    sessionStorage.setItem("vulcanlab_auto_query_text", newQuery.trim());
+    sessionStorage.setItem("vulcanlab_auto_query_text", query);
     router.push("/rag/auto");
-  };
+  }, [router]);
 
-  const handleEmbed = async (queryId: number) => {
+  const handleEmbed = useCallback(async (queryId: number) => {
     setOperatingId(queryId);
     setOperationError(null);
     setOperationSuccess(null);
@@ -135,9 +196,9 @@ export default function RAGPage() {
     } finally {
       setOperatingId(null);
     }
-  };
+  }, [refetch]);
 
-  const handleRetrieve = async (queryId: number) => {
+  const handleRetrieve = useCallback(async (queryId: number) => {
     setOperatingId(queryId);
     setOperationError(null);
     setOperationSuccess(null);
@@ -160,9 +221,9 @@ export default function RAGPage() {
     } finally {
       setOperatingId(null);
     }
-  };
+  }, [refetch]);
 
-  const handleConsolidate = async (queryId: number) => {
+  const handleConsolidate = useCallback(async (queryId: number) => {
     setOperatingId(queryId);
     setOperationError(null);
     setOperationSuccess(null);
@@ -185,13 +246,13 @@ export default function RAGPage() {
     } finally {
       setOperatingId(null);
     }
-  };
+  }, [refetch]);
 
-  const handleGenerate = (queryId: number) => {
+  const handleGenerate = useCallback((queryId: number) => {
     router.push(`/rag/${queryId}`);
-  };
+  }, [router]);
 
-  const handleRunAll = async (queryId: number, currentStatus: string) => {
+  const handleRunAll = useCallback(async (queryId: number, currentStatus: string) => {
     setRunAllId(queryId);
     setOperationError(null);
     setOperationSuccess(null);
@@ -234,9 +295,9 @@ export default function RAGPage() {
       setRunAllId(null);
       setRunAllStep(null);
     }
-  };
+  }, [refetch]);
 
-  const getActionButton = (query: QueryListItem) => {
+  const getActionButton = useCallback((query: QueryListItem) => {
     const isOperating = operatingId === query.id;
     const isRunningAll = runAllId === query.id;
     const isDisabled = isOperating || isRunningAll;
@@ -366,7 +427,7 @@ export default function RAGPage() {
         {getRunAllButton()}
       </div>
     );
-  };
+  }, [operatingId, runAllId, runAllStep, handleEmbed, handleRetrieve, handleConsolidate, handleGenerate, handleRunAll, refetch, router]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -379,15 +440,19 @@ export default function RAGPage() {
     });
   };
 
-  // Calculate stats
-  const stats = data ? {
-    total: data.total,
-    ready: data.queries.filter(q => q.status === "ready").length,
-    pending: data.total - data.queries.filter(q => q.status === "ready").length
-  } : { total: 0, ready: 0, pending: 0 };
+  // Calculate stats - memoized to prevent recalculation on every render
+  const stats = useMemo(() => {
+    if (!data) return { total: 0, ready: 0, pending: 0 };
+    const readyCount = data.queries.filter(q => q.status === "ready").length;
+    return {
+      total: data.total,
+      ready: readyCount,
+      pending: data.total - readyCount
+    };
+  }, [data]);
 
-  // Define columns for DataTable
-  const columns: DataTableColumn<QueryListItem>[] = [
+  // Define columns for DataTable - memoized to prevent re-rendering the whole table
+  const columns = useMemo((): DataTableColumn<QueryListItem>[] => [
     {
       key: "original_query",
       header: "Query",
@@ -429,7 +494,7 @@ export default function RAGPage() {
       cell: (query) => getActionButton(query),
       className: "text-right",
     },
-  ];
+  ], [getActionButton]);
 
   if (loading) {
     return <PageLoadingState />;
@@ -461,65 +526,55 @@ export default function RAGPage() {
         </Alert>
       )}
 
-      {/* Stats Cards */}
-      <StatsCardGrid
-        stats={[
-          {
-            label: "Total Queries",
-            value: stats.total,
-            icon: MessageSquare,
-          },
-          {
-            label: "Ready",
-            value: stats.ready,
-            icon: CheckCircle2,
-          },
-          {
-            label: "Pending",
-            value: stats.pending,
-            icon: Clock,
-          },
-        ]}
-      />
-
-      {/* New Query Input */}
+      {/* Consolidated Stats Card */}
       <Card>
         <CardHeader>
-          <CardTitle>New Query</CardTitle>
-          <CardDescription>
-            Enter a new query to expand and process through the RAG pipeline.
-          </CardDescription>
+          <CardTitle className="text-lg">Pipeline Overview</CardTitle>
+          <CardDescription>Status of queries across the RAG pipeline</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-3">
-            <Textarea
-              value={newQuery}
-              onChange={(e) => setNewQuery(e.target.value)}
-              placeholder="Enter your query here... (e.g., What is working memory?)"
-              className="flex-1 min-h-[80px] resize-none"
-            />
-            <div className="flex flex-col gap-2 self-end">
-              <Button
-                onClick={handleAutoQuery}
-                disabled={!newQuery.trim()}
-                className="gap-2"
-              >
-                <Zap className="h-4 w-4" />
-                Auto
-              </Button>
-              <Button
-                onClick={handleNewQuery}
-                disabled={!newQuery.trim()}
-                variant="outline"
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Manual
-              </Button>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+            {/* Total Queries */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <MessageSquare className="h-4 w-4" />
+                <span className="text-sm font-medium">Total Queries</span>
+              </div>
+              <div className="text-3xl font-bold text-foreground">
+                {stats.total}
+              </div>
+            </div>
+
+            {/* Ready */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-500">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-sm font-medium">Ready</span>
+              </div>
+              <div className="text-3xl font-bold text-green-600 dark:text-green-500">
+                {stats.ready}
+              </div>
+            </div>
+
+            {/* Pending */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500">
+                <Clock className="h-4 w-4" />
+                <span className="text-sm font-medium">Pending</span>
+              </div>
+              <div className="text-3xl font-bold text-amber-600 dark:text-amber-500">
+                {stats.pending}
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* New Query Input - Managed by its own component to prevent page-wide lag */}
+      <NewQueryCard
+        onAuto={handleAutoQuery}
+        onManual={handleNewQuery}
+      />
 
       {/* Queries Table */}
       <Card>
