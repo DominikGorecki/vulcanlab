@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,6 +79,7 @@ export default function CleanupPage() {
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
+  const [headingsOnly, setHeadingsOnly] = useState(false);
   const [results, setResults] = useState<ChunkSearchResult[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -111,7 +114,7 @@ export default function CleanupPage() {
       setError(null);
 
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/chunks/search?q=${encodeURIComponent(query)}&page=${page}`
+        `${API_BASE_URL}/api/v1/chunks/search?q=${encodeURIComponent(query)}&page=${page}&headings_only=${headingsOnly}`
       );
 
       if (!response.ok) {
@@ -304,28 +307,44 @@ export default function CleanupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="Search chunks by title or content..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1"
-              disabled={loading}
-            />
-            <Button type="submit" disabled={loading || !searchQuery.trim()}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                <>
-                  <Search className="mr-2 h-4 w-4" />
-                  Search
-                </>
-              )}
-            </Button>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Search chunks by title or content..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1"
+                disabled={loading}
+              />
+              <Button type="submit" disabled={loading || !searchQuery.trim()}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Search
+                  </>
+                )}
+              </Button>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="headings-only"
+                checked={headingsOnly}
+                onCheckedChange={(checked) => setHeadingsOnly(checked === true)}
+                disabled={loading}
+              />
+              <Label
+                htmlFor="headings-only"
+                className="text-sm font-normal cursor-pointer"
+              >
+                Search headings only (H1-H5)
+              </Label>
+            </div>
           </form>
         </CardContent>
       </Card>

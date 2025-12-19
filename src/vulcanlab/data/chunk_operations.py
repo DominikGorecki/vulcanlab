@@ -21,6 +21,7 @@ def search_chunks_lexical(
     query: str,
     page: int = 1,
     page_size: int = 25,
+    headings_only: bool = False,
     session: Session = None
 ) -> Tuple[List[Chunk], int]:
     """
@@ -35,6 +36,7 @@ def search_chunks_lexical(
         query: Search term to match against titles and content
         page: Page number (1-indexed)
         page_size: Number of results per page
+        headings_only: If True, only return chunks with level H1-H5 (exclude sentence/chunk)
         session: SQLAlchemy session for database operations
 
     Returns:
@@ -86,6 +88,10 @@ def search_chunks_lexical(
         (Chunk.heading_breadcrumbs.ilike(f'%{query}%')) |
         (Chunk.content.ilike(f'%{query}%'))
     )
+
+    # Add headings_only filter if requested
+    if headings_only:
+        where_clause = where_clause & Chunk.level.in_(['H1', 'H2', 'H3', 'H4', 'H5'])
 
     # Get total count
     total_count = session.query(func.count(Chunk.id)).filter(where_clause).scalar()

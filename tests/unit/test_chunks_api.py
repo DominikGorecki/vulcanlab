@@ -216,6 +216,74 @@ class TestSearchEndpoint:
 
         assert response.status_code == 500
 
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    @patch('vulcanlab_api.routers.chunks.search_chunks_lexical')
+    def test_search_headings_only_true(self, mock_search, mock_get_session):
+        """Test headings_only=true parameter filters to heading chunks."""
+        # Mock heading chunks only
+        chunks = [
+            create_mock_chunk(id=1, level="H2", content="heading content"),
+            create_mock_chunk(id=2, level="H3", content="another heading"),
+        ]
+        mock_search.return_value = (chunks, 2)
+
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Make request with headings_only=true
+        response = client.get("/api/v1/chunks/search?q=test&headings_only=true")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify search_chunks_lexical was called with headings_only=True
+        mock_search.assert_called_once()
+        call_kwargs = mock_search.call_args.kwargs
+        assert call_kwargs['headings_only'] is True
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    @patch('vulcanlab_api.routers.chunks.search_chunks_lexical')
+    def test_search_headings_only_false(self, mock_search, mock_get_session):
+        """Test headings_only=false parameter returns all chunks."""
+        chunks = [
+            create_mock_chunk(id=1, level="H1", content="heading"),
+            create_mock_chunk(id=2, level="sentence", content="sentence"),
+        ]
+        mock_search.return_value = (chunks, 2)
+
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Make request with headings_only=false (default)
+        response = client.get("/api/v1/chunks/search?q=test&headings_only=false")
+
+        assert response.status_code == 200
+
+        # Verify search_chunks_lexical was called with headings_only=False
+        mock_search.assert_called_once()
+        call_kwargs = mock_search.call_args.kwargs
+        assert call_kwargs['headings_only'] is False
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    @patch('vulcanlab_api.routers.chunks.search_chunks_lexical')
+    def test_search_headings_only_default(self, mock_search, mock_get_session):
+        """Test default behavior when headings_only not specified."""
+        chunks = [create_mock_chunk(id=1)]
+        mock_search.return_value = (chunks, 1)
+
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Make request without headings_only parameter
+        response = client.get("/api/v1/chunks/search?q=test")
+
+        assert response.status_code == 200
+
+        # Verify search_chunks_lexical was called with headings_only=False (default)
+        mock_search.assert_called_once()
+        call_kwargs = mock_search.call_args.kwargs
+        assert call_kwargs['headings_only'] is False
+
 
 class TestGetChunkDetailEndpoint:
     """Test suite for GET /api/v1/chunks/{chunk_id} endpoint."""

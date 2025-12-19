@@ -286,6 +286,55 @@ class TestSearchChunksLexical:
         assert total == 1
         assert len(results) == 1
 
+    def test_headings_only_filter(self, mock_session):
+        """Test headings_only filter returns only H1-H5 chunks."""
+        # Create chunks with different levels
+        h2_chunk = create_mock_chunk(id=1, level="H2", content="heading content")
+        h3_chunk = create_mock_chunk(id=2, level="H3", content="another heading")
+        sentence_chunk = create_mock_chunk(id=3, level="sentence", content="sentence content")
+        chunk_chunk = create_mock_chunk(id=4, level="chunk", content="chunk content")
+
+        # Mock query to return only headings when filtered
+        mock_query = create_mock_query_chain(
+            return_data=[h2_chunk, h3_chunk],
+            return_scalar=2
+        )
+        mock_session.query.return_value = mock_query
+
+        results, total = search_chunks_lexical(
+            "content",
+            headings_only=True,
+            session=mock_session
+        )
+
+        # Should only return heading chunks
+        assert total == 2
+        assert len(results) == 2
+
+    def test_headings_only_false_returns_all(self, mock_session):
+        """Test headings_only=False returns all chunk types."""
+        chunks = [
+            create_mock_chunk(id=1, level="H1", content="heading"),
+            create_mock_chunk(id=2, level="sentence", content="sentence"),
+            create_mock_chunk(id=3, level="chunk", content="chunk"),
+        ]
+
+        mock_query = create_mock_query_chain(
+            return_data=chunks,
+            return_scalar=3
+        )
+        mock_session.query.return_value = mock_query
+
+        results, total = search_chunks_lexical(
+            "test",
+            headings_only=False,
+            session=mock_session
+        )
+
+        # Should return all chunks
+        assert total == 3
+        assert len(results) == 3
+
 
 class TestGetAllDescendants:
     """Test suite for get_all_descendants function."""

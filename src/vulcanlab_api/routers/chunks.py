@@ -72,6 +72,11 @@ async def search_chunks(
         description="Page number (1-indexed)",
         example=1,
     ),
+    headings_only: bool = Query(
+        default=False,
+        description="If true, only return heading chunks (H1-H5), excluding sentence and chunk levels",
+        example=False,
+    ),
 ) -> ChunkSearchResponse:
     """
     Search chunks using lexical matching.
@@ -84,6 +89,7 @@ async def search_chunks(
     Args:
         q: Search query (minimum 1 character)
         page: Page number (default: 1, minimum: 1)
+        headings_only: Only return heading chunks (H1-H5), default: False
 
     Returns:
         ChunkSearchResponse with results and pagination info
@@ -107,6 +113,7 @@ async def search_chunks(
                 query=q.strip(),
                 page=page,
                 page_size=25,
+                headings_only=headings_only,
                 session=session
             )
 
