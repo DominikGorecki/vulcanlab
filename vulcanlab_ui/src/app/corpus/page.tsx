@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Loader2Icon, Database, Trash2 } from "lucide-react";
+import { Database, Trash2, BookOpen, Layers, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ConfirmDeleteModal } from "@/components/ConfirmDeleteModal";
-import { ErrorModal } from "@/components/ErrorModal";
+  PageHeader,
+  DataTable,
+  DataTableColumn,
+  StatsCardGrid,
+  ConfirmDialog,
+  StatusBadge,
+  PageErrorState,
+} from "@/components";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePageData } from "@/hooks/use-page-data";
+import { useState, useMemo, useCallback } from "react";
+import { Zap, FileText } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -34,306 +35,251 @@ interface CorpusWork {
   id: number;
   title: string;
   authors: string | null;
+  created_at: string;
+  status: string;
 }
 
-interface CorpusWorksResponse {
+interface PageData {
+  stats: CorpusStats;
   works: CorpusWork[];
-  total: number;
 }
 
 export default function CorpusPage() {
   const router = useRouter();
-  const [stats, setStats] = useState<CorpusStats | null>(null);
-  const [works, setWorks] = useState<CorpusWork[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
   const [workToDelete, setWorkToDelete] = useState<CorpusWork | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<{ title: string; message: string; detail?: string } | null>(null);
 
-  useEffect(() => {
-    fetchData();
+  const fetchData = useCallback(async () => {
+    const [statsRes, worksRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/corpus/stats`),
+      fetch(`${API_BASE_URL}/corpus/works`),
+    ]);
+
+    if (!statsRes.ok) throw new Error("Failed to load statistics");
+    if (!worksRes.ok) throw new Error("Failed to load works");
+
+    const stats = await statsRes.json();
+    const worksData = await worksRes.json();
+
+    return {
+      stats,
+      works: worksData.works,
+    };
   }, []);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const { data, loading, error, refetch } = usePageData<PageData>(fetchData);
 
-      // Fetch stats and works in parallel
-      const [statsResponse, worksResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/corpus/stats`),
-        fetch(`${API_BASE_URL}/corpus/works`),
-      ]);
-
-      if (!statsResponse.ok) {
-        throw new Error(`Failed to load statistics: ${statsResponse.statusText}`);
-      }
-
-      if (!worksResponse.ok) {
-        throw new Error(`Failed to load works: ${worksResponse.statusText}`);
-      }
-
-      const statsData: CorpusStats = await statsResponse.json();
-      const worksData: CorpusWorksResponse = await worksResponse.json();
-
-      setStats(statsData);
-      setWorks(worksData.works);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load corpus data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleWorkClick = (workId: number) => {
-    router.push(`/corpus/${workId}`);
-  };
-
-  const handleDeleteClick = (work: CorpusWork, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setWorkToDelete(work);
-  };
-
-  const handleDeleteCancel = () => {
-    setWorkToDelete(null);
-  };
-
-  const handleDeleteConfirm = async () => {
+  const handleDelete = async () => {
     if (!workToDelete) return;
 
     try {
-      setIsDeleting(true);
       const response = await fetch(
         `${API_BASE_URL}/api/v1/corpus/works/${workToDelete.id}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" }
       );
 
       if (!response.ok) {
-        // Parse error response
-        let errorDetail: string | undefined;
-        let errorMessage: string;
-        let errorTitle: string;
-
-        if (response.status === 404) {
-          errorTitle = "Work Not Found";
-          errorMessage = "This work may have already been deleted.";
-        } else if (response.status === 500) {
-          errorTitle = "Deletion Failed";
-          errorMessage = "An internal server error occurred while deleting the work.";
-
-          // Try to parse error detail from response
-          try {
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-              const errorData = await response.json();
-              if (errorData.detail) {
-                // Remove file paths from error details
-                errorDetail = String(errorData.detail).replace(/\/[^\s]+\.py/g, "[file]");
-              }
-            }
-          } catch {
-            // Ignore JSON parsing errors
-          }
-        } else {
-          errorTitle = "Deletion Failed";
-          errorMessage = `Failed to delete work: ${response.statusText}`;
-        }
-
-        // Close confirmation modal and show error modal
-        setWorkToDelete(null);
-        setDeleteError({ title: errorTitle, message: errorMessage, detail: errorDetail });
-        return;
+        throw new Error("Failed to delete work");
       }
 
-      // Success: close modal and refresh data
-      setWorkToDelete(null);
-      await fetchData();
-    } catch (err) {
-      // Handle network errors
-      console.error("Error deleting work:", err);
-      setWorkToDelete(null);
-      setDeleteError({
-        title: "Connection Error",
-        message: "Failed to connect to server. Please check your network connection and try again.",
-        detail: err instanceof Error ? err.message : undefined,
+      toast({
+        title: "Work deleted",
+        description: `"${workToDelete.title}" has been removed from the corpus.`,
       });
-    } finally {
-      setIsDeleting(false);
+      
+      setWorkToDelete(null);
+      refetch();
+    } catch (err) {
+      toast({
+        title: "Deletion failed",
+        description: err instanceof Error ? err.message : "An error occurred",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleErrorClose = () => {
-    setDeleteError(null);
-  };
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Corpus</h2>
-          <p className="text-muted-foreground">Works ready for vectorization and RAG.</p>
+  const columns: DataTableColumn<CorpusWork>[] = useMemo(() => [
+    {
+      key: "id",
+      header: "ID",
+      sortable: true,
+      className: "w-[60px] min-w-[60px]",
+    },
+    {
+      key: "title",
+      header: "Title",
+      sortable: true,
+      className: "min-w-[200px] max-w-[400px]",
+      cell: (work) => (
+        <div className="font-medium break-words whitespace-normal leading-tight py-1">
+          {work.title}
         </div>
-        <div className="flex items-center justify-center h-64">
-          <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
+      ),
+    },
+    {
+      key: "authors",
+      header: "Authors",
+      sortable: true,
+      className: "min-w-[150px] max-w-[250px] text-muted-foreground hidden md:table-cell",
+      cell: (work) => (
+        <div className="break-words whitespace-normal leading-tight">
+          {work.authors || "-"}
         </div>
-      </div>
-    );
-  }
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Date",
+      sortable: true,
+      className: "w-[110px] min-w-[110px] hidden sm:table-cell",
+      cell: (work) => (
+        <div className="flex items-center gap-1.5 text-muted-foreground whitespace-nowrap">
+          <Clock size={14} className="flex-shrink-0" />
+          <span className="text-xs">{new Date(work.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}</span>
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Type",
+      sortable: true,
+      className: "w-[110px] min-w-[110px] hidden lg:table-cell",
+      cell: (work) => (
+        <StatusBadge
+          status={work.status}
+          statusConfig={{
+            Automatic: {
+              label: "Auto",
+              variant: "default",
+              icon: Zap,
+            },
+            Standard: {
+              label: "Std",
+              variant: "secondary",
+              icon: FileText,
+            },
+          }}
+        />
+      ),
+    },
+    {
+      key: "actions" as keyof CorpusWork,
+      header: "",
+      className: "w-[50px] text-right",
+      cell: (work) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setWorkToDelete(work);
+          }}
+          className="p-2 rounded hover:bg-muted transition-colors group"
+          aria-label="Delete work"
+        >
+          <Trash2 size={16} className="text-muted-foreground group-hover:text-destructive" />
+        </button>
+      ),
+    },
+  ], []);
 
   if (error) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Corpus</h2>
-          <p className="text-muted-foreground">Works ready for vectorization and RAG.</p>
-        </div>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              <p>{error}</p>
-            </div>
-            <Button onClick={fetchData} className="mt-4">
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <PageErrorState error={error} onRetry={refetch} />;
   }
+
+  const stats = data?.stats;
+  const works = data?.works || [];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Corpus</h2>
-          <p className="text-muted-foreground">
-            Works ready for vectorization and RAG.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Corpus"
+        description="Works ready for vectorization and RAG."
+      />
 
-      {/* Overview Statistics Card */}
+      {/* Consolidated Stats Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Embeddings Overview</CardTitle>
-          <CardDescription>Corpus statistics and embedding vectorization status</CardDescription>
+          <CardTitle className="text-lg">Embeddings Overview</CardTitle>
+          <CardDescription>Chunk vectorization status across all corpus works</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Total Works</p>
-              <p className="text-2xl font-bold">{stats?.total_works || 0}</p>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+            {/* Total Works */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <BookOpen className="h-4 w-4" />
+                <span className="text-sm font-medium">Total Works</span>
+              </div>
+              <div className="text-3xl font-bold text-foreground">
+                {stats?.total_works || 0}
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Not Queued</p>
-              <p className="text-2xl font-bold text-muted-foreground">
+
+            {/* Not Queued */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Layers className="h-4 w-4" />
+                <span className="text-sm font-medium">Not Queued</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-600 dark:text-gray-400">
                 {stats?.chunk_stats.no_vec || 0}
-              </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">To Vectorize</p>
-              <p className="text-2xl font-bold text-amber-500">
+
+            {/* To Vectorize */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500">
+                <Clock className="h-4 w-4" />
+                <span className="text-sm font-medium">To Vectorize</span>
+              </div>
+              <div className="text-3xl font-bold text-amber-600 dark:text-amber-500">
                 {stats?.chunk_stats.to_vec || 0}
-              </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Vectorized</p>
-              <p className="text-2xl font-bold text-green-500">
+
+            {/* Vectorized */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-500">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-sm font-medium">Vectorized</span>
+              </div>
+              <div className="text-3xl font-bold text-green-600 dark:text-green-500">
                 {stats?.chunk_stats.vec || 0}
-              </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Errors</p>
-              <p className="text-2xl font-bold text-red-500">
+
+            {/* Errors */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-red-600 dark:text-red-500">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">Errors</span>
+              </div>
+              <div className="text-3xl font-bold text-red-600 dark:text-red-500">
                 {stats?.chunk_stats.vec_err || 0}
-              </p>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Works Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Works</CardTitle>
-          <CardDescription>
-            Click on a work to view its sanitized content
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {works.length === 0 ? (
-            <div className="text-center py-12">
-              <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No corpus works found.</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Works must complete chunking before appearing here.
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[60px]">ID</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Authors</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {works.map((work) => (
-                    <TableRow
-                      key={work.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleWorkClick(work.id)}
-                    >
-                      <TableCell className="font-medium">{work.id}</TableCell>
-                      <TableCell className="max-w-md truncate">
-                        {work.title}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate text-muted-foreground">
-                        {work.authors || "-"}
-                      </TableCell>
-                      <TableCell>
-                        <button
-                          onClick={(e) => handleDeleteClick(work, e)}
-                          className="p-2 rounded hover:bg-muted transition-colors"
-                          aria-label="Delete work"
-                          data-testid="delete-icon"
-                        >
-                          <Trash2
-                            size={16}
-                            className="text-muted-foreground hover:text-destructive"
-                          />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <ConfirmDeleteModal
-        work={workToDelete}
-        isOpen={!!workToDelete}
-        onClose={handleDeleteCancel}
-        onConfirm={handleDeleteConfirm}
-        isDeleting={isDeleting}
+      <DataTable
+        data={works}
+        columns={columns}
+        onRowClick={(work) => router.push(`/corpus/${work.id}`)}
+        loading={loading}
+        emptyState={{
+          title: "No corpus works found",
+          description: "Works must complete chunking before appearing here.",
+          icon: Database,
+        }}
       />
 
-      <ErrorModal
-        isOpen={!!deleteError}
-        onClose={handleErrorClose}
-        title={deleteError?.title || "Error"}
-        message={deleteError?.message || "An error occurred"}
-        error={deleteError?.detail}
+      <ConfirmDialog
+        open={!!workToDelete}
+        onOpenChange={(open) => !open && setWorkToDelete(null)}
+        title="Delete Work"
+        message={`Are you sure you want to delete "${workToDelete?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
       />
     </div>
   );

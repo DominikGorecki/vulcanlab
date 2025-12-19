@@ -196,11 +196,18 @@ async def list_corpus_works() -> CorpusWorksResponse:
         # Build work list items
         work_items = []
         for work in corpus_works:
+            # Determine status based on conversion type
+            status = "Standard"
+            if work.processing_status and work.processing_status.get('simple_conversion_step') == 'complete':
+                status = "Automatic"
+
             work_items.append(
                 CorpusWorkListItem(
                     id=work.id,
                     title=work.title,
-                    authors=work.authors
+                    authors=work.authors,
+                    created_at=work.created_at.isoformat(),
+                    status=status
                 )
             )
 

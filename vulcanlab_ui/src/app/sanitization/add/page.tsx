@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader, FormField } from "@/components";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, Loader2Icon, ArrowLeft, FileText } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckCircle2, FileText, ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -23,98 +24,56 @@ interface FormData {
   content: string;
 }
 
-interface FormErrors {
-  title?: string;
-  filename?: string;
-  content?: string;
-  year?: string;
-}
-
 export default function AddSanitizedMarkdownPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    title: "",
-    authors: "",
-    year: "",
-    publisher: "",
-    isbn: "",
-    edition: "",
-    filename: "",
-    content: "",
+  const [success, setSuccess] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<FormData>({
+    defaultValues: {
+      title: "",
+      authors: "",
+      year: "",
+      publisher: "",
+      isbn: "",
+      edition: "",
+      filename: "",
+      content: "",
+    },
   });
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const validateForm = (): boolean => {
-    const errors: FormErrors = {};
-
-    if (!formData.title.trim()) {
-      errors.title = "Title is required";
-    }
-
-    if (!formData.filename.trim()) {
-      errors.filename = "Filename is required";
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.filename)) {
-      errors.filename = "Filename must contain only letters, numbers, underscores, and hyphens";
-    }
-
-    if (!formData.content.trim()) {
-      errors.content = "Content is required";
-    }
-
-    if (formData.year && !/^\d{4}$/.test(formData.year)) {
-      errors.year = "Year must be a 4-digit number";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
-    if (formErrors[name as keyof FormErrors]) {
-      setFormErrors((prev) => ({ ...prev, [name]: undefined }));
-    }
-  };
+  const titleValue = watch("title");
 
   const generateFilename = () => {
-    if (formData.title) {
-      const filename = formData.title
+    if (titleValue) {
+      const filename = titleValue
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, "")
         .replace(/\s+/g, "_")
         .substring(0, 50);
-      setFormData((prev) => ({ ...prev, filename }));
+      setValue("filename", filename);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (!validateForm()) {
-      return;
-    }
-
+  const onSubmit = async (data: FormData) => {
     setLoading(true);
-
     try {
       const payload = {
-        title: formData.title.trim(),
-        authors: formData.authors.trim() || null,
-        year: formData.year ? parseInt(formData.year, 10) : null,
-        publisher: formData.publisher.trim() || null,
-        isbn: formData.isbn.trim() || null,
-        edition: formData.edition.trim() || null,
-        filename: formData.filename.trim(),
-        content: formData.content,
+        ...data,
+        authors: data.authors.trim() || null,
+        year: data.year ? parseInt(data.year, 10) : null,
+        publisher: data.publisher.trim() || null,
+        isbn: data.isbn.trim() || null,
+        edition: data.edition.trim() || null,
+        filename: data.filename.trim(),
+        content: data.content,
       };
 
       const response = await fetch(`${API_BASE_URL}/sanitization/add-sanitized`, {
@@ -125,247 +84,192 @@ export default function AddSanitizedMarkdownPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed: ${response.statusText}`);
+        throw new Error(errorData.detail || "Failed to create work");
       }
 
-      const data = await response.json();
-      setSuccess(`Work created successfully! ID: ${data.work_id}`);
+      const resData = await response.json();
+      setSuccess(true);
+      toast({
+        title: "Work created",
+        description: `Work ID: ${resData.work_id} created successfully.`,
+      });
 
-      // Redirect to the work's sanitization page after a short delay
       setTimeout(() => {
-        router.push(`/sanitization/${data.work_id}`);
+        router.push(`/sanitization/${resData.work_id}`);
       }, 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add sanitized markdown");
+      toast({
+        title: "Creation failed",
+        description: err instanceof Error ? err.message : "An error occurred",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  if (success) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center space-y-4">
+          <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
+          <h2 className="text-2xl font-bold text-foreground">Work Created Successfully!</h2>
+          <p className="text-muted-foreground">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-12">
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
           size="icon"
           onClick={() => router.push("/sanitization")}
+          aria-label="Back to Sanitization"
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Add Sanitized Markdown</h2>
-          <p className="text-muted-foreground">
-            Add a pre-sanitized document directly to start chunking.
-          </p>
-        </div>
+        <PageHeader 
+          title="Add Sanitized Markdown" 
+          description="Add a pre-sanitized document directly to the corpus to start chunking."
+        />
       </div>
 
-      {/* Success Message */}
-      {success && (
-        <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-700 dark:text-green-300">
-            {success}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Error Message */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        {/* Bibliographic Information */}
-        <Card className="mb-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-w-5xl">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+              <FileText className="h-5 w-5 text-primary" />
               Bibliographic Information
             </CardTitle>
             <CardDescription>
-              Enter the metadata for this work. Only Title is required.
+              Enter the metadata for this work. Only title is required.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Title */}
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="title" className="flex items-center gap-1">
-                  Title <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField 
+                label="Title" 
+                required 
+                error={errors.title?.message}
+                className="md:col-span-2"
+              >
+                <Input 
+                  {...register("title", { required: "Title is required" })}
                   placeholder="Cognitive Psychology: A Student's Handbook"
-                  className={formErrors.title ? "border-red-500" : ""}
                 />
-                {formErrors.title && (
-                  <p className="text-sm text-red-500">{formErrors.title}</p>
-                )}
-              </div>
+              </FormField>
 
-              {/* Authors */}
-              <div className="space-y-2">
-                <Label htmlFor="authors">Authors</Label>
-                <Input
-                  id="authors"
-                  name="authors"
-                  value={formData.authors}
-                  onChange={handleInputChange}
+              <FormField label="Authors" error={errors.authors?.message}>
+                <Input 
+                  {...register("authors")}
                   placeholder="Michael W. Eysenck, Mark T. Keane"
                 />
-              </div>
+              </FormField>
 
-              {/* Year */}
-              <div className="space-y-2">
-                <Label htmlFor="year">Year</Label>
-                <Input
-                  id="year"
-                  name="year"
-                  value={formData.year}
-                  onChange={handleInputChange}
+              <FormField label="Year" error={errors.year?.message}>
+                <Input 
+                  {...register("year", {
+                    pattern: {
+                      value: /^\d{4}$/,
+                      message: "Year must be a 4-digit number"
+                    }
+                  })}
                   placeholder="2020"
-                  maxLength={4}
-                  className={formErrors.year ? "border-red-500" : ""}
                 />
-                {formErrors.year && (
-                  <p className="text-sm text-red-500">{formErrors.year}</p>
-                )}
-              </div>
+              </FormField>
 
-              {/* Publisher */}
-              <div className="space-y-2">
-                <Label htmlFor="publisher">Publisher</Label>
-                <Input
-                  id="publisher"
-                  name="publisher"
-                  value={formData.publisher}
-                  onChange={handleInputChange}
+              <FormField label="Publisher" error={errors.publisher?.message}>
+                <Input 
+                  {...register("publisher")}
                   placeholder="Psychology Press"
                 />
-              </div>
+              </FormField>
 
-              {/* ISBN */}
-              <div className="space-y-2">
-                <Label htmlFor="isbn">ISBN</Label>
-                <Input
-                  id="isbn"
-                  name="isbn"
-                  value={formData.isbn}
-                  onChange={handleInputChange}
+              <FormField label="ISBN" error={errors.isbn?.message}>
+                <Input 
+                  {...register("isbn")}
                   placeholder="978-1138482210"
                 />
-              </div>
+              </FormField>
 
-              {/* Edition */}
-              <div className="md:col-span-2 space-y-2">
-                <Label htmlFor="edition">Edition</Label>
-                <Input
-                  id="edition"
-                  name="edition"
-                  value={formData.edition}
-                  onChange={handleInputChange}
+              <FormField label="Edition" error={errors.edition?.message} className="md:col-span-2">
+                <Input 
+                  {...register("edition")}
                   placeholder="8th Edition"
                 />
-              </div>
+              </FormField>
             </div>
           </CardContent>
         </Card>
 
-        {/* File Information */}
-        <Card className="mb-6">
+        <Card>
           <CardHeader>
             <CardTitle>File Details</CardTitle>
             <CardDescription>
-              Specify the filename for the sanitized markdown file.
+              Specify the filename and content.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="filename" className="flex items-center gap-1">
-                Filename <span className="text-red-500">*</span>
-              </Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    id="filename"
-                    name="filename"
-                    value={formData.filename}
-                    onChange={handleInputChange}
+          <CardContent className="space-y-6">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+              <FormField 
+                label="Filename" 
+                required 
+                error={errors.filename?.message}
+                className="flex-1 w-full"
+                description="Only letters, numbers, underscores, and hyphens"
+              >
+                <div className="relative">
+                  <Input 
+                    {...register("filename", {
+                      required: "Filename is required",
+                      pattern: {
+                        value: /^[a-zA-Z0-9_-]+$/,
+                        message: "Invalid characters in filename"
+                      }
+                    })}
                     placeholder="cognitive_psychology"
-                    className={formErrors.filename ? "border-red-500 pr-32" : "pr-32"}
+                    className="pr-32"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     .sanitized.md
                   </span>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={generateFilename}
-                  disabled={!formData.title}
-                >
-                  Generate from Title
-                </Button>
+              </FormField>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={generateFilename}
+                disabled={!titleValue}
+                className="w-full sm:w-auto"
+              >
+                Generate from Title
+              </Button>
+            </div>
+
+            <FormField 
+              label="Sanitized Markdown Content" 
+              required 
+              error={errors.content?.message}
+              description="Clean, well-structured markdown ready for chunking"
+            >
+              <div className="space-y-2">
+                <Textarea 
+                  {...register("content", { required: "Content is required" })}
+                  placeholder="# Chapter 1: Introduction..."
+                  className="min-h-[400px] font-mono text-sm leading-relaxed"
+                />
+                <p className="text-xs text-muted-foreground text-right italic">
+                  {(watch("content") || "").length.toLocaleString()} characters
+                </p>
               </div>
-              {formErrors.filename && (
-                <p className="text-sm text-red-500">{formErrors.filename}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Only letters, numbers, underscores, and hyphens are allowed.
-              </p>
-            </div>
+            </FormField>
           </CardContent>
         </Card>
 
-        {/* Content */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Sanitized Markdown Content</CardTitle>
-            <CardDescription>
-              Paste the sanitized markdown content below. This should be clean,
-              well-structured markdown ready for chunking.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="content" className="flex items-center gap-1">
-                Content <span className="text-red-500">*</span>
-              </Label>
-              <Textarea
-                id="content"
-                name="content"
-                value={formData.content}
-                onChange={handleInputChange}
-                placeholder="# Chapter 1: Introduction
-
-This is the introduction to the document...
-
-## 1.1 Background
-
-Background content here..."
-                className={`min-h-[400px] font-mono text-sm ${
-                  formErrors.content ? "border-red-500" : ""
-                }`}
-              />
-              {formErrors.content && (
-                <p className="text-sm text-red-500">{formErrors.content}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {formData.content.length.toLocaleString()} characters
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Actions */}
-        <div className="flex justify-between">
+        <div className="flex justify-end gap-3">
           <Button
             type="button"
             variant="outline"
@@ -373,21 +277,11 @@ Background content here..."
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              "Create Work"
-            )}
+          <Button type="submit" disabled={loading} className="min-w-[120px]">
+            {loading ? "Creating..." : "Create Work"}
           </Button>
         </div>
       </form>
     </div>
   );
 }
-
-
-

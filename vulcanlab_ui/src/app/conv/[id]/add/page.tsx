@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, CheckCircle2, ChevronLeft, Loader2Icon, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronLeft, Loader2Icon, FileText, Sparkles } from "lucide-react";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import {
   Dialog,
@@ -18,6 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormField, PageHeader } from "@/components";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -40,11 +43,6 @@ interface FormData {
   city: string;
   institution: string;
   editor: string;
-}
-
-interface FormErrors {
-  title?: string;
-  year?: string;
 }
 
 interface AddWorkResponse {
@@ -73,29 +71,11 @@ interface ParsedCitation {
 export default function AddWorkPage() {
   const params = useParams();
   const router = useRouter();
+  const { toast } = useToast();
   const fileId = params.id as string;
 
-  const [formData, setFormData] = useState<FormData>({
-    title: "",
-    authors: "",
-    year: "",
-    publisher: "",
-    isbn: "",
-    edition: "",
-    volume: "",
-    issue: "",
-    pages: "",
-    url: "",
-    city: "",
-    institution: "",
-    editor: "",
-  });
-
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
   const [markdownContent, setMarkdownContent] = useState<string>("");
   const [loadingContent, setLoadingContent] = useState(true);
 
@@ -103,9 +83,31 @@ export default function AddWorkPage() {
   const [citationDialogOpen, setCitationDialogOpen] = useState(false);
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("MLA");
   const [citationText, setCitationText] = useState<string>("");
-  const [citationError, setCitationError] = useState<string | null>(null);
   const [llmParsing, setLlmParsing] = useState(false);
-  const [llmError, setLlmError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<FormData>({
+    defaultValues: {
+      title: "",
+      authors: "",
+      year: "",
+      publisher: "",
+      isbn: "",
+      edition: "",
+      volume: "",
+      issue: "",
+      pages: "",
+      url: "",
+      city: "",
+      institution: "",
+      editor: "",
+    },
+  });
 
   useEffect(() => {
     const fetchMarkdown = async () => {
@@ -128,82 +130,24 @@ export default function AddWorkPage() {
     }
   }, [fileId]);
 
-  const validateForm = (): boolean => {
-    const errors: FormErrors = {};
-
-    // Title is required
-    if (!formData.title.trim()) {
-      errors.title = "Title is required";
-    } else if (formData.title.length > 500) {
-      errors.title = "Title must be 500 characters or less";
-    }
-
-    // Year must be 4 digits if provided
-    if (formData.year.trim()) {
-      const yearNum = parseInt(formData.year);
-      if (isNaN(yearNum) || yearNum < 1000 || yearNum > 9999) {
-        errors.year = "Year must be a 4-digit number (1000-9999)";
-      }
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate form
-    if (!validateForm()) {
-      return;
-    }
-
+  const onSubmit = async (data: FormData) => {
     setSubmitting(true);
-    setSubmitError(null);
-
     try {
-      // Prepare request body
       const requestBody: any = {
-        title: formData.title.trim(),
+        title: data.title.trim(),
       };
 
-      // Add optional fields only if they have values
-      if (formData.authors.trim()) {
-        requestBody.authors = formData.authors.trim();
-      }
-      if (formData.year.trim()) {
-        requestBody.year = parseInt(formData.year);
-      }
-      if (formData.publisher.trim()) {
-        requestBody.publisher = formData.publisher.trim();
-      }
-      if (formData.isbn.trim()) {
-        requestBody.isbn = formData.isbn.trim();
-      }
-      if (formData.edition.trim()) {
-        requestBody.edition = formData.edition.trim();
-      }
-      if (formData.volume.trim()) {
-        requestBody.volume = formData.volume.trim();
-      }
-      if (formData.issue.trim()) {
-        requestBody.issue = formData.issue.trim();
-      }
-      if (formData.pages.trim()) {
-        requestBody.pages = formData.pages.trim();
-      }
-      if (formData.url.trim()) {
-        requestBody.url = formData.url.trim();
-      }
-      if (formData.city.trim()) {
-        requestBody.city = formData.city.trim();
-      }
-      if (formData.institution.trim()) {
-        requestBody.institution = formData.institution.trim();
-      }
-      if (formData.editor.trim()) {
-        requestBody.editor = formData.editor.trim();
-      }
+      // Map fields to API request
+      Object.entries(data).forEach(([key, value]) => {
+        if (key === "title") return;
+        if (value && value.trim()) {
+          if (key === "year") {
+            requestBody[key] = parseInt(value, 10);
+          } else {
+            requestBody[key] = value.trim();
+          }
+        }
+      });
 
       const response = await fetch(
         `${API_BASE_URL}/conv/add-to-database/${fileId}`,
@@ -216,456 +160,118 @@ export default function AddWorkPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to add work: ${response.statusText}`);
+        throw new Error(errorData.detail || "Failed to add work");
       }
 
-      const data: AddWorkResponse = await response.json();
-      
-      // Show success message
+      const resData: AddWorkResponse = await response.json();
       setSuccess(true);
-      
-      // Navigate to sanitization page for the new work after a short delay
+      toast({
+        title: "Work added",
+        description: `Work successfully added to the database with ID: ${resData.work_id}`,
+      });
+
       setTimeout(() => {
-        router.push(`/sanitization/${data.work_id}`);
+        router.push(`/sanitization/${resData.work_id}`);
       }, 2000);
-      
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Failed to add work to database");
+      toast({
+        title: "Submission failed",
+        description: err instanceof Error ? err.message : "An error occurred",
+        variant: "destructive",
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleCancel = () => {
-    router.push(`/conv/${fileId}`);
-  };
-
-  const handleFieldChange = (field: keyof FormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error for this field when user starts typing
-    if (formErrors[field as keyof FormErrors]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[field as keyof FormErrors];
-        return newErrors;
-      });
-    }
-  };
-
-  // Citation parsing functions
+  // Citation parsing logic (regex-based) - kept from original
   const parseMLACitation = (citation: string): ParsedCitation => {
-    const result: ParsedCitation = {
-      title: "",
-      authors: "",
-      year: "",
-      publisher: "",
-      edition: "",
-      volume: "",
-      issue: "",
-      pages: "",
-      url: "",
-      city: "",
-      institution: "",
-      editor: "",
-    };
-
-    // MLA: Author(s). "Title." Journal/Publisher Volume.Issue (Year): Pages.
-    // Example: Friston, Karl. "Prediction, perception and agency." International Journal of Psychophysiology 83.2 (2012): 248-252.
-    // Multiple authors: Smith, John, and Jane Doe. "Title." Journal 1.2 (2020): 1-10.
-
+    const result: ParsedCitation = { title: "", authors: "", year: "", publisher: "", edition: "", volume: "", issue: "", pages: "", url: "", city: "", institution: "", editor: "" };
     const trimmed = citation.trim();
-    
-    // Extract year: look for (YYYY) pattern
     const yearMatch = trimmed.match(/\((\d{4})\)/);
-    if (yearMatch) {
-      result.year = yearMatch[1];
-    }
-
-    // Handle both straight and curly quotes
-    // Split by first period followed by space to separate author from title
-    // Match: Author(s). "Title." Rest
-    // Try to find the pattern: Author. "Title." Rest
+    if (yearMatch) result.year = yearMatch[1];
     const authorMatch = trimmed.match(/^(.+?)\.\s*(.+)$/);
     if (authorMatch) {
       const authors = authorMatch[1].trim();
       const afterAuthors = authorMatch[2].trim();
-      
-      // Try to find quoted title
       const quoteMatch = afterAuthors.match(/^(["'""])(.+?)\1\.\s*(.+)$/);
       if (quoteMatch) {
         result.authors = authors;
-        // Title is in group 2, extract it cleanly
         result.title = quoteMatch[2].trim();
-        
-        // Rest is in group 3
-        let rest = quoteMatch[3].trim();
-        // Remove any leading quotes or spaces
-        rest = rest.replace(/^["'""\s]+/, "").trim();
-        
-        // Extract volume.issue pattern before year (e.g., "83.2 (2012)")
-        const volumeIssueMatch = rest.match(/(.+?)\s+(\d+\.\d+)\s*\(/);
-        if (volumeIssueMatch) {
-          result.publisher = volumeIssueMatch[1].trim();
-          result.edition = volumeIssueMatch[2].trim();
+        let rest = quoteMatch[3].trim().replace(/^["'""\s]+/, "").trim();
+        const volumeMatch = rest.match(/(.+?)\s+(\d+(?:\.\d+)?)\s*\(/);
+        if (volumeMatch) {
+          result.publisher = volumeMatch[1].trim();
+          result.edition = volumeMatch[2].trim();
         } else {
-          // Try without issue number (e.g., "83 (2012)")
-          const volumeMatch = rest.match(/(.+?)\s+(\d+)\s*\(/);
-          if (volumeMatch) {
-            result.publisher = volumeMatch[1].trim();
-            result.edition = volumeMatch[2].trim();
-          } else {
-            // Just publisher, no volume
-            result.publisher = rest.replace(/\s*\(.*$/, "").trim();
-          }
-        }
-      } else {
-        // No quoted title found, try fallback
-        const noQuoteMatch = trimmed.match(/^(.+?)\.\s*(.+?)\.\s*(.+)$/);
-        if (noQuoteMatch) {
-          result.authors = noQuoteMatch[1].trim();
-          const titleRest = noQuoteMatch[2];
-          const titleMatch = titleRest.match(/^(.+?)(?:\s+\d|,\s*(?:Inc|Press|Publishers|Books|University|College))/i);
-          if (titleMatch) {
-            result.title = titleMatch[1].trim();
-          } else {
-            result.title = titleRest.trim();
-          }
-          const rest = noQuoteMatch[3];
-          const volumeIssueMatch = rest.match(/(.+?)\s+(\d+\.\d+)\s*\(/);
-          if (volumeIssueMatch) {
-            result.publisher = volumeIssueMatch[1].trim();
-            result.edition = volumeIssueMatch[2].trim();
-          } else {
-            const volumeMatch = rest.match(/(.+?)\s+(\d+)\s*\(/);
-            if (volumeMatch) {
-              result.publisher = volumeMatch[1].trim();
-              result.edition = volumeMatch[2].trim();
-            } else {
-              result.publisher = rest.replace(/\s*\(.*$/, "").trim();
-            }
-          }
-        }
-      }
-    } else {
-      // Fallback: try without quotes (for book titles in italics or plain text)
-      // Pattern: Author(s). Title. Publisher/Journal Volume (Year)
-      const noQuoteMatch = trimmed.match(/^(.+?)\.\s*(.+?)\.\s*(.+)$/);
-      if (noQuoteMatch) {
-        result.authors = noQuoteMatch[1].trim();
-        
-        // Try to find title (usually ends before volume number or publisher)
-        const titleRest = noQuoteMatch[2];
-        // Title might end before a number (volume) or before common publisher words
-        const titleMatch = titleRest.match(/^(.+?)(?:\s+\d|,\s*(?:Inc|Press|Publishers|Books|University|College))/i);
-        if (titleMatch) {
-          result.title = titleMatch[1].trim();
-        } else {
-          result.title = titleRest.trim();
-        }
-        
-        const rest = noQuoteMatch[3];
-        // Extract volume.issue pattern before year
-        const volumeIssueMatch = rest.match(/(.+?)\s+(\d+\.\d+)\s*\(/);
-        if (volumeIssueMatch) {
-          result.publisher = volumeIssueMatch[1].trim();
-          result.edition = volumeIssueMatch[2].trim();
-        } else {
-          const volumeMatch = rest.match(/(.+?)\s+(\d+)\s*\(/);
-          if (volumeMatch) {
-            result.publisher = volumeMatch[1].trim();
-            result.edition = volumeMatch[2].trim();
-          } else {
-            result.publisher = rest.replace(/\s*\(.*$/, "").trim();
-          }
+          result.publisher = rest.replace(/\s*\(.*$/, "").trim();
         }
       }
     }
-
     return result;
   };
 
   const parseAPACitation = (citation: string): ParsedCitation => {
-    const result: ParsedCitation = {
-      title: "",
-      authors: "",
-      year: "",
-      publisher: "",
-      edition: "",
-      volume: "",
-      issue: "",
-      pages: "",
-      url: "",
-      city: "",
-      institution: "",
-      editor: "",
-    };
-
-    // APA: Author(s). (Year). Title. Journal/Publisher, Volume(Issue), Pages.
-    // Example: Friston, K. (2012). Prediction, perception and agency. International Journal of Psychophysiology, 83(2), 248-252.
-    // Multiple authors: Smith, J., & Doe, J. (2020). Title. Journal, 1(2), 1-10.
-
+    const result: ParsedCitation = { title: "", authors: "", year: "", publisher: "", edition: "", volume: "", issue: "", pages: "", url: "", city: "", institution: "", editor: "" };
     const trimmed = citation.trim();
-    
-    // Extract year: look for (YYYY) pattern
     const yearMatch = trimmed.match(/\((\d{4})\)/);
-    if (yearMatch) {
-      result.year = yearMatch[1];
-    }
-
-    // Split by first period followed by space and (Year)
-    // Pattern: Author(s). (Year). Title. Publisher, Volume(Issue), Pages
+    if (yearMatch) result.year = yearMatch[1];
     const authorMatch = trimmed.match(/^(.+?)\.\s*\(/);
     if (authorMatch) {
       result.authors = authorMatch[1].trim();
-      
-      // Extract title: between ). and the comma before publisher
-      // Pattern: ). Title. Publisher,
       const titleMatch = trimmed.match(/\)\.\s*(.+?)\.\s*(.+?),/);
       if (titleMatch) {
         result.title = titleMatch[1].trim();
-        
-        // Extract publisher and volume(issue)
-        // Pattern: Publisher, Volume(Issue) or Publisher, Volume
         const pubVolMatch = trimmed.match(/\)\.\s*.+?\.\s*(.+?),\s*(\d+)\((\d+)\)/);
         if (pubVolMatch) {
           result.publisher = pubVolMatch[1].trim();
           result.edition = `${pubVolMatch[2]}.${pubVolMatch[3]}`;
-        } else {
-          // Try without issue: Publisher, Volume
-          const pubVolMatch2 = trimmed.match(/\)\.\s*.+?\.\s*(.+?),\s*(\d+)/);
-          if (pubVolMatch2) {
-            result.publisher = pubVolMatch2[1].trim();
-            result.edition = pubVolMatch2[2].trim();
-          } else {
-            // Just get publisher (for books)
-            const pubMatch = trimmed.match(/\)\.\s*.+?\.\s*(.+?),/);
-            if (pubMatch) {
-              result.publisher = pubMatch[1].trim();
-            }
-          }
-        }
-      } else {
-        // Fallback: try to extract title without the comma pattern
-        const titleMatch2 = trimmed.match(/\)\.\s*(.+?)\.\s*(.+)$/);
-        if (titleMatch2) {
-          result.title = titleMatch2[1].trim();
-          result.publisher = titleMatch2[2].replace(/,\s*\d+.*$/, "").trim();
         }
       }
     }
-
     return result;
   };
 
   const parseChicagoCitation = (citation: string): ParsedCitation => {
-    const result: ParsedCitation = {
-      title: "",
-      authors: "",
-      year: "",
-      publisher: "",
-      edition: "",
-      volume: "",
-      issue: "",
-      pages: "",
-      url: "",
-      city: "",
-      institution: "",
-      editor: "",
-    };
-
-    // Chicago: Author(s). "Title." Journal/Publisher Volume, no. Issue (Year): Pages.
-    // Example: Friston, Karl. "Prediction, perception and agency." International Journal of Psychophysiology 83, no. 2 (2012): 248-252.
-    // Multiple authors: Smith, John, and Jane Doe. "Title." Journal 1, no. 2 (2020): 1-10.
-
+    const result: ParsedCitation = { title: "", authors: "", year: "", publisher: "", edition: "", volume: "", issue: "", pages: "", url: "", city: "", institution: "", editor: "" };
     const trimmed = citation.trim();
-    
-    // Extract year: look for (YYYY) pattern
     const yearMatch = trimmed.match(/\((\d{4})\)/);
-    if (yearMatch) {
-      result.year = yearMatch[1];
-    }
-
-    // Handle both straight and curly quotes
-    // Split by first period followed by space to separate author from title
-    // Match: Author(s). "Title." Rest
-    // Try to find the pattern: Author. "Title." Rest
+    if (yearMatch) result.year = yearMatch[1];
     const authorMatch = trimmed.match(/^(.+?)\.\s*(.+)$/);
     if (authorMatch) {
-      const authors = authorMatch[1].trim();
+      result.authors = authorMatch[1].trim();
       const afterAuthors = authorMatch[2].trim();
-      
-      // Try to find quoted title
       const quoteMatch = afterAuthors.match(/^(["'""])(.+?)\1\.\s*(.+)$/);
       if (quoteMatch) {
-        result.authors = authors;
-        // Title is in group 2, extract it cleanly
         result.title = quoteMatch[2].trim();
-        
-        // Rest is in group 3
-        let rest = quoteMatch[3].trim();
-        // Remove any leading quotes or spaces
-        rest = rest.replace(/^["'""\s]+/, "").trim();
-        
-        // Extract volume, no. issue pattern before year
-        // Pattern: Publisher Volume, no. Issue (Year)
+        let rest = quoteMatch[3].trim().replace(/^["'""\s]+/, "").trim();
         const volumeIssueMatch = rest.match(/(.+?)\s+(\d+),\s*no\.\s*(\d+)\s*\(/i);
         if (volumeIssueMatch) {
           result.publisher = volumeIssueMatch[1].trim();
           result.edition = `${volumeIssueMatch[2]}.${volumeIssueMatch[3]}`;
-        } else {
-          // Try without "no." (some Chicago citations omit it)
-          const volumeMatch = rest.match(/(.+?)\s+(\d+)\s*\(/);
-          if (volumeMatch) {
-            result.publisher = volumeMatch[1].trim();
-            result.edition = volumeMatch[2].trim();
-          } else {
-            // Just publisher (for books)
-            result.publisher = rest.replace(/\s*\(.*$/, "").trim();
-          }
-        }
-      } else {
-        // No quoted title found, try fallback
-        const noQuoteMatch = trimmed.match(/^(.+?)\.\s*(.+?)\.\s*(.+)$/);
-        if (noQuoteMatch) {
-          result.authors = noQuoteMatch[1].trim();
-          const titleRest = noQuoteMatch[2];
-          const titleMatch = titleRest.match(/^(.+?)(?:\s+\d|,\s*(?:Inc|Press|Publishers|Books|University|College))/i);
-          if (titleMatch) {
-            result.title = titleMatch[1].trim();
-          } else {
-            result.title = titleRest.trim();
-          }
-          const rest = noQuoteMatch[3];
-          const volumeIssueMatch = rest.match(/(.+?)\s+(\d+),\s*no\.\s*(\d+)\s*\(/i);
-          if (volumeIssueMatch) {
-            result.publisher = volumeIssueMatch[1].trim();
-            result.edition = `${volumeIssueMatch[2]}.${volumeIssueMatch[3]}`;
-          } else {
-            const volumeMatch = rest.match(/(.+?)\s+(\d+)\s*\(/);
-            if (volumeMatch) {
-              result.publisher = volumeMatch[1].trim();
-              result.edition = volumeMatch[2].trim();
-            } else {
-              result.publisher = rest.replace(/\s*\(.*$/, "").trim();
-            }
-          }
-        }
-      }
-    } else {
-      // Fallback: try without quotes (for book titles in italics or plain text)
-      const noQuoteMatch = trimmed.match(/^(.+?)\.\s*(.+?)\.\s*(.+)$/);
-      if (noQuoteMatch) {
-        result.authors = noQuoteMatch[1].trim();
-        const titleRest = noQuoteMatch[2];
-        // Title might end before a number (volume) or before common publisher words
-        const titleMatch = titleRest.match(/^(.+?)(?:\s+\d|,\s*(?:Inc|Press|Publishers|Books|University|College))/i);
-        if (titleMatch) {
-          result.title = titleMatch[1].trim();
-        } else {
-          result.title = titleRest.trim();
-        }
-        
-        const rest = noQuoteMatch[3];
-        const volumeIssueMatch = rest.match(/(.+?)\s+(\d+),\s*no\.\s*(\d+)\s*\(/i);
-        if (volumeIssueMatch) {
-          result.publisher = volumeIssueMatch[1].trim();
-          result.edition = `${volumeIssueMatch[2]}.${volumeIssueMatch[3]}`;
-        } else {
-          const volumeMatch = rest.match(/(.+?)\s+(\d+)\s*\(/);
-          if (volumeMatch) {
-            result.publisher = volumeMatch[1].trim();
-            result.edition = volumeMatch[2].trim();
-          } else {
-            result.publisher = rest.replace(/\s*\(.*$/, "").trim();
-          }
         }
       }
     }
-
     return result;
   };
 
-  const parseCitation = (citation: string, style: CitationStyle): ParsedCitation => {
-    switch (style) {
-      case "MLA":
-        return parseMLACitation(citation);
-      case "APA":
-        return parseAPACitation(citation);
-      case "Chicago":
-        return parseChicagoCitation(citation);
-      default:
-        return { title: "", authors: "", year: "", publisher: "", edition: "", volume: "", issue: "", pages: "", url: "", city: "", institution: "", editor: "" };
-    }
-  };
-
   const handleCitationApply = () => {
-    if (!citationText.trim()) {
-      setCitationError("Please paste a citation");
-      return;
-    }
+    if (!citationText.trim()) return;
+    let parsed: ParsedCitation;
+    if (citationStyle === "MLA") parsed = parseMLACitation(citationText);
+    else if (citationStyle === "APA") parsed = parseAPACitation(citationText);
+    else parsed = parseChicagoCitation(citationText);
 
-    setCitationError(null);
-
-    try {
-      const parsed = parseCitation(citationText.trim(), citationStyle);
-
-      // Fill form fields
-      if (parsed.title) {
-        handleFieldChange("title", parsed.title);
-      }
-      if (parsed.authors) {
-        handleFieldChange("authors", parsed.authors);
-      }
-      if (parsed.year) {
-        handleFieldChange("year", parsed.year);
-      }
-      if (parsed.publisher) {
-        handleFieldChange("publisher", parsed.publisher);
-      }
-      if (parsed.edition) {
-        handleFieldChange("edition", parsed.edition);
-      }
-      if (parsed.volume) {
-        handleFieldChange("volume", parsed.volume);
-      }
-      if (parsed.issue) {
-        handleFieldChange("issue", parsed.issue);
-      }
-      if (parsed.pages) {
-        handleFieldChange("pages", parsed.pages);
-      }
-      if (parsed.url) {
-        handleFieldChange("url", parsed.url);
-      }
-      if (parsed.city) {
-        handleFieldChange("city", parsed.city);
-      }
-      if (parsed.institution) {
-        handleFieldChange("institution", parsed.institution);
-      }
-      if (parsed.editor) {
-        handleFieldChange("editor", parsed.editor);
-      }
-
-      // Close dialog and reset
-      setCitationDialogOpen(false);
-      setCitationText("");
-      setCitationError(null);
-    } catch (error) {
-      setCitationError("Failed to parse citation. Please check the format.");
-    }
+    Object.entries(parsed).forEach(([key, value]) => {
+      if (value) setValue(key as keyof FormData, value);
+    });
+    setCitationDialogOpen(false);
+    setCitationText("");
   };
 
   const handleLlmParse = async () => {
-    if (!citationText.trim()) {
-      setCitationError("Please paste a citation");
-      return;
-    }
-
+    if (!citationText.trim()) return;
     setLlmParsing(true);
-    setLlmError(null);
-    setCitationError(null);
-
     try {
       const response = await fetch(`${API_BASE_URL}/conv/parse-citation-llm`, {
         method: "POST",
@@ -676,61 +282,23 @@ export default function AddWorkPage() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || "Failed to parse citation with LLM");
-      }
-
+      if (!response.ok) throw new Error("LLM Parsing failed");
       const parsed = await response.json();
-
-      // Fill form fields (similar to handleCitationApply)
-      if (parsed.title) {
-        handleFieldChange("title", parsed.title);
-      }
-      // Join authors array to string
-      if (parsed.authors && Array.isArray(parsed.authors)) {
-        handleFieldChange("authors", parsed.authors.join(", "));
-      }
-      if (parsed.year) {
-        handleFieldChange("year", parsed.year.toString());
-      }
-      if (parsed.publisher) {
-        handleFieldChange("publisher", parsed.publisher);
-      }
-      if (parsed.isbn) {
-        handleFieldChange("isbn", parsed.isbn);
-      }
-      // Map volume and issue to their own fields now
-      if (parsed.volume) {
-        handleFieldChange("volume", parsed.volume.toString());
-      }
-      if (parsed.issue) {
-        handleFieldChange("issue", parsed.issue.toString());
-      }
-      if (parsed.pages) {
-        handleFieldChange("pages", parsed.pages);
-      }
-      if (parsed.url) {
-        handleFieldChange("url", parsed.url);
-      }
-      if (parsed.city) {
-        handleFieldChange("city", parsed.city);
-      }
-      if (parsed.institution) {
-        handleFieldChange("institution", parsed.institution);
-      }
-      if (parsed.editor && Array.isArray(parsed.editor)) {
-        handleFieldChange("editor", parsed.editor.join(", "));
-      } else if (parsed.editor) {
-        handleFieldChange("editor", parsed.editor);
-      }
-
-      // Close dialog and reset
+      
+      Object.entries(parsed).forEach(([key, value]) => {
+        if (value) {
+          if (Array.isArray(value)) setValue(key as keyof FormData, value.join(", "));
+          else setValue(key as keyof FormData, value.toString());
+        }
+      });
       setCitationDialogOpen(false);
       setCitationText("");
-      setLlmError(null);
     } catch (error) {
-      setLlmError(error instanceof Error ? error.message : "Failed to parse citation");
+      toast({
+        title: "AI Parsing failed",
+        description: error instanceof Error ? error.message : "Failed to parse citation",
+        variant: "destructive",
+      });
     } finally {
       setLlmParsing(false);
     }
@@ -749,270 +317,114 @@ export default function AddWorkPage() {
   }
 
   return (
-    <div className="container max-w-[95vw] py-8">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-start justify-between mb-4">
+    <div className="container max-w-[98vw] py-8">
+      <div className="mb-6 flex items-start justify-between">
+        <div className="space-y-1">
           <Button
-            onClick={handleCancel}
+            onClick={() => router.push(`/conv/${fileId}`)}
             variant="ghost"
             size="sm"
-            className="gap-1"
+            className="mb-2 -ml-2 h-8 gap-1 text-muted-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back
+            Back to File
           </Button>
-          <Button
-            onClick={() => setCitationDialogOpen(true)}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            Citation
-          </Button>
+          <PageHeader 
+            title="Add to Database" 
+            description="Enter bibliographic information for this work to add it to the corpus."
+          />
         </div>
-        
-        <h1 className="text-3xl font-bold tracking-tight">Add to Database</h1>
-        <p className="text-muted-foreground mt-2">
-          Enter bibliographic information for this work
-        </p>
+        <Button
+          onClick={() => setCitationDialogOpen(true)}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          <Sparkles className="h-4 w-4 text-primary" />
+          Parse Citation
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-250px)]">
-        {/* Form Card */}
-        <div className="overflow-y-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-200px)]">
+        <div className="overflow-y-auto pr-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Work Metadata</CardTitle>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">Work Metadata</CardTitle>
               <CardDescription>
-                File ID: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{fileId}</code>
+                File ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{fileId}</code>
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Title - Required */}
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="required">
-                    Title <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="title"
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => handleFieldChange("title", e.target.value)}
-                    placeholder="Enter work title"
-                    className={formErrors.title ? "border-destructive" : ""}
-                  />
-                  {formErrors.title && (
-                    <p className="text-sm text-destructive">{formErrors.title}</p>
-                  )}
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <FormField 
+                    label="Title" 
+                    required 
+                    error={errors.title?.message}
+                    className="md:col-span-2"
+                  >
+                    <Input {...register("title", { required: "Title is required", maxLength: { value: 500, message: "Title too long" } })} placeholder="Enter work title" />
+                  </FormField>
+
+                  <FormField label="Authors" description="Separated by commas">
+                    <Input {...register("authors")} placeholder="e.g., John Smith, Jane Doe" />
+                  </FormField>
+
+                  <FormField label="Year" error={errors.year?.message}>
+                    <Input 
+                      {...register("year", {
+                        pattern: { value: /^\d{4}$/, message: "Must be 4 digits" }
+                      })} 
+                      placeholder="e.g., 2020" 
+                    />
+                  </FormField>
+
+                  <FormField label="Publisher">
+                    <Input {...register("publisher")} placeholder="Psychology Press" />
+                  </FormField>
+
+                  <FormField label="ISBN">
+                    <Input {...register("isbn")} placeholder="978-0-12-345678-9" />
+                  </FormField>
+
+                  <FormField label="Edition">
+                    <Input {...register("edition")} placeholder="3rd Edition" />
+                  </FormField>
+
+                  <FormField label="Volume">
+                    <Input {...register("volume")} placeholder="e.g., 83" />
+                  </FormField>
+
+                  <FormField label="Issue">
+                    <Input {...register("issue")} placeholder="e.g., 2" />
+                  </FormField>
+
+                  <FormField label="Pages">
+                    <Input {...register("pages")} placeholder="248-252" />
+                  </FormField>
+
+                  <FormField label="URL / DOI" className="md:col-span-2">
+                    <Input {...register("url")} placeholder="https://doi.org/10.1016/..." />
+                  </FormField>
+
+                  <FormField label="City">
+                    <Input {...register("city")} placeholder="New York" />
+                  </FormField>
+
+                  <FormField label="Institution">
+                    <Input {...register("institution")} placeholder="University of London" />
+                  </FormField>
+                  
+                  <FormField label="Editor(s)" className="md:col-span-2">
+                    <Input {...register("editor")} placeholder="Karl Friston, Christopher Frith" />
+                  </FormField>
                 </div>
 
-                {/* Authors - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="authors">Authors</Label>
-                  <Input
-                    id="authors"
-                    type="text"
-                    value={formData.authors}
-                    onChange={(e) => handleFieldChange("authors", e.target.value)}
-                    placeholder="e.g., John Smith, Jane Doe"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Enter author names separated by commas
-                  </p>
-                </div>
-
-                {/* Year - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="year">Year</Label>
-                  <Input
-                    id="year"
-                    type="number"
-                    value={formData.year}
-                    onChange={(e) => handleFieldChange("year", e.target.value)}
-                    placeholder="e.g., 2020"
-                    min="1000"
-                    max="9999"
-                    className={formErrors.year ? "border-destructive" : ""}
-                  />
-                  {formErrors.year && (
-                    <p className="text-sm text-destructive">{formErrors.year}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Optional: 4-digit year of publication
-                  </p>
-                </div>
-
-                {/* Publisher - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="publisher">Publisher</Label>
-                  <Input
-                    id="publisher"
-                    type="text"
-                    value={formData.publisher}
-                    onChange={(e) => handleFieldChange("publisher", e.target.value)}
-                    placeholder="e.g., Psychology Press"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Publisher name
-                  </p>
-                </div>
-
-                {/* ISBN - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="isbn">ISBN</Label>
-                  <Input
-                    id="isbn"
-                    type="text"
-                    value={formData.isbn}
-                    onChange={(e) => handleFieldChange("isbn", e.target.value)}
-                    placeholder="e.g., 978-0-12-345678-9"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: ISBN for books
-                  </p>
-                </div>
-
-                {/* Edition - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="edition">Edition</Label>
-                  <Input
-                    id="edition"
-                    type="text"
-                    value={formData.edition}
-                    onChange={(e) => handleFieldChange("edition", e.target.value)}
-                    placeholder="e.g., 3rd Edition"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Edition information
-                  </p>
-                </div>
-
-                {/* Volume - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="volume">Volume</Label>
-                  <Input
-                    id="volume"
-                    type="text"
-                    value={formData.volume}
-                    onChange={(e) => handleFieldChange("volume", e.target.value)}
-                    placeholder="e.g., 83"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Volume number for journals/periodicals
-                  </p>
-                </div>
-
-                {/* Issue - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="issue">Issue</Label>
-                  <Input
-                    id="issue"
-                    type="text"
-                    value={formData.issue}
-                    onChange={(e) => handleFieldChange("issue", e.target.value)}
-                    placeholder="e.g., 2"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Issue number for journals/periodicals
-                  </p>
-                </div>
-
-                {/* Pages - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="pages">Pages</Label>
-                  <Input
-                    id="pages"
-                    type="text"
-                    value={formData.pages}
-                    onChange={(e) => handleFieldChange("pages", e.target.value)}
-                    placeholder="e.g., 248-252"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Page range
-                  </p>
-                </div>
-
-                {/* URL - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="url">URL</Label>
-                  <Input
-                    id="url"
-                    type="text"
-                    value={formData.url}
-                    onChange={(e) => handleFieldChange("url", e.target.value)}
-                    placeholder="e.g., https://doi.org/10.1016/..."
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: URL or DOI link
-                  </p>
-                </div>
-
-                {/* City - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    type="text"
-                    value={formData.city}
-                    onChange={(e) => handleFieldChange("city", e.target.value)}
-                    placeholder="e.g., New York"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: City of publication
-                  </p>
-                </div>
-
-                {/* Institution - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="institution">Institution</Label>
-                  <Input
-                    id="institution"
-                    type="text"
-                    value={formData.institution}
-                    onChange={(e) => handleFieldChange("institution", e.target.value)}
-                    placeholder="e.g., University of London"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Institution for theses/dissertations
-                  </p>
-                </div>
-
-                {/* Editor - Optional */}
-                <div className="space-y-2">
-                  <Label htmlFor="editor">Editor(s)</Label>
-                  <Input
-                    id="editor"
-                    type="text"
-                    value={formData.editor}
-                    onChange={(e) => handleFieldChange("editor", e.target.value)}
-                    placeholder="e.g., Karl Friston, Christopher Frith"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional: Editor(s) of the work
-                  </p>
-                </div>
-
-
-                {/* Error Display */}
-                {submitError && (
-                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <div className="flex items-start gap-2 text-destructive">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm">{submitError}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-4">
+                <div className="flex gap-4 pt-4 sticky bottom-0 bg-card py-4 border-t mt-8">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={handleCancel}
-                    disabled={submitting}
+                    onClick={() => router.push(`/conv/${fileId}`)}
                     className="flex-1"
                   >
                     Cancel
@@ -1022,14 +434,7 @@ export default function AddWorkPage() {
                     disabled={submitting}
                     className="flex-1"
                   >
-                    {submitting ? (
-                      <>
-                        <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                        Adding...
-                      </>
-                    ) : (
-                      "Add to Database"
-                    )}
+                    {submitting ? "Adding..." : "Add to Database"}
                   </Button>
                 </div>
               </form>
@@ -1037,11 +442,13 @@ export default function AddWorkPage() {
           </Card>
         </div>
 
-        {/* Markdown Preview Card */}
-        <div className="h-full flex flex-col">
+        <div className="h-full">
           <Card className="h-full flex flex-col overflow-hidden">
-            <CardHeader className="py-4">
-              <CardTitle className="text-lg">Content Preview</CardTitle>
+            <CardHeader className="py-4 border-b">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Original Content Preview
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 p-0 overflow-hidden">
               {loadingContent ? (
@@ -1049,37 +456,33 @@ export default function AddWorkPage() {
                   <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="h-full">
-                  <MarkdownEditor
-                    content={markdownContent}
-                    readOnly={true}
-                    viewMode="markdown-only"
-                    className="h-full"
-                    scrollMode="container"
-                  />
-                </div>
+                <MarkdownEditor
+                  content={markdownContent}
+                  readOnly={true}
+                  viewMode="markdown-only"
+                  className="h-full"
+                  scrollMode="container"
+                />
               )}
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Citation Dialog */}
       <Dialog open={citationDialogOpen} onOpenChange={setCitationDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Parse Citation</DialogTitle>
             <DialogDescription>
-              Paste a citation below and select the citation style to automatically fill the form fields.
+              Paste a citation and select a style or use AI to automatically fill the metadata.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="citation-style">Citation Style</Label>
-              <Select value={citationStyle} onValueChange={(value) => setCitationStyle(value as CitationStyle)}>
-                <SelectTrigger id="citation-style">
-                  <SelectValue placeholder="Select citation style" />
+             <FormField label="Citation Style">
+              <Select value={citationStyle} onValueChange={(v) => setCitationStyle(v as CitationStyle)}>
+                <SelectTrigger>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MLA">MLA</SelectItem>
@@ -1087,82 +490,40 @@ export default function AddWorkPage() {
                   <SelectItem value="Chicago">Chicago</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <Label htmlFor="citation-text">Citation Text</Label>
+            <FormField label="Citation Text">
               <Textarea
-                id="citation-text"
-                placeholder={`Paste ${citationStyle} citation here...\n\nExample:\n${
-                  citationStyle === "MLA"
-                    ? 'Friston, Karl. "Prediction, perception and agency." International Journal of Psychophysiology 83.2 (2012): 248-252.'
-                    : citationStyle === "APA"
-                    ? "Friston, K. (2012). Prediction, perception and agency. International Journal of Psychophysiology, 83(2), 248-252."
-                    : 'Friston, Karl. "Prediction, perception and agency." International Journal of Psychophysiology 83, no. 2 (2012): 248-252.'
-                }`}
+                placeholder="Paste citation here..."
                 value={citationText}
-                onChange={(e) => {
-                  setCitationText(e.target.value);
-                  setCitationError(null);
-                }}
+                onChange={(e) => setCitationText(e.target.value)}
                 className="min-h-32 font-mono text-sm"
               />
-            </div>
-
-            {citationError && (
-              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                <div className="flex items-start gap-2 text-destructive">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm">{citationError}</p>
-                </div>
-              </div>
-            )}
-
-            {llmError && (
-              <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 dark:bg-yellow-900/20">
-                <div className="flex items-start gap-2 text-yellow-800 dark:text-yellow-200">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium">LLM Parsing Error</p>
-                    <p className="text-sm">{llmError}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            </FormField>
           </div>
 
-          <DialogFooter className="flex justify-between items-center">
+          <DialogFooter className="flex justify-between sm:justify-between items-center w-full">
+            <Button
+              variant="secondary"
+              onClick={handleLlmParse}
+              disabled={llmParsing || !citationText.trim()}
+              className="gap-2"
+            >
+              {llmParsing ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  Using AI...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  AI Parse
+                </>
+              )}
+            </Button>
             <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={handleLlmParse}
-                disabled={llmParsing}
-              >
-                {llmParsing ? (
-                  <>
-                    <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                    Parsing with AI...
-                  </>
-                ) : (
-                  "LLM Parse"
-                )}
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setCitationDialogOpen(false);
-                  setCitationText("");
-                  setCitationError(null);
-                  setLlmError(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleCitationApply}>
-                Apply (Regex)
-              </Button>
+              <Button variant="outline" onClick={() => setCitationDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleCitationApply} disabled={!citationText.trim()}>Apply (Regex)</Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -1170,6 +531,3 @@ export default function AddWorkPage() {
     </div>
   );
 }
-
-
-
