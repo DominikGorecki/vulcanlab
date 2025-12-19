@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2Icon, AlertCircle, PenSquare } from "lucide-react";
+import { PenSquare } from "lucide-react";
+import { usePageData } from "@/hooks";
+import { PageLoadingState, PageErrorState } from "@/components";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -27,7 +29,6 @@ interface TemplateListResponse {
   templates: FunctionTemplateSummary[];
 }
 
-// Human-readable labels for function tags
 const FUNCTION_LABELS: Record<string, string> = {
   query_expansion: "Query Expansion",
   rag_augmentation: "RAG Augmented Prompt",
@@ -38,61 +39,27 @@ const FUNCTION_LABELS: Record<string, string> = {
 
 export function TemplatesTabContent() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<FunctionTemplateSummary[]>([]);
-
-  useEffect(() => {
-    fetchTemplates();
+  const fetchTemplatesFn = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/settings/templates/`);
+    if (!response.ok) throw new Error(`Failed to fetch templates: ${response.statusText}`);
+    return response.json();
   }, []);
 
-  const fetchTemplates = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(`${API_BASE_URL}/settings/templates/`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch templates: ${response.statusText}`);
-      }
-      const data: TemplateListResponse = await response.json();
-      setTemplates(data.templates);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load templates");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, loading, error, refetch: fetchTemplates } = usePageData<TemplateListResponse>(
+    fetchTemplatesFn
+  );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoadingState />;
+  if (error) return <PageErrorState title="Failed to load templates" error={error} onRetry={fetchTemplates} />;
 
-  if (error) {
-    return (
-      <Card className="border-destructive">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>{error}</span>
-          </div>
-          <Button onClick={fetchTemplates} className="mt-4">
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
+  const templates = data?.templates || [];
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Prompt Templates</CardTitle>
         <CardDescription>
-          Manage versioned prompt templates for AI functions. Click a function to edit its templates.
+          Manage versioned prompt templates for AI functions.
         </CardDescription>
       </CardHeader>
       <CardContent>

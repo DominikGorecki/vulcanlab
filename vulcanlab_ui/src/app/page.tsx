@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageLoadingState } from "@/components";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -14,17 +14,10 @@ export default function Home() {
 
   return (
     <div className="flex items-center justify-center h-full">
-      <Card className="w-[400px]">
-        <CardHeader>
-          <CardTitle>Welcome to VulcanLab</CardTitle>
-          <CardDescription>Redirecting to corpus...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex justify-center p-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </CardContent>
-      </Card>
+      <PageLoadingState
+        title="Welcome to VulcanLab"
+        description="Redirecting to corpus..."
+      />
     </div>
   );
 }
