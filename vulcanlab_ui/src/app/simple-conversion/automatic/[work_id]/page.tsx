@@ -13,8 +13,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2Icon, CheckCircle2, AlertCircle, FileText, ArrowLeft, ExternalLink } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { DataTable, DataTableColumn } from "@/components/data-table";
+import { PageLoadingState } from "@/components/page-loading-state";
+import { PageErrorState } from "@/components/page-error-state";
+import { cn } from "@/lib/utils";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -30,7 +34,7 @@ interface StatusData {
 
 interface ChunkResult {
   id: number;
-  heading_level: number;
+  heading_level: string;
   heading_text: string;
   start_line: number;
   end_line: number;
@@ -47,8 +51,6 @@ interface ResultsData {
   chunks: ChunkResult[];
   output_files?: Record<string, string>;
 }
-
-type ExecutionStep = 'executing' | 'parsing' | 'parsed' | 'sanitizing' | 'sanitized' | 'chunking' | 'chunked' | 'complete' | 'error';
 
 export default function AutomaticWorkflowPage() {
   const params = useParams();
@@ -74,7 +76,6 @@ export default function AutomaticWorkflowPage() {
       if (statusData.step === 'complete') {
         setExecuting(false);
         setCompleted(true);
-        // Will fetch results in useEffect when completed becomes true
       } else if (statusData.step === 'error') {
         setExecuting(false);
         setError(statusData.error_message || 'Pipeline execution failed');
@@ -89,12 +90,10 @@ export default function AutomaticWorkflowPage() {
       setExecuting(true);
       setError(null);
 
-      // First check current status to see if already executed
       const statusResponse = await fetch(`${API_BASE_URL}/api/simple-conversion/status/${workId}`);
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
 
-        // If already complete or in error state, don't execute again
         if (statusData.step === 'complete') {
           setStatus(statusData);
           setExecuting(false);
@@ -107,15 +106,12 @@ export default function AutomaticWorkflowPage() {
           return;
         }
 
-        // If in progress (parsing, sanitizing, chunking), just poll status
         if (['parsing', 'parsed', 'sanitizing', 'sanitized', 'chunking', 'chunked'].includes(statusData.step)) {
           setStatus(statusData);
-          // Let the polling effect handle status updates
           return;
         }
       }
 
-      // Only execute if status is 'converting' or unknown
       const response = await fetch(`${API_BASE_URL}/api/simple-conversion/execute-auto/${workId}`, {
         method: 'POST',
       });
@@ -144,12 +140,10 @@ export default function AutomaticWorkflowPage() {
       setResults(data);
     } catch (err) {
       console.error('Failed to fetch results:', err);
-      const message = err instanceof Error ? err.message : 'Failed to load results';
-      setError(message);
+      setError(err instanceof Error ? err.message : 'Failed to load results');
     }
   }, [workId]);
 
-  // Start execution on mount
   useEffect(() => {
     if (workId && initialLoad) {
       setInitialLoad(false);
@@ -157,7 +151,6 @@ export default function AutomaticWorkflowPage() {
     }
   }, [workId, initialLoad, executeAutomatic]);
 
-  // Poll for status
   useEffect(() => {
     if (!executing || completed || error) return;
 
@@ -168,7 +161,6 @@ export default function AutomaticWorkflowPage() {
     return () => clearInterval(interval);
   }, [executing, completed, error, fetchStatus]);
 
-  // Fetch results when complete
   useEffect(() => {
     if (completed && !results) {
       fetchResults();
@@ -202,15 +194,43 @@ export default function AutomaticWorkflowPage() {
     return status?.step === stepName;
   };
 
+  const columns: DataTableColumn<ChunkResult>[] = [
+    {
+      key: 'heading_level',
+      header: 'Level',
+      className: "w-[80px]",
+      cell: (chunk) => (
+        <Badge variant="outline" className="font-mono">
+          {chunk.heading_level}
+        </Badge>
+      )
+    },
+    {
+      key: 'heading_text',
+      header: 'Heading',
+      className: "min-w-[200px] max-w-[400px] whitespace-normal break-words font-medium",
+    },
+    {
+      key: 'start_line',
+      header: 'Range',
+      cell: (chunk) => `Lines ${chunk.start_line}-${chunk.end_line}`,
+      className: "w-[120px] text-xs text-muted-foreground whitespace-nowrap",
+    },
+    {
+      key: 'content_preview',
+      header: 'Content Preview',
+      className: "min-w-[400px] whitespace-normal break-words font-mono text-xs",
+      cell: (chunk) => (
+        <div className="max-h-[80px] overflow-hidden text-ellipsis whitespace-pre-wrap">
+          {chunk.content_preview}
+        </div>
+      )
+    }
+  ];
+
   if (!workId) {
     return (
-      <div className="p-8">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>No Work ID provided</AlertDescription>
-        </Alert>
-      </div>
+      <PageErrorState error="No Work ID provided" />
     );
   }
 
@@ -232,23 +252,24 @@ export default function AutomaticWorkflowPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 space-y-8">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/simple-conversion')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-3xl font-bold tracking-tight">Automatic Conversion</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader 
+        title="Automatic Conversion"
+        description="Pipeline execution and monitoring."
+        actions={
+          <Button variant="ghost" size="sm" onClick={() => router.push('/simple-conversion')} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Simple Conversion
+          </Button>
+        }
+      />
 
-      {/* Initial loading state before we have status */}
       {executing && !status && !error && (
         <Card>
           <CardContent className="pt-6 flex flex-col items-center justify-center space-y-4 min-h-[300px]">
             <Loader2Icon className="h-12 w-12 animate-spin text-primary" />
             <p className="text-lg font-medium">Starting automatic conversion...</p>
-            <p className="text-sm text-muted-foreground">
-              Preparing to process your document
-            </p>
+            <p className="text-sm text-muted-foreground">Preparing to process your document</p>
           </CardContent>
         </Card>
       )}
@@ -257,9 +278,7 @@ export default function AutomaticWorkflowPage() {
         <Card>
           <CardHeader>
             <CardTitle>Pipeline Status</CardTitle>
-            <CardDescription>
-              Processing your document...
-            </CardDescription>
+            <CardDescription>Processing your document...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
             <div className="flex items-center gap-3 text-lg font-medium text-primary">
@@ -276,19 +295,15 @@ export default function AutomaticWorkflowPage() {
                 return (
                   <div 
                     key={step.key}
-                    className={`flex flex-col items-center gap-2 text-center transition-all duration-300 ${
-                      isComplete ? 'text-green-600 opacity-100' : isActive ? 'text-primary opacity-100 font-semibold' : 'text-muted-foreground opacity-40'
-                    }`}
+                    className={cn(
+                      "flex flex-col items-center gap-2 text-center transition-all duration-300",
+                      isComplete ? "text-green-600 opacity-100" : isActive ? "text-primary opacity-100 font-semibold" : "text-muted-foreground opacity-40"
+                    )}
                   >
-                    <div className={`
-                      flex items-center justify-center w-12 h-12 rounded-full border-2 text-lg font-bold transition-all
-                      ${isComplete 
-                        ? 'bg-green-100 border-green-600' 
-                        : isActive 
-                          ? 'bg-background border-primary text-primary shadow-[0_0_15px_rgba(var(--primary),0.3)]' 
-                          : 'bg-muted border-transparent'
-                      }
-                    `}>
+                    <div className={cn(
+                      "flex items-center justify-center w-12 h-12 rounded-full border-2 text-lg font-bold transition-all",
+                      isComplete ? "bg-green-100 border-green-600" : isActive ? "bg-background border-primary text-primary shadow-[0_0_15px_rgba(var(--primary),0.3)]" : "bg-muted border-transparent"
+                    )}>
                       {isComplete ? <CheckCircle2 className="h-6 w-6" /> : step.icon}
                     </div>
                     <span className="text-sm">{step.label}</span>
@@ -301,7 +316,7 @@ export default function AutomaticWorkflowPage() {
               <div className="flex flex-wrap gap-4 pt-4 border-t">
                   <div className="flex flex-col">
                     <span className="text-xs text-muted-foreground uppercase font-bold">Classification</span>
-                    <span className="font-mono text-lg">{status.classification.toUpperCase()}</span>
+                    <span className="font-mono text-lg font-bold uppercase">{status.classification}</span>
                   </div>
                   {status.token_count !== undefined && (
                     <div className="flex flex-col border-l pl-4">
@@ -316,16 +331,11 @@ export default function AutomaticWorkflowPage() {
       )}
 
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-          <div className="mt-4">
-             <Button variant="outline" size="sm" onClick={() => router.push('/simple-conversion')}>
-               Return to Start
-             </Button>
-          </div>
-        </Alert>
+        <PageErrorState 
+          error={error} 
+          title="Conversion Failed"
+          onRetry={() => router.push('/simple-conversion')}
+        />
       )}
 
       {completed && results && (
@@ -333,9 +343,7 @@ export default function AutomaticWorkflowPage() {
           <Alert className="border-green-500 bg-green-50 text-green-900">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
             <AlertTitle>Success</AlertTitle>
-            <AlertDescription>
-              Conversion completed successfully!
-            </AlertDescription>
+            <AlertDescription>Conversion completed successfully!</AlertDescription>
           </Alert>
 
           <Card>
@@ -372,10 +380,7 @@ export default function AutomaticWorkflowPage() {
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push(`/corpus/${workId}`)}
-                >
+                <Button variant="outline" onClick={() => router.push(`/corpus/${workId}`)}>
                   <ExternalLink className="mr-2 h-4 w-4" />
                   View in Corpus
                 </Button>
@@ -386,36 +391,20 @@ export default function AutomaticWorkflowPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Generated Chunks</CardTitle>
-              <CardDescription>Preview of the generated chunks</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[600px] pr-4">
-                <div className="space-y-4">
-                  {results.chunks.map((chunk) => (
-                    <div key={chunk.id} className="border rounded-lg p-4 bg-card hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-primary text-primary-foreground">H{chunk.heading_level}</Badge>
-                          <h4 className="font-semibold text-lg">{chunk.heading_text}</h4>
-                        </div>
-                        <span className="text-xs text-muted-foreground bg-muted cx-2 py-1 rounded">
-                          Lines {chunk.start_line}-{chunk.end_line}
-                        </span>
-                      </div>
-                      <div className="pl-4 border-l-2 border-muted mt-2">
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap font-mono text-xs">
-                          {chunk.content_preview}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-2xl font-bold tracking-tight">Generated Chunks</h3>
+              <p className="text-sm text-muted-foreground">Preview of the generated chunks</p>
+            </div>
+            <DataTable
+              columns={columns}
+              data={results.chunks}
+              emptyState={{
+                title: "No chunks found",
+                description: "No chunks were generated for this conversion.",
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

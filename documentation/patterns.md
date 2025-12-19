@@ -99,15 +99,23 @@ VulcanLab follows a decoupled, three-tier architecture designed for modularity a
 -   **State Management**:
     -   Prefer **React Server Components (RSC)** for initial data fetching where interactivity is not required.
     -   Use **Client Components** (`"use client"`) for pages requiring state (forms, tables, real-time updates).
+-   **Critical Rule: Avoid Infinite Rendering Loops**:
+    -   **ALWAYS** wrap fetch functions or complex objects in `useCallback` or `useMemo` when passed as dependencies to hooks (like `usePageData` or `useEffect`).
+    -   *Reason*: Inline functions are recreated on every render. If a hook uses that function as a dependency to trigger an update, it will cause an infinite rendering loop.
 
 ### 4.2 UI Building Patterns
 For detailed component documentation and code examples, refer to: `documentation/work/ui-component-library-guide.md`.
 
 #### 1. Page Lifecycle Pattern
-All data-driven pages MUST follow the standardized fetching lifecycle using the `usePageData` hook and layout components:
+All data-driven pages MUST follow the standardized fetching lifecycle using the `usePageData` hook and layout components. **Ensure fetch functions are memoized with `useCallback` to avoid infinite loops.**
 
 ```tsx
 function MyPage() {
+  const fetchFn = useCallback(async () => {
+    const response = await fetch('/api/data');
+    return response.json();
+  }, []); // Add dependencies if needed
+
   const { data, loading, error, refetch } = usePageData(fetchFn);
 
   // 1. Loading State
