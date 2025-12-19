@@ -18,8 +18,13 @@ nav:
     - getting-started.md
     - Docker Setup: docker_setup.md
     - Running Locally: running_locally.md
+    - Windows Setup (WSL): windows_setup.md
   - Guide:
     - VulcanLab Pages: pages/index.md
     - Using CLI: cli_docs/cli_overview.md
+  - Technical Documentation:
+    - RAG Pipeline: rag-pipeline.md
+    - Settings Guide: settings-guide.md
+    - RAG Settings Guide: rag-settings-guide.md
 repo_url: https://github.com/DominikGorecki/vulcanlab
 edit_uri: edit/main/docs/src/

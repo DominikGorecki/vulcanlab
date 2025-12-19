@@ -26,5 +26,10 @@
   "logging": {
     "enabled": true,
     "log_dir": "logs"
+  },
+  "conversion": {
+    "token_threshold": 30000,
+    "advanced_mode_enabled": false,
+    "use_full_model": false
   }
 }
