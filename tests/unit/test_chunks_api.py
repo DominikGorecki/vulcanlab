@@ -3,6 +3,7 @@ Unit tests for chunks API endpoints.
 
 Tests request validation, response formatting, and error handling for:
 - GET /api/v1/chunks/search
+- GET /api/v1/chunks/{chunk_id}
 - GET /api/v1/chunks/{chunk_id}/descendants
 - DELETE /api/v1/chunks/{chunk_id}
 """
@@ -214,6 +215,84 @@ class TestSearchEndpoint:
         response = client.get("/api/v1/chunks/search?q=test&page=1")
 
         assert response.status_code == 500
+
+
+class TestGetChunkDetailEndpoint:
+    """Test suite for GET /api/v1/chunks/{chunk_id} endpoint."""
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    def test_get_chunk_success(self, mock_get_session):
+        """Test successful chunk retrieval returns 200 with full details."""
+        # Mock chunk
+        chunk = create_mock_chunk(
+            id=123,
+            content="This is the full content of the chunk without any truncation at all.",
+            heading_breadcrumbs="Chapter 1 > Introduction > Overview",
+            level="H3",
+            work_id=5,
+            start_line=42,
+            end_line=58
+        )
+
+        # Mock session and query
+        mock_session = MagicMock()
+        mock_query = mock_session.query.return_value
+        mock_query.filter.return_value.first.return_value = chunk
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        # Make request
+        response = client.get("/api/v1/chunks/123")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify response structure
+        assert data["id"] == 123
+        assert data["content"] == "This is the full content of the chunk without any truncation at all."
+        assert data["heading_breadcrumbs"] == "Chapter 1 > Introduction > Overview"
+        assert data["level"] == "H3"
+        assert data["work_id"] == 5
+        assert data["start_line"] == 42
+        assert data["end_line"] == 58
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    def test_get_chunk_not_found(self, mock_get_session):
+        """Test chunk not found returns 404."""
+        # Mock session - no chunk found
+        mock_session = MagicMock()
+        mock_query = mock_session.query.return_value
+        mock_query.filter.return_value.first.return_value = None
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        response = client.get("/api/v1/chunks/999")
+
+        assert response.status_code == 404
+        data = response.json()
+        assert "not found" in data["detail"].lower()
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    def test_get_chunk_invalid_id(self, mock_get_session):
+        """Test invalid chunk ID returns 422."""
+        # Chunk ID must be > 0
+        response = client.get("/api/v1/chunks/0")
+        assert response.status_code == 422
+
+        response = client.get("/api/v1/chunks/-1")
+        assert response.status_code == 422
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    def test_get_chunk_sqlalchemy_error(self, mock_get_session):
+        """Test SQLAlchemy error returns 500."""
+        # Mock session to raise error
+        mock_session = MagicMock()
+        mock_session.query.side_effect = SQLAlchemyError("Database error")
+        mock_get_session.return_value.__enter__.return_value = mock_session
+
+        response = client.get("/api/v1/chunks/123")
+
+        assert response.status_code == 500
+        data = response.json()
+        assert "Database error" in data["detail"]
 
 
 class TestDescendantsEndpoint:

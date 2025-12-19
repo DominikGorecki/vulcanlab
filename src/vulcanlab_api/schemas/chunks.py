@@ -199,6 +199,57 @@ class DescendantsResponse(BaseModel):
     )
 
 
+class ChunkDetailResponse(BaseModel):
+    """Response for chunk detail endpoint with full content."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 123,
+                "content": "This is the full content of the chunk without truncation...",
+                "heading_breadcrumbs": "Chapter 1 > Introduction > Overview",
+                "level": "H3",
+                "work_id": 5,
+                "start_line": 42,
+                "end_line": 58,
+            }
+        }
+    )
+
+    id: int = Field(
+        ...,
+        description="Chunk ID",
+        gt=0,
+    )
+    content: str = Field(
+        ...,
+        description="Full content of the chunk",
+    )
+    heading_breadcrumbs: str | None = Field(
+        default=None,
+        description="Breadcrumb trail of section headings (e.g., 'H1 > H2 > H3')",
+    )
+    level: str = Field(
+        ...,
+        description="Hierarchy level (H1, H2, H3, H4, H5, sentence, chunk)",
+    )
+    work_id: int = Field(
+        ...,
+        description="ID of the work this chunk belongs to",
+        gt=0,
+    )
+    start_line: int = Field(
+        ...,
+        description="Line number where chunk begins in markdown",
+        ge=0,
+    )
+    end_line: int = Field(
+        ...,
+        description="Line number where chunk ends in markdown",
+        ge=0,
+    )
+
+
 class ChunkDeleteResponse(BaseModel):
     """Response for chunk deletion endpoint."""
 

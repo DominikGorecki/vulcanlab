@@ -3,11 +3,13 @@ Chunks Router - API endpoints for chunk search and deletion.
 
 This router provides endpoints for:
 - Lexical search of chunks with title/content ranking
+- Retrieve full chunk details with complete content
 - Preview of chunk descendants before deletion
 - Cascading deletion of chunks with all descendants
 
 Endpoints:
     GET     /search                     - Search chunks with lexical matching
+    GET     /{chunk_id}                 - Get full chunk details with complete content
     GET     /{chunk_id}/descendants     - Get all descendants of a chunk
     DELETE  /{chunk_id}                 - Delete chunk and all descendants
 """
@@ -29,6 +31,7 @@ from vulcanlab_api.schemas.chunks import (
     PaginationInfo,
     DescendantsResponse,
     DescendantInfo,
+    ChunkDetailResponse,
     ChunkDeleteResponse,
 )
 
@@ -155,6 +158,88 @@ async def search_chunks(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during search: {str(e)}"
+        )
+
+
+@router.get(
+    "/{chunk_id}",
+    response_model=ChunkDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get chunk detail",
+    description="Retrieve full details of a specific chunk including complete content. "
+                "Used for viewing the entire chunk content in a modal.",
+    responses={
+        200: {
+            "description": "Chunk details with full content",
+            "model": ChunkDetailResponse,
+        },
+        404: {
+            "description": "Chunk not found",
+        },
+        500: {
+            "description": "Internal server error",
+        },
+    }
+)
+async def get_chunk_detail(
+    chunk_id: int = Path(
+        ...,
+        gt=0,
+        description="ID of the chunk to retrieve",
+        example=123,
+    ),
+) -> ChunkDetailResponse:
+    """
+    Get full details of a chunk.
+
+    Retrieves complete information about a specific chunk including the full
+    content (not truncated like in search results).
+
+    Args:
+        chunk_id: ID of the chunk to retrieve
+
+    Returns:
+        ChunkDetailResponse with full chunk details
+
+    Raises:
+        404: Chunk not found
+        500: Database error
+    """
+    try:
+        with get_session() as session:
+            # Query chunk
+            chunk = session.query(Chunk).filter(Chunk.id == chunk_id).first()
+            if chunk is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Chunk with id {chunk_id} not found"
+                )
+
+            # Return full chunk details
+            return ChunkDetailResponse(
+                id=chunk.id,
+                content=chunk.content,  # Full content, not truncated
+                heading_breadcrumbs=chunk.heading_breadcrumbs,
+                level=chunk.level,
+                work_id=chunk.work_id,
+                start_line=chunk.start_line,
+                end_line=chunk.end_line,
+            )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except SQLAlchemyError as e:
+        # Database error
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
+        )
+    except Exception as e:
+        # Generic error
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred: {str(e)}"
         )
 
 
