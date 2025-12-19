@@ -667,8 +667,8 @@ export default function CleanupPage() {
                 {/* Full Content */}
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-2">Content:</p>
-                  <ScrollArea className="h-[400px] rounded-md border p-4">
-                    <pre className="text-sm whitespace-pre-wrap font-sans">
+                  <ScrollArea className="h-[400px] rounded-md border p-4 break-words overflow-wrap-anywhere">
+                    <pre className="text-sm whitespace-pre-wrap font-sans break-words" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                       {viewChunkDetail.content}
                     </pre>
                   </ScrollArea>
@@ -677,7 +677,25 @@ export default function CleanupPage() {
             )}
           </div>
 
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-between pt-4">
+            <Button
+              onClick={() => {
+                if (viewChunkDetail) {
+                  // Close view modal
+                  setViewModalOpen(false);
+                  // Find the chunk in results to pass to delete handler
+                  const chunk = results.find(r => r.id === viewChunkDetail.id);
+                  if (chunk) {
+                    handleDeleteClick(chunk);
+                  }
+                }
+              }}
+              variant="destructive"
+              disabled={!viewChunkDetail}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Chunk
+            </Button>
             <Button onClick={handleCloseView} variant="outline">
               Close
             </Button>

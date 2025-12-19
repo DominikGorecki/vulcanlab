@@ -149,11 +149,11 @@ def get_all_descendants(chunk_id: int, session: Session) -> List[Chunk]:
 
 def delete_chunk_cascade(chunk_id: int, session: Session) -> int:
     """
-    Delete a chunk and all its descendants using database CASCADE.
+    Delete a chunk and all its descendants recursively.
 
-    The actual deletion of descendants is handled by the database CASCADE
-    constraint on the parent_id foreign key. This function verifies the chunk
-    exists, retrieves descendants for counting, and deletes the parent chunk.
+    Since self-referential CASCADE constraints may not work as expected,
+    this function explicitly deletes all descendants in bottom-up order
+    (deepest descendants first) to avoid constraint violations.
 
     Args:
         chunk_id: ID of the chunk to delete
@@ -167,7 +167,7 @@ def delete_chunk_cascade(chunk_id: int, session: Session) -> int:
 
     Note:
         Caller is responsible for committing the transaction.
-        Database CASCADE will automatically delete all descendants.
+        Descendants are explicitly deleted in reverse order (deepest first).
     """
     if session is None:
         raise ValueError("Session is required")
@@ -177,7 +177,7 @@ def delete_chunk_cascade(chunk_id: int, session: Session) -> int:
     if chunk is None:
         raise ValueError(f"Chunk with id {chunk_id} not found")
 
-    # Get all descendants for counting (before deletion)
+    # Get all descendants for counting and deletion (before deletion)
     descendants = get_all_descendants(chunk_id, session)
     descendant_count = len(descendants)
     total_count = 1 + descendant_count  # Parent + descendants
@@ -188,8 +188,12 @@ def delete_chunk_cascade(chunk_id: int, session: Session) -> int:
         f"(total: {total_count} chunks)"
     )
 
-    # Delete the parent chunk
-    # Database CASCADE constraint will automatically delete all descendants
+    # Delete descendants in reverse order (deepest first)
+    # This ensures we delete children before parents to avoid constraint issues
+    for descendant in reversed(descendants):
+        session.delete(descendant)
+
+    # Delete the parent chunk last
     session.delete(chunk)
 
     # Note: Commit is handled by the caller (session management pattern)

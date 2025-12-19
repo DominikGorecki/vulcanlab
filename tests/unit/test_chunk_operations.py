@@ -496,7 +496,10 @@ class TestDeleteChunkCascade:
 
         # Should return 4 (parent + 3 descendants)
         assert count == 4
-        mock_session.delete.assert_called_once_with(parent)
+        # All descendants should be deleted explicitly in reverse order, then parent
+        assert mock_session.delete.call_count == 4
+        expected_calls = [call(great_grandchild), call(grandchild), call(child), call(parent)]
+        mock_session.delete.assert_has_calls(expected_calls)
 
     def test_delete_leaf_node(self, mock_session):
         """Test deletion of chunk with no children."""
@@ -567,7 +570,7 @@ class TestDeleteChunkCascade:
         assert "total: 2" in log_message.lower()
 
     def test_cascade_behavior_verification(self, mock_session):
-        """Test that only parent delete is called (CASCADE handles rest)."""
+        """Test that all descendants are explicitly deleted in reverse order."""
         parent = create_mock_chunk(id=1)
         child = create_mock_chunk(id=2, parent_id=1)
         grandchild = create_mock_chunk(id=3, parent_id=2)
@@ -581,10 +584,12 @@ class TestDeleteChunkCascade:
 
         delete_chunk_cascade(1, mock_session)
 
-        # Only the parent should be explicitly deleted
-        # Database CASCADE will handle descendants
-        assert mock_session.delete.call_count == 1
-        mock_session.delete.assert_called_once_with(parent)
+        # All descendants should be explicitly deleted in reverse order, then parent
+        # This avoids issues with self-referential CASCADE constraints
+        assert mock_session.delete.call_count == 3
+        # Verify delete was called with grandchild first (deepest), then child, then parent
+        expected_calls = [call(grandchild), call(child), call(parent)]
+        mock_session.delete.assert_has_calls(expected_calls)
 
     def test_session_commit_not_called(self, mock_session):
         """Test that function doesn't commit (caller's responsibility)."""
