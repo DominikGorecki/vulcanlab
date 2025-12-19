@@ -89,35 +89,60 @@ VulcanLab follows a decoupled, three-tier architecture designed for modularity a
 
 **Stack**: Next.js 15+, TypeScript, TailwindCSS v4, Radix UI.
 
-### Standards
+### 4.1 Development Standards
 -   **Router**: Use the **App Router** (`src/app`).
--   **Styling**: Use **TailwindCSS** for utility classes. Avoid CSS Modules unless strictly necessary for complex animations.
+-   **Styling**: Use **TailwindCSS** for utility classes. Avoid CSS Modules.
 -   **Components**: Use **Shadcn/Radix** patterns for interactive UI elements.
-    - Use existing components whenever possible for things like buttons, cards, etc. as they are available in `vulcanlab_ui/src/components/ui/`.
-    - Create new components when necessary and add them to `vulcanlab_ui/src/components/ui/`.
-    - Navigation and higher level components like navigation is in `vulcanlab_ui/src/components/`.
-    - **Shared Component Library**: Use shared components from `vulcanlab_ui/src/components/` for common patterns:
-        - **PageLoadingState** - Standardized loading displays
-        - **PageErrorState** - Standardized error displays with retry
-        - **DataTable** - Generic tables with configurable columns and sorting
-        - **StatusBadge** - Universal status indicators
-        - **EmptyState** - Standardized empty states
-        - **PageHeader** / **StickyDetailHeader** - Consistent page headers
-        - **FormField** - Form fields with react-hook-form integration
-        - **ConfirmDialog** - Generic confirmation dialogs
-        - See `documentation/work/ui-component-standardization.spec.md` for complete component reference
--   **Custom Hooks**: Use shared hooks from `vulcanlab_ui/src/hooks/` for common patterns:
-    - **usePageData** - Data fetching with loading/error/retry states
-    - **useTable** - Table state management (sorting, selection)
-    - **useModal** - Modal open/close state management
--   **Forms**: Use **react-hook-form** for form validation following shadcn/ui patterns
-    - Keep validation lightweight - basic required/pattern checks
-    - Use FormField component wrapper for consistent styling and error display
-    - Reference: https://ui.shadcn.com/docs/components/form
+    - Base primitives (Button, Card, Input) are in `vulcanlab_ui/src/components/ui/`.
+    - Business-logic-aware or pattern-standardized components are in `vulcanlab_ui/src/components/`.
+-   **Forms**: Use **react-hook-form** with the `FormField` wrapper for all user input.
 -   **State Management**:
-    -   Prefer **React Server Components (RSC)** for initial data fetching.
-    -   Use **Client Components** (`"use client"`) only for interactivity (forms, buttons, real-time updates).
--   **API Integration**: Use a typed client or `fetch` wrappers that respect the API schema.
+    -   Prefer **React Server Components (RSC)** for initial data fetching where interactivity is not required.
+    -   Use **Client Components** (`"use client"`) for pages requiring state (forms, tables, real-time updates).
+
+### 4.2 UI Building Patterns
+For detailed component documentation and code examples, refer to: `documentation/work/ui-component-library-guide.md`.
+
+#### 1. Page Lifecycle Pattern
+All data-driven pages MUST follow the standardized fetching lifecycle using the `usePageData` hook and layout components:
+
+```tsx
+function MyPage() {
+  const { data, loading, error, refetch } = usePageData(fetchFn);
+
+  // 1. Loading State
+  if (loading) return <PageLoadingState title="Loading data..." />;
+
+  // 2. Error State
+  if (error) return <PageErrorState error={error} onRetry={refetch} />;
+
+  // 3. Empty State (optional but recommended)
+  if (!data || data.length === 0) return <EmptyState title="No items found" />;
+
+  // 4. Data State
+  return <DataTable data={data} columns={columns} />;
+}
+```
+
+#### 2. Component Composition Rules
+- **Props-In, Events-Out**: Components should be "pure" UI implementations that receive data via props and communicate via callbacks.
+- **Composition over Inheritance**: Build complex views by composing smaller, standardized components.
+- **Theme Awareness**: All UI code MUST be theme-aware (dark/light mode) by using Tailwind's semantic classes (e.g., `text-foreground`, `bg-card`).
+
+#### 3. Standard Layout Hierarchy
+- **List/Dashboard Pages**: Start with `PageHeader` + `StatsCardGrid` (if metrics available) + `DataTable`.
+- **Detail Pages**: Start with `StickyDetailHeader` + Content Cards.
+- **Modals/Dialogs**: Avoid inline `useState` for dialogs; use the `useModal` hook and `ConfirmDialog` for destructive actions.
+
+### 4.3 Component Library Reference
+| Pattern | Shared Component | Hook |
+| :--- | :--- | :--- |
+| **Data Fetching** | `PageLoadingState`, `PageErrorState` | `usePageData` |
+| **Tabular Data** | `DataTable`, `StatusBadge` | `useTable` (internal) |
+| **Navigation** | `PageHeader`, `StickyDetailHeader` | — |
+| **User Input** | `FormField`, `ConfirmDialog` | `useModal`, `react-hook-form` |
+| **Metrics** | `StatsCard`, `StatsCardGrid` | — |
+| **Misc** | `EmptyState` | — |
 
 ---
 

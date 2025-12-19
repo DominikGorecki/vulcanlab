@@ -7,7 +7,7 @@
 
 ## Goal
 
-* Migrate the root page, `/init`, and `/settings` pages to the shared component library.
+* Migrate the root page, `/init`, and `/settings` pages to use the shared component library.
 * Implement a global Error Boundary using `PageErrorState` to capture and display unhandled client-side crashes consistently.
 * Establish the pattern for `usePageData` and `react-hook-form` migration for subsequent batches.
 
