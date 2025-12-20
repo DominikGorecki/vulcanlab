@@ -7,7 +7,7 @@
 
 ## Goal
 
-* Standardize the remaining 15+ processing and utility pages (`/chunk`, `/vec`, `/cleanup`, `/sanitization`, `/conv`).
+* Standardize the remaining processing and utility pages (`/vec`, `/cleanup`, `/markdown` and its subpages).
 * Perform final cleanup by deleting deprecated components and resolving any remaining legacy UI patterns.
 * Ensure all 39 pages are fully integrated with the shared library.
 
@@ -16,13 +16,12 @@
 ### In scope
 
 * Refactoring all pages in:
-    * `/chunk` (chunking configuration and results)
     * `/vec` (vectorization status)
     * `/cleanup` (data cleanup utilities)
-    * `/sanitization` (data sanitization pipeline)
-    * `/conv` (conversion utilities)
+    * `/markdown` (including `/markdown/import`, `/markdown/export`, and all related subpages)
 * Deletion of `src/components/ConfirmDeleteModal.tsx`.
 * Deletion of `src/components/ErrorModal.tsx`.
+* **Important**: Before deleting any component, ensure it is not being imported or used anywhere in the UI.
 * Resolving any "TODO" or "Legacy" comments introduced during the migration.
 
 ### Out of scope
@@ -42,7 +41,7 @@
     * `PageHeader` for titles.
     * `DataTable` for summaries.
     * `FormField` for configuration parameters.
-* Audit all imports in `vulcanlab_ui` to ensure no references to `ConfirmDeleteModal` or `ErrorModal` remain.
+* Audit all imports in `vulcanlab_ui` to ensure no references to `ConfirmDeleteModal`, `ErrorModal`, or any other components marked for deletion remain (ensure they are not used anywhere in the UI before deletion).
 * Delete the deprecated files and their associated tests.
 * Perform a final styling pass to ensure Tailwind CSS v4 consistency across all 39 pages.
 * Patterns to apply:
@@ -69,7 +68,7 @@
 ## Manual verification
 
 * Steps:
-    * Smoke test of the utility pages (Chunking, Vectorization, Cleanup).
+    * Smoke test of the utility pages (Vectorization, Cleanup, Markdown).
     * Verify that deletion prompts everywhere use the new `ConfirmDialog` layout.
 * Expected results:
     * 100% component library adoption.

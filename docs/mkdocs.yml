@@ -1,5 +1,5 @@
 site_name: VulcanLab
-site_description: VulcanLab v0.3.0
+site_description: VulcanLab v0.4.0
 docs_dir: src                   # Source markdown files are in docs/src/
 site_dir: site                  # Build output goes to docs/site/
 theme:
