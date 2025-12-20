@@ -71,3 +71,6 @@ docker-test-remove/.env.docker
 # Claude and Cursor Rules
 .claude/
 .cursor/
+
+# Meta
+.VSCodeCounter/
