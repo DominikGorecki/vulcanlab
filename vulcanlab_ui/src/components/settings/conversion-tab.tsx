@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2Icon, CheckCircleIcon, AlertCircle } from "lucide-react";
+import { Loader2Icon, CheckCircleIcon } from "lucide-react";
 import { useConversionSettings } from "@/contexts/conversion-settings";
+import { usePageData } from "@/hooks";
+import { PageLoadingState, PageErrorState, FormField } from "@/components";
+import { useForm } from "react-hook-form";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -19,294 +22,108 @@ interface ConversionSettingsData {
 
 export function ConversionTab() {
   const { updateAdvancedMode } = useConversionSettings();
-  const [threshold, setThreshold] = useState<number>(15000);
-  const [advancedMode, setAdvancedMode] = useState<boolean>(false);
-  const [fullLLMMode, setFullLLMMode] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [saving, setSaving] = useState<boolean>(false);
-  const [savingToggle, setSavingToggle] = useState<boolean>(false);
-  const [savingFullLLM, setSavingFullLLM] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
-  const [toggleSaveSuccess, setToggleSaveSuccess] = useState<boolean>(false);
-  const [fullLLMSaveSuccess, setFullLLMSaveSuccess] = useState<boolean>(false);
-
-  // Load current settings on mount
-  useEffect(() => {
-    loadSettings();
+  
+  const fetchSettingsFn = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/api/conversion/settings`);
+    if (!response.ok) throw new Error(`Failed to load settings: ${response.statusText}`);
+    return response.json();
   }, []);
 
-  const loadSettings = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/conversion/settings`);
+  const { data, loading, error, refetch: loadSettings } = usePageData<ConversionSettingsData>(
+    fetchSettingsFn
+  );
 
-      if (!response.ok) {
-        throw new Error(`Failed to load settings: ${response.statusText}`);
-      }
+  const { register, handleSubmit, reset, watch, setValue, formState: { isDirty } } = useForm<ConversionSettingsData>();
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-      const data: ConversionSettingsData = await response.json();
-      setThreshold(data.token_threshold);
-      setAdvancedMode(data.advanced_mode_enabled ?? false);
-      setFullLLMMode(data.use_full_model ?? false);
-    } catch (err) {
-      console.error('Failed to load conversion settings:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load settings. Using default value.');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (data) {
+      reset(data);
     }
-  };
+  }, [data, reset]);
 
-  const saveSettings = async () => {
-    // Validate threshold
-    if (threshold <= 0) {
-      setError('Token threshold must be a positive number');
-      return;
-    }
+  const advancedMode = watch("advanced_mode_enabled");
+  const useFullModel = watch("use_full_model");
 
+  const onSave = async (formData: ConversionSettingsData) => {
     try {
       setSaving(true);
-      setError(null);
-      setSaveSuccess(false);
-
       const response = await fetch(`${API_BASE_URL}/api/conversion/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token_threshold: threshold,
-          advanced_mode_enabled: advancedMode,
-          use_full_model: fullLLMMode
-        }),
+        body: JSON.stringify(formData),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to save: ${response.statusText}`);
+        throw new Error(`Failed to save: ${response.statusText}`);
       }
 
+      const updated = await response.json();
+      updateAdvancedMode(updated.advanced_mode_enabled);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
-    } catch (err: any) {
-      console.error('Failed to save conversion settings:', err);
-      const message = err instanceof Error ? err.message : 'Failed to save settings';
-      setError(message);
+      loadSettings();
+    } catch (err) {
+      console.error(err);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value, 10);
-    if (!isNaN(value)) {
-      setThreshold(value);
-      setError(null);
-    }
-  };
-
-  const handleToggleChange = async (checked: boolean) => {
-    try {
-      setSavingToggle(true);
-      setError(null);
-      setToggleSaveSuccess(false);
-
-      const response = await fetch(`${API_BASE_URL}/api/conversion/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token_threshold: threshold,
-          advanced_mode_enabled: checked,
-          use_full_model: fullLLMMode
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to save: ${response.statusText}`);
-      }
-
-      setAdvancedMode(checked);
-      // Update context to immediately reflect in navigation
-      updateAdvancedMode(checked);
-      setToggleSaveSuccess(true);
-      setTimeout(() => setToggleSaveSuccess(false), 2000);
-    } catch (err: any) {
-      console.error('Failed to save advanced mode toggle:', err);
-      const message = err instanceof Error ? err.message : 'Failed to save toggle setting';
-      setError(message);
-    } finally {
-      setSavingToggle(false);
-    }
-  };
-
-  const handleFullLLMToggleChange = async (checked: boolean) => {
-    try {
-      setSavingFullLLM(true);
-      setError(null);
-      setFullLLMSaveSuccess(false);
-
-      const response = await fetch(`${API_BASE_URL}/api/conversion/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token_threshold: threshold,
-          advanced_mode_enabled: advancedMode,
-          use_full_model: checked
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to save: ${response.statusText}`);
-      }
-
-      setFullLLMMode(checked);
-      setFullLLMSaveSuccess(true);
-      setTimeout(() => setFullLLMSaveSuccess(false), 2000);
-    } catch (err: any) {
-      console.error('Failed to save full LLM mode toggle:', err);
-      const message = err instanceof Error ? err.message : 'Failed to save toggle setting';
-      setError(message);
-    } finally {
-      setSavingFullLLM(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoadingState />;
+  if (error) return <PageErrorState title="Conversion Settings Error" error={error} onRetry={loadSettings} />;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Conversion Settings</CardTitle>
         <CardDescription>
-          Configure settings for the simple conversion pipeline. The token
-          threshold determines whether a document is processed as &quot;small&quot;
-          (full LLM sanitization) or &quot;large&quot; (condensed heading extraction).
+          Configure settings for the simple conversion pipeline.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {error && (
-          <div className="flex items-center gap-2 text-destructive bg-destructive/10 border border-destructive/20 px-4 py-3 rounded-md text-sm">
-            <AlertCircle className="h-4 w-4" />
-            <span>{error}</span>
+        <div className="flex items-center justify-between pb-4 border-b">
+          <div className="space-y-1">
+            <Label className="text-base font-medium">Advanced Conversion</Label>
+            <p className="text-sm text-muted-foreground">Show advanced workflow pages in navigation</p>
           </div>
-        )}
-
-        {toggleSaveSuccess && (
-          <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 px-4 py-3 rounded-md text-sm">
-            <CheckCircleIcon className="h-4 w-4" />
-            <span>Advanced mode setting saved successfully</span>
-          </div>
-        )}
-
-        {fullLLMSaveSuccess && (
-          <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 px-4 py-3 rounded-md text-sm">
-            <CheckCircleIcon className="h-4 w-4" />
-            <span>Full LLM mode setting saved successfully</span>
-          </div>
-        )}
-
-        <div className="space-y-4 pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="advanced-mode" className="text-base font-medium">
-                Advanced Conversion
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Show advanced workflow pages (Conversion, Sanitization, Chunking) in navigation
-              </p>
-            </div>
-            <Switch
-              id="advanced-mode"
-              checked={advancedMode}
-              onCheckedChange={handleToggleChange}
-              disabled={savingToggle}
-            />
-          </div>
-          {savingToggle && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2Icon className="h-3 w-3 animate-spin" />
-              <span>Saving...</span>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-4 pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="full-llm-mode" className="text-base font-medium">
-                Simple Conversion - Full LLM Calls
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Use full LLM model tier instead of light for all simple conversion processing. Does not affect document classification (token threshold).
-              </p>
-            </div>
-            <Switch
-              id="full-llm-mode"
-              checked={fullLLMMode}
-              onCheckedChange={handleFullLLMToggleChange}
-              disabled={savingFullLLM}
-            />
-          </div>
-          {savingFullLLM && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2Icon className="h-3 w-3 animate-spin" />
-              <span>Saving...</span>
-            </div>
-          )}
-          {fullLLMMode && (
-            <div className="flex items-start gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-4 py-3 rounded-md text-sm">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <span>Enabling full LLM mode will use more expensive and slower models. This may increase processing time and costs.</span>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="token-threshold">Token Threshold</Label>
-          <Input
-            id="token-threshold"
-            type="number"
-            min="1"
-            step="1000"
-            value={threshold}
-            onChange={handleThresholdChange}
-            disabled={saving}
-            className="max-w-xs"
+          <Switch 
+            checked={advancedMode} 
+            onCheckedChange={(checked) => setValue("advanced_mode_enabled", checked, { shouldDirty: true })} 
           />
-          <p className="text-xs text-muted-foreground">
-            Documents with fewer tokens use full LLM sanitization. Documents above this threshold
-            use condensed heading extraction for processing.
-          </p>
         </div>
+
+        <div className="flex items-center justify-between pb-4 border-b">
+          <div className="space-y-1">
+            <Label className="text-base font-medium">Use Full LLM Models</Label>
+            <p className="text-sm text-muted-foreground">Use full model tier for all processing</p>
+          </div>
+          <Switch 
+            checked={useFullModel} 
+            onCheckedChange={(checked) => setValue("use_full_model", checked, { shouldDirty: true })} 
+          />
+        </div>
+
+        <FormField 
+          label="Token Threshold" 
+          description="Documents above this threshold use condensed extraction."
+        >
+          <Input 
+            type="number" 
+            min="1" 
+            step="1000" 
+            {...register("token_threshold", { valueAsNumber: true })} 
+          />
+        </FormField>
 
         <div className="flex items-center gap-3 pt-2">
-          <Button onClick={saveSettings} disabled={saving}>
-            {saving ? (
-              <>
-                <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                Saving...
-              </>
-            ) : saveSuccess ? (
-              <>
-                <CheckCircleIcon className="h-4 w-4 mr-2 text-emerald-500" />
-                Save Changes
-              </>
-            ) : (
-              "Save Changes"
-            )}
+          <Button onClick={handleSubmit(onSave)} disabled={saving || !isDirty}>
+            {saving ? <Loader2Icon className="h-4 w-4 animate-spin mr-2" /> : null}
+            {saveSuccess ? <CheckCircleIcon className="h-4 w-4 mr-2 text-emerald-500" /> : null}
+            Save Changes
           </Button>
-          <Button
-            variant="outline"
-            onClick={loadSettings}
-            disabled={saving || loading}
-          >
+          <Button variant="outline" onClick={() => reset()} disabled={saving || !isDirty}>
             Reset
           </Button>
         </div>

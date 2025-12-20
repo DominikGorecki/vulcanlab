@@ -89,6 +89,8 @@ class CorpusWorkListItem(BaseModel):
     id: int = Field(..., description="Work ID")
     title: str = Field(..., description="Work title")
     authors: Optional[str] = Field(None, description="Author(s)")
+    created_at: str = Field(..., description="Creation timestamp")
+    status: str = Field(..., description="Work status for UI badge")
 
 
 class CorpusWorksResponse(BaseModel):

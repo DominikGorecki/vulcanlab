@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2Icon, ChevronLeft } from "lucide-react";
+import { PageErrorState } from "@/components";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -76,26 +77,28 @@ export default function AutoRAGPage() {
     router.push("/rag");
   };
 
+  const handleRetry = () => {
+    if (queryText) {
+      runAutomation(queryText);
+    }
+  };
+
   // Show error state if no query text
   if (error && !queryText) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6">
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-            <Button
-              onClick={handleBackToQueries}
-              variant="outline"
-              className="mt-4 gap-2 w-full"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back to Queries
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center gap-4">
+          <PageErrorState 
+            error={error} 
+            title="Missing Query"
+          />
+          <Button
+            onClick={handleBackToQueries}
+            variant="outline"
+          >
+            Back to Queries
+          </Button>
+        </div>
       </div>
     );
   }
@@ -129,14 +132,23 @@ export default function AutoRAGPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
-              <Button
-                onClick={handleBackToQueries}
-                variant="outline"
-                className="gap-2 w-full"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Back to Queries
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleRetry}
+                  variant="default"
+                  className="flex-1"
+                >
+                  Retry
+                </Button>
+                <Button
+                  onClick={handleBackToQueries}
+                  variant="outline"
+                  className="gap-2 flex-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

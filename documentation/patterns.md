@@ -89,17 +89,68 @@ VulcanLab follows a decoupled, three-tier architecture designed for modularity a
 
 **Stack**: Next.js 15+, TypeScript, TailwindCSS v4, Radix UI.
 
-### Standards
+### 4.1 Development Standards
 -   **Router**: Use the **App Router** (`src/app`).
--   **Styling**: Use **TailwindCSS** for utility classes. Avoid CSS Modules unless strictly necessary for complex animations.
+-   **Styling**: Use **TailwindCSS** for utility classes. Avoid CSS Modules.
 -   **Components**: Use **Shadcn/Radix** patterns for interactive UI elements.
-    - Use existing components whenever possible for things like buttons, cards, etc. as they are available in `vulcanlab_ui/src/components/ui/`.
-    - Create new components when necessary and add them to `vulcanlab_ui/src/components/ui/`.
-    - Navigation and higher level components like navigation is in `vulcanlab_ui/src/components/`.
+    - Base primitives (Button, Card, Input) are in `vulcanlab_ui/src/components/ui/`.
+    - Business-logic-aware or pattern-standardized components are in `vulcanlab_ui/src/components/`.
+-   **Forms**: Use **react-hook-form** with the `FormField` wrapper for all user input.
 -   **State Management**:
-    -   Prefer **React Server Components (RSC)** for initial data fetching.
-    -   Use **Client Components** (`"use client"`) only for interactivity (forms, buttons, real-time updates).
--   **API Integration**: Use a typed client or `fetch` wrappers that respect the API schema.
+    -   Prefer **React Server Components (RSC)** for initial data fetching where interactivity is not required.
+    -   Use **Client Components** (`"use client"`) for pages requiring state (forms, tables, real-time updates).
+-   **Critical Rule: Avoid Infinite Rendering Loops**:
+    -   **ALWAYS** wrap fetch functions or complex objects in `useCallback` or `useMemo` when passed as dependencies to hooks (like `usePageData` or `useEffect`).
+    -   *Reason*: Inline functions are recreated on every render. If a hook uses that function as a dependency to trigger an update, it will cause an infinite rendering loop.
+
+### 4.2 UI Building Patterns
+For detailed component documentation and code examples, refer to: `documentation/work/ui-component-library-guide.md`.
+
+#### 1. Page Lifecycle Pattern
+All data-driven pages MUST follow the standardized fetching lifecycle using the `usePageData` hook and layout components. **Ensure fetch functions are memoized with `useCallback` to avoid infinite loops.**
+
+```tsx
+function MyPage() {
+  const fetchFn = useCallback(async () => {
+    const response = await fetch('/api/data');
+    return response.json();
+  }, []); // Add dependencies if needed
+
+  const { data, loading, error, refetch } = usePageData(fetchFn);
+
+  // 1. Loading State
+  if (loading) return <PageLoadingState title="Loading data..." />;
+
+  // 2. Error State
+  if (error) return <PageErrorState error={error} onRetry={refetch} />;
+
+  // 3. Empty State (optional but recommended)
+  if (!data || data.length === 0) return <EmptyState title="No items found" />;
+
+  // 4. Data State
+  return <DataTable data={data} columns={columns} />;
+}
+```
+
+#### 2. Component Composition Rules
+- **Props-In, Events-Out**: Components should be "pure" UI implementations that receive data via props and communicate via callbacks.
+- **Composition over Inheritance**: Build complex views by composing smaller, standardized components.
+- **Theme Awareness**: All UI code MUST be theme-aware (dark/light mode) by using Tailwind's semantic classes (e.g., `text-foreground`, `bg-card`).
+
+#### 3. Standard Layout Hierarchy
+- **List/Dashboard Pages**: Start with `PageHeader` + `StatsCardGrid` (if metrics available) + `DataTable`.
+- **Detail Pages**: Start with `StickyDetailHeader` + Content Cards.
+- **Modals/Dialogs**: Avoid inline `useState` for dialogs; use the `useModal` hook and `ConfirmDialog` for destructive actions.
+
+### 4.3 Component Library Reference
+| Pattern | Shared Component | Hook |
+| :--- | :--- | :--- |
+| **Data Fetching** | `PageLoadingState`, `PageErrorState` | `usePageData` |
+| **Tabular Data** | `DataTable`, `StatusBadge` | `useTable` (internal) |
+| **Navigation** | `PageHeader`, `StickyDetailHeader` | — |
+| **User Input** | `FormField`, `ConfirmDialog` | `useModal`, `react-hook-form` |
+| **Metrics** | `StatsCard`, `StatsCardGrid` | — |
+| **Misc** | `EmptyState` | — |
 
 ---
 

@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { GlobalErrorBoundary } from "@/components/global-error-boundary";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,13 +37,15 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          <div className="flex min-h-screen bg-background text-foreground">
-            <NavBar />
-            <main className="flex-1 p-8">
-              {children}
-            </main>
-          </div>
-          <Toaster />
+          <GlobalErrorBoundary>
+            <div className="flex min-h-screen bg-background text-foreground">
+              <NavBar />
+              <main className="flex-1 p-8">
+                {children}
+              </main>
+            </div>
+            <Toaster />
+          </GlobalErrorBoundary>
         </Providers>
       </body>
     </html>

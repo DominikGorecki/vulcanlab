@@ -27,12 +27,7 @@ global.fetch = mockFetch;
 describe('ManualWorkflowPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
     mockFetch.mockReset();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
   });
 
   const mockPromptLoad = () => {
@@ -58,7 +53,7 @@ describe('ManualWorkflowPage', () => {
         expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/api/simple-conversion/manual-prompt/123'));
         expect(screen.getByText('TEST PROMPT')).toBeInTheDocument();
         expect(screen.getByText('TEST INSTRUCTION')).toBeInTheDocument();
-        expect(screen.getByText('SMALL')).toBeInTheDocument();
+        expect(screen.getByText('small')).toBeInTheDocument();
     });
   });
 
@@ -67,6 +62,10 @@ describe('ManualWorkflowPage', () => {
 
     await act(async () => {
       render(<ManualWorkflowPage />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Copy to Clipboard')).toBeInTheDocument();
     });
 
     const copyBtn = screen.getByText('Copy to Clipboard');
@@ -103,10 +102,13 @@ describe('ManualWorkflowPage', () => {
       render(<ManualWorkflowPage />);
     });
 
-    const textarea = screen.getByPlaceholderText('Paste LLM response here (JSON format)...');
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Paste sanitized markdown here/i)).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText(/Paste sanitized markdown here/i);
     fireEvent.change(textarea, { target: { value: '{"foo":"bar"}' } });
     
-    // Have to select the manual tab content button
     const submitBtn = screen.getByText('Submit Response');
     fireEvent.click(submitBtn);
 
@@ -126,8 +128,10 @@ describe('ManualWorkflowPage', () => {
     mockPromptLoad();
     // Auto execute call
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-    // Poll status: complete
+    
+    // For polling, we'll use a real timer but speed it up if possible or just mock the status
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ step: 'complete' }) });
+    
     // Fetch result
     mockFetch.mockResolvedValueOnce({ 
       ok: true, 
@@ -146,28 +150,33 @@ describe('ManualWorkflowPage', () => {
       render(<ManualWorkflowPage />);
     });
 
-    // Switch to auto tab
-    const autoTab = screen.getByText('Option 2: Automatic Execution');
-    fireEvent.click(autoTab);
-
-    const autoBtn = screen.getByText('Run Automatically');
-    fireEvent.click(autoBtn);
-    
-    // Advance timer for polling
-    await act(async () => {
-        jest.advanceTimersByTime(2000);
+    await waitFor(() => {
+      expect(screen.getByText('Automatic Execution')).toBeInTheDocument();
     });
 
+    // Switch to auto tab
+    const autoTab = screen.getByRole('tab', { name: /Automatic Execution/i });
+    fireEvent.click(autoTab);
+    fireEvent.keyDown(autoTab, { key: ' ', code: 'Space' });
+
+    // Wait for the content to appear
+    const autoBtn = await screen.findByRole('button', { name: /Run Automatically/i }, { timeout: 5000 });
+    fireEvent.click(autoBtn);
+    
     await waitFor(() => {
        expect(mockFetch).toHaveBeenCalledWith(
            expect.stringContaining('/api/simple-conversion/execute-auto/123'),
            expect.objectContaining({ method: 'POST' })
        );
+    }, { timeout: 3000 });
+
+    await waitFor(() => {
        expect(screen.getByText('Success')).toBeInTheDocument();
-    });
+    }, { timeout: 5000 });
   });
 
   it('displays errors properly', async () => {
+    mockFetch.mockReset();
     mockFetch.mockRejectedValueOnce(new Error('Network blew up'));
 
     await act(async () => {
