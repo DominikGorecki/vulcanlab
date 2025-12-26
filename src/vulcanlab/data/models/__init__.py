@@ -9,6 +9,14 @@ from .parsed_markdown import ParsedMarkdown
 from .sanitized_markdown import SanitizedMarkdown
 from .heading_modifications import HeadingModification
 from .enums import FileType, DocumentClassification, ModificationAction
+from .experiment import (
+    Experiment,
+    ExperimentDimension,
+    ExperimentPrompt,
+    ExperimentAnswer,
+    ExperimentEvaluation,
+    ExperimentDimensionResult,
+)
 
 __all__ = [
     "Chunk",
@@ -22,4 +30,10 @@ __all__ = [
     "FileType",
     "DocumentClassification",
     "ModificationAction",
+    "Experiment",
+    "ExperimentDimension",
+    "ExperimentPrompt",
+    "ExperimentAnswer",
+    "ExperimentEvaluation",
+    "ExperimentDimensionResult",
 ]

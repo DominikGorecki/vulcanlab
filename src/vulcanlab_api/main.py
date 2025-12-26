@@ -30,6 +30,7 @@ from vulcanlab_api.routers import (
     conversion,
     conversion_settings,
     corpus,
+    eval,
     init,
     markdown,
     rag,
@@ -111,6 +112,10 @@ app = FastAPI(
             "name": "Chunks",
             "description": "Chunk management operations. Search, preview, and delete chunks with descendants.",
         },
+        {
+            "name": "Eval",
+            "description": "Evaluation experiments. Compare and evaluate LLM responses using blind testing and statistical analysis.",
+        },
     ],
     # Additional metadata
     contact={
@@ -146,6 +151,7 @@ app.include_router(rag_config.router, prefix="/api/rag-config", tags=["RAG Confi
 app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix
 app.include_router(markdown.router, prefix="/api/v1/markdown", tags=["Markdown"])
 app.include_router(chunks.router, prefix="/api/v1/chunks", tags=["Chunks"])
+app.include_router(eval.router, prefix="/api/v1/eval", tags=["Eval"])
 
 
 @app.get("/", include_in_schema=False)
