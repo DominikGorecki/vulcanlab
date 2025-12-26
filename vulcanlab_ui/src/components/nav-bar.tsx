@@ -5,12 +5,12 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2, Flask } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2, FlaskConical } from "lucide-react";
 import { useConversionSettings } from "@/contexts/conversion-settings";
 
 const navItems = [
   { href: "/rag", label: "Research (RAG)", icon: MessageSquare, alwaysVisible: true },
-  { href: "/eval", label: "Eval", icon: Flask, alwaysVisible: true },
+  { href: "/eval", label: "Eval", icon: FlaskConical, alwaysVisible: true },
   { href: "/corpus", label: "Corpus", icon: Database, alwaysVisible: true },
   { href: "/markdown/export", label: "MD Import/Export", icon: FileUp, alwaysVisible: true },
   { href: "/simple-conversion", label: "Simple Conversion", icon: Zap, alwaysVisible: true },

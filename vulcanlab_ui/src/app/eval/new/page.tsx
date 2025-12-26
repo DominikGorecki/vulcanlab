@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { ChevronLeft, Flask, Loader2 } from "lucide-react";
+import { ChevronLeft, FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components";
@@ -93,7 +93,7 @@ export default function NewExperimentPage() {
           Back to Experiments
         </Button>
         <div className="flex items-center gap-3 mb-2">
-          <Flask className="h-8 w-8 text-primary" />
+          <FlaskConical className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">New Experiment</h1>
         </div>
         <p className="text-muted-foreground">

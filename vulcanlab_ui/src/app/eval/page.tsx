@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Plus, Flask, Calendar, ListChecks } from "lucide-react";
+import { Plus, FlaskConical, Calendar, ListChecks } from "lucide-react";
 import {
   PageHeader,
   DataTable,
@@ -64,7 +64,7 @@ export default function EvalPage() {
         <PageHeader
           title="Evaluation Experiments"
           description="Compare and evaluate LLM responses using blind testing"
-          icon={<Flask className="h-6 w-6" />}
+          icon={<FlaskConical className="h-6 w-6" />}
           actions={
             <Button onClick={handleNewExperiment}>
               <Plus className="mr-2 h-4 w-4" />
@@ -75,14 +75,11 @@ export default function EvalPage() {
         <EmptyState
           title="No experiments yet"
           description="Create your first evaluation experiment to compare LLM responses"
-          icon={<Flask className="h-12 w-12" />}
-          actions={[
-            {
-              label: "New Experiment",
-              onClick: handleNewExperiment,
-              variant: "default",
-            },
-          ]}
+          icon={FlaskConical}
+          action={{
+            label: "New Experiment",
+            onClick: handleNewExperiment,
+          }}
         />
       </div>
     );
@@ -120,7 +117,7 @@ export default function EvalPage() {
       label: "Evaluations",
       render: (value) => (
         <div className="flex items-center gap-1">
-          <Flask className="h-4 w-4 text-muted-foreground" />
+          <FlaskConical className="h-4 w-4 text-muted-foreground" />
           <span>{value as number}</span>
         </div>
       ),
@@ -144,7 +141,7 @@ export default function EvalPage() {
       <PageHeader
         title="Evaluation Experiments"
         description="Compare and evaluate LLM responses using blind testing"
-        icon={<Flask className="h-6 w-6" />}
+        icon={<FlaskConical className="h-6 w-6" />}
         actions={
           <Button onClick={handleNewExperiment}>
             <Plus className="mr-2 h-4 w-4" />

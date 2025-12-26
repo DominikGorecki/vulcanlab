@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Flask, Trash2, Calendar, ListChecks, AlertCircle } from "lucide-react";
+import { FlaskConical, Trash2, Calendar, ListChecks, AlertCircle } from "lucide-react";
 import {
   StickyDetailHeader,
   PageLoadingState,
@@ -104,7 +104,7 @@ export default function ExperimentDetailPage({ params }: PageProps) {
       <StickyDetailHeader
         title={data.name}
         subtitle={`Created ${new Date(data.created_at).toLocaleDateString()}`}
-        icon={<Flask className="h-6 w-6" />}
+        icon={<FlaskConical className="h-6 w-6" />}
         backHref="/eval"
         backLabel="Back to Experiments"
         actions={[
