@@ -18,6 +18,7 @@ import {
   Plus,
   FastForward,
   Files,
+  Eye,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UpdateRetrieveConsolidateButton } from "@/components/rag/update-button";
@@ -400,6 +401,16 @@ export default function RAGPage() {
             title="View Results"
           >
             <Files className="h-3 w-3" />
+          </Button>
+          {/* Inspect */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => router.push(`/rag/${query.id}/inspect`)}
+            disabled={isDisabled}
+            title="Inspect"
+          >
+            <Eye className="h-3 w-3" />
           </Button>
           {/* Update R & C */}
           <UpdateRetrieveConsolidateButton
