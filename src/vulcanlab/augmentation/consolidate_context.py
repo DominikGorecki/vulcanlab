@@ -637,7 +637,9 @@ def consolidate_context(
         # Save to database
         context_data = []
         for group in groups:
+            work = works_map.get(group.work_id)
             context_data.append({
+                'id': group.chunk_ids[0] if group.chunk_ids else None,
                 'chunk_ids': group.chunk_ids,
                 'parent_id': group.parent_id,
                 'work_id': group.work_id,
@@ -645,7 +647,10 @@ def consolidate_context(
                 'start_line': group.start_line,
                 'end_line': group.end_line,
                 'score': group.score,
-                'heading_chain': group.heading_chain  # Store as list, not joined string
+                'heading_chain': group.heading_chain,  # Store as list, not joined string
+                'work_title': work.title if work else None,
+                'work_authors': work.authors if work else None,
+                'work_year': work.year if work else None
             })
 
         query.clean_retrieval_context = context_data

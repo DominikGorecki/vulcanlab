@@ -14,6 +14,7 @@ import {
   ArrowDown,
   Plus,
   Check,
+  ChevronRight,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
@@ -33,6 +34,10 @@ interface RetrievalContextItem {
   content: string;
   source?: string;
   score?: number;
+  heading_chain?: string[];
+  work_title?: string;
+  work_authors?: string;
+  work_year?: number;
   [key: string]: any;
 }
 
@@ -373,8 +378,37 @@ export default function InspectPage() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+                  {item.heading_chain && item.heading_chain.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">
+                      {item.heading_chain.map((h, i) => (
+                        <div key={i} className="flex items-center gap-1">
+                          {i > 0 && <ChevronRight className="h-3 w-3 opacity-50" />}
+                          <span>{h}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="max-h-[200px] overflow-y-auto border rounded p-2 bg-background text-sm">
                     <MarkdownRenderer content={item.content} />
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-border/40">
+                    {(item.work_title || item.work_authors || item.work_year) ? (
+                      <div className="text-[11px] text-muted-foreground italic flex flex-wrap gap-x-3 gap-y-1">
+                        {item.work_title && (
+                          <span className="font-semibold text-foreground/70">{item.work_title}</span>
+                        )}
+                        {item.work_authors && (
+                          <span>{item.work_authors}</span>
+                        )}
+                        {item.work_year && (
+                          <span>({item.work_year})</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-muted-foreground/50 italic">
+                        No source metadata available. Re-run consolidation to update.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

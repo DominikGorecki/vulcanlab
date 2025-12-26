@@ -51,6 +51,9 @@ class RetrievedChunk:
     start_line: int
     end_line: int
     level: str
+    work_title: str | None = None
+    work_authors: str | None = None
+    work_year: int | None = None
     heading_breadcrumbs: str | None = None
     dense_rank: int | None = None
     lexical_rank: int | None = None
@@ -1145,6 +1148,9 @@ def retrieve(
                 id=chunk.id,
                 parent_id=parent_id if is_enriched else chunk.parent_id,
                 work_id=chunk.work_id,
+                work_title=work.title if work else None,
+                work_authors=work.authors if work else None,
+                work_year=work.year if work else None,
                 content=chunk.content,
                 enriched_content=enriched,
                 start_line=start_line,
@@ -1238,6 +1244,9 @@ def retrieve(
                 "id": chunk.id,
                 "parent_id": chunk.parent_id,
                 "work_id": chunk.work_id,
+                "work_title": chunk.work_title,
+                "work_authors": chunk.work_authors,
+                "work_year": chunk.work_year,
                 "content": chunk.content,
                 "heading_breadcrumbs": chunk.heading_breadcrumbs,
                 "enriched_content": chunk.enriched_content,
