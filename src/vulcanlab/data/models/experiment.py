@@ -176,6 +176,11 @@ class ExperimentPrompt(Base):
         cascade="all, delete-orphan"
     )
 
+    @property
+    def updated_at(self) -> datetime:
+        """Provide updated_at as created_at for API compatibility."""
+        return self.created_at
+
     def __repr__(self) -> str:
         """String representation of ExperimentPrompt."""
         truncated = (
@@ -237,6 +242,21 @@ class ExperimentAnswer(Base):
         cascade="all, delete-orphan",
         uselist=False  # One-to-one relationship
     )
+
+    @property
+    def answer_a(self) -> str:
+        """Get answer mapped to position A (blind randomized)."""
+        return self.answer_x if self.is_x_mapped_to_a else self.answer_y
+
+    @property
+    def answer_b(self) -> str:
+        """Get answer mapped to position B (blind randomized)."""
+        return self.answer_y if self.is_x_mapped_to_a else self.answer_x
+
+    @property
+    def updated_at(self) -> datetime:
+        """Provide updated_at as created_at for API compatibility."""
+        return self.created_at
 
     def __repr__(self) -> str:
         """String representation of ExperimentAnswer."""

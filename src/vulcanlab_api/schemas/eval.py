@@ -73,3 +73,92 @@ class ExperimentListItem(BaseModel):
     eval_count: int = Field(0, description="Number of completed evaluations")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Prompt Schemas
+# ============================================================================
+
+class PromptCreate(BaseModel):
+    """Schema for creating a new prompt."""
+
+    prompt_text: str = Field(..., min_length=1, max_length=10000, description="The prompt text")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "prompt_text": "What is the capital of France?"
+            }
+        }
+    )
+
+
+class PromptResponse(BaseModel):
+    """Schema for prompt response."""
+
+    id: int
+    experiment_id: int
+    prompt_text: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PromptListItem(BaseModel):
+    """Schema for prompt in list view with eval count."""
+
+    id: int
+    experiment_id: int
+    prompt_text: str
+    created_at: datetime
+    eval_count: int = Field(0, description="Number of completed evaluations for this prompt")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Answer Schemas
+# ============================================================================
+
+class AnswerPairCreate(BaseModel):
+    """Schema for creating an answer pair."""
+
+    answer_x: str = Field(..., min_length=1, max_length=10000, description="Answer from model X")
+    answer_y: str = Field(..., min_length=1, max_length=10000, description="Answer from model Y")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "answer_x": "The capital of France is Paris.",
+                "answer_y": "Paris is the capital of France."
+            }
+        }
+    )
+
+
+class AnswerResponse(BaseModel):
+    """Schema for answer response."""
+
+    id: int
+    prompt_id: int
+    answer_x: str
+    answer_y: str
+    is_x_mapped_to_a: bool
+    answer_a: str
+    answer_b: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnswerListItem(BaseModel):
+    """Schema for answer in list view with evaluation status."""
+
+    id: int
+    prompt_id: int
+    created_at: datetime
+    has_evaluation: bool = Field(False, description="Whether this answer has been evaluated")
+
+    model_config = ConfigDict(from_attributes=True)
