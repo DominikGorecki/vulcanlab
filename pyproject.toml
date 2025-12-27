@@ -45,6 +45,7 @@ dependencies = [
 
     # Numerical
     "numpy",
+    "scipy",  # For statistical tests (Wilcoxon)
 
     # Testing
     "pytest",

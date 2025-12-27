@@ -2,7 +2,21 @@
 
 import { use, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical, Trash2, Calendar, ListChecks, AlertCircle, Plus, Send } from "lucide-react";
+import {
+  FlaskConical,
+  Trash2,
+  Calendar,
+  ListChecks,
+  AlertCircle,
+  Plus,
+  Send,
+  TrendingUp,
+  TrendingDown,
+  Target,
+  BarChart3,
+  Equal,
+  AlertTriangle,
+} from "lucide-react";
 import {
   StickyDetailHeader,
   PageLoadingState,
@@ -10,6 +24,7 @@ import {
   ConfirmDialog,
   EmptyState,
   DataTable,
+  StatsCardGrid,
   type DataTableColumn,
 } from "@/components";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +35,16 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface ExperimentStats {
+  eval_count: number;
+  x_win_rate: number;
+  mean_score: number;
+  median_score: number;
+  tie_percentage: number;
+  harm_rate: number;
+  wilcoxon_p_value: number | null;
+}
 
 interface ExperimentDetail {
   id: number;
@@ -32,6 +57,7 @@ interface ExperimentDetail {
   eval_template_id: number | null;
   created_at: string;
   updated_at: string;
+  stats?: ExperimentStats;
 }
 
 interface PromptListItem {
@@ -306,23 +332,88 @@ export default function ExperimentDetailPage({ params }: PageProps) {
           </CardContent>
         </Card>
 
-        {/* Stats Placeholder (T05) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Statistics</CardTitle>
-            <CardDescription>
-              Evaluation results and statistical analysis
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Statistical analysis will be available after evaluations are completed (T05).
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+        {/* Statistics */}
+        {data.stats && data.stats.eval_count > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Statistical Analysis</CardTitle>
+              <CardDescription>
+                Aggregate results from {data.stats.eval_count} evaluation
+                {data.stats.eval_count !== 1 ? "s" : ""}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <StatsCardGrid
+                stats={[
+                  {
+                    label: "Evaluations",
+                    value: data.stats.eval_count,
+                    icon: BarChart3,
+                  },
+                  {
+                    label: "X Win Rate",
+                    value: `${data.stats.x_win_rate.toFixed(1)}%`,
+                    icon: TrendingUp,
+                  },
+                  {
+                    label: "Mean Score",
+                    value: data.stats.mean_score.toFixed(2),
+                    icon: Target,
+                  },
+                  {
+                    label: "Median Score",
+                    value: data.stats.median_score.toFixed(2),
+                    icon: BarChart3,
+                  },
+                  {
+                    label: "Tie Rate",
+                    value: `${data.stats.tie_percentage.toFixed(1)}%`,
+                    icon: Equal,
+                  },
+                  {
+                    label: "Harm Rate",
+                    value: `${data.stats.harm_rate.toFixed(1)}%`,
+                    icon: data.stats.harm_rate > 50 ? AlertTriangle : TrendingDown,
+                  },
+                ]}
+              />
+              {data.stats.wilcoxon_p_value !== null && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      Wilcoxon Signed-Rank Test
+                    </span>
+                    <span className="text-sm font-mono">
+                      p = {data.stats.wilcoxon_p_value.toFixed(4)}
+                      {data.stats.wilcoxon_p_value < 0.05 && (
+                        <span className="ml-2 text-green-600 dark:text-green-500">
+                          (significant)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Statistics</CardTitle>
+              <CardDescription>
+                Evaluation results and statistical analysis
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Statistics will be available after evaluations are completed.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Prompts Section */}
         <Card>

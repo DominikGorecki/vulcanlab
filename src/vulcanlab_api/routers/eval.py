@@ -52,10 +52,12 @@ from vulcanlab.eval.evaluations import (
     submit_evaluation,
     delete_evaluation,
 )
+from vulcanlab.eval.statistics import compute_experiment_statistics
 from vulcanlab_api.schemas.eval import (
     ExperimentCreate,
     ExperimentResponse,
     ExperimentListItem,
+    ExperimentStats,
     PromptCreate,
     PromptResponse,
     PromptListItem,
@@ -130,14 +132,22 @@ async def list_experiments() -> List[ExperimentListItem]:
     "/experiments/{experiment_id}",
     response_model=ExperimentResponse,
     summary="Get experiment details",
-    description="Get detailed information about a specific experiment.",
+    description="Get detailed information about a specific experiment with statistical analysis.",
 )
 async def get_experiment(experiment_id: int) -> ExperimentResponse:
-    """Get experiment by ID."""
+    """Get experiment by ID with computed statistics."""
     try:
         with get_session() as session:
             experiment = get_experiment_by_id(session, experiment_id)
-            return ExperimentResponse.model_validate(experiment)
+
+            # Compute statistics
+            stats_dict = compute_experiment_statistics(session, experiment_id)
+
+            # Build response
+            response = ExperimentResponse.model_validate(experiment)
+            response.stats = ExperimentStats(**stats_dict)
+
+            return response
 
     except ValueError as e:
         raise HTTPException(
@@ -586,4 +596,42 @@ async def delete_evaluation_endpoint(evaluation_id: int):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete evaluation: {str(e)}"
+        )
+
+
+@router.get(
+    "/prompts/{prompt_id}/evaluations",
+    response_model=List[EvaluationResponse],
+    summary="List evaluations for prompt",
+    description="Get all evaluations for answers associated with a prompt.",
+)
+async def list_prompt_evaluations(prompt_id: int) -> List[EvaluationResponse]:
+    """List all evaluations for a prompt."""
+    try:
+        with get_session() as session:
+            # Verify prompt exists
+            get_prompt_by_id(session, prompt_id)
+
+            # Query evaluations for this prompt's answers
+            evaluations = (
+                session.query(ExperimentEvaluation)
+                .join(
+                    ExperimentAnswer,
+                    ExperimentEvaluation.answer_id == ExperimentAnswer.id,
+                )
+                .filter(ExperimentAnswer.prompt_id == prompt_id)
+                .order_by(ExperimentEvaluation.created_at.desc())
+                .all()
+            )
+
+            return [EvaluationResponse.model_validate(e) for e in evaluations]
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list evaluations: {str(e)}",
         )

@@ -44,6 +44,23 @@ class ExperimentCreate(BaseModel):
 # Response Schemas
 # ============================================================================
 
+class ExperimentStats(BaseModel):
+    """Schema for experiment statistics."""
+
+    eval_count: int = Field(0, description="Total number of completed evaluations")
+    x_win_rate: float = Field(0.0, description="Percentage where X > Y")
+    mean_score: float = Field(0.0, description="Mean unblinded score")
+    median_score: float = Field(0.0, description="Median unblinded score")
+    tie_percentage: float = Field(0.0, description="Percentage of ties (score = 0)")
+    harm_rate: float = Field(0.0, description="Percentage where X < Y (harm rate)")
+    wilcoxon_p_value: Optional[float] = Field(
+        None,
+        description="Wilcoxon signed-rank test p-value (None if N <= 1)"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ExperimentResponse(BaseModel):
     """Schema for experiment response."""
 
@@ -57,6 +74,7 @@ class ExperimentResponse(BaseModel):
     eval_template_id: Optional[int]
     created_at: datetime
     updated_at: datetime
+    stats: Optional[ExperimentStats] = None
 
     model_config = ConfigDict(from_attributes=True)
 
