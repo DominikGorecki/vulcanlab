@@ -47,6 +47,11 @@ from vulcanlab.eval.answers import (
     create_answer_pair,
     get_answers_by_prompt,
 )
+from vulcanlab.eval.evaluations import (
+    generate_eval_prompt,
+    submit_evaluation,
+    delete_evaluation,
+)
 from vulcanlab_api.schemas.eval import (
     ExperimentCreate,
     ExperimentResponse,
@@ -57,6 +62,9 @@ from vulcanlab_api.schemas.eval import (
     AnswerPairCreate,
     AnswerResponse,
     AnswerListItem,
+    EvaluationSubmitRequest,
+    EvaluationResponse,
+    EvalPromptResponse,
 )
 
 router = APIRouter()
@@ -440,10 +448,13 @@ async def list_prompt_answers(prompt_id: int) -> List[AnswerListItem]:
             # Verify prompt exists
             get_prompt_by_id(session, prompt_id)
 
-            # Query answers with evaluation status
+            # Query answers with evaluation status and ID
             answers = session.query(
                 ExperimentAnswer,
-                exists(select(1).where(ExperimentEvaluation.answer_id == ExperimentAnswer.id)).label('has_evaluation')
+                ExperimentEvaluation.id.label('evaluation_id')
+            ).outerjoin(
+                ExperimentEvaluation,
+                ExperimentAnswer.id == ExperimentEvaluation.answer_id
             ).filter(
                 ExperimentAnswer.prompt_id == prompt_id
             ).order_by(
@@ -452,12 +463,13 @@ async def list_prompt_answers(prompt_id: int) -> List[AnswerListItem]:
 
             # Convert to response schema
             result = []
-            for answer, has_eval in answers:
+            for answer, eval_id in answers:
                 result.append(AnswerListItem(
                     id=answer.id,
                     prompt_id=answer.prompt_id,
                     created_at=answer.created_at,
-                    has_evaluation=has_eval
+                    has_evaluation=eval_id is not None,
+                    evaluation_id=eval_id
                 ))
 
             return result
@@ -471,4 +483,107 @@ async def list_prompt_answers(prompt_id: int) -> List[AnswerListItem]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list answers: {str(e)}"
+        )
+
+
+# ============================================================================
+# Evaluation Endpoints (T04)
+# ============================================================================
+
+@router.get(
+    "/answers/{answer_id}/eval-prompt",
+    response_model=EvalPromptResponse,
+    summary="Generate evaluation prompt",
+    description="Generate an evaluation prompt for an answer pair with template resolution.",
+)
+async def get_evaluation_prompt(answer_id: int) -> EvalPromptResponse:
+    """Generate evaluation prompt for an answer pair."""
+    try:
+        with get_session() as session:
+            prompt = generate_eval_prompt(session, answer_id)
+            return EvalPromptResponse(prompt=prompt, answer_id=answer_id)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate evaluation prompt: {str(e)}"
+        )
+
+
+@router.post(
+    "/answers/{answer_id}/evaluation",
+    response_model=EvaluationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit evaluation",
+    description="Submit an evaluation for an answer pair with dimension scores.",
+)
+async def submit_answer_evaluation(
+    answer_id: int,
+    data: EvaluationSubmitRequest
+) -> EvaluationResponse:
+    """Submit an evaluation for an answer pair."""
+    try:
+        with get_session() as session:
+            evaluation = submit_evaluation(
+                session=session,
+                answer_id=answer_id,
+                overall_score=data.overall_score,
+                justification=data.justification,
+                dimension_scores=data.dimension_scores
+            )
+            session.commit()
+            session.refresh(evaluation)
+            return EvaluationResponse.model_validate(evaluation)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except IntegrityError as e:
+        # Check if it's duplicate evaluation
+        error_msg = str(e)
+        if "unique" in error_msg.lower() or "answer_id" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Answer {answer_id} has already been evaluated"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Integrity constraint violation: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to submit evaluation: {str(e)}"
+        )
+
+
+@router.delete(
+    "/evaluations/{evaluation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete evaluation",
+    description="Delete an evaluation and all associated dimension results (cascade).",
+)
+async def delete_evaluation_endpoint(evaluation_id: int):
+    """Delete an evaluation."""
+    try:
+        with get_session() as session:
+            delete_evaluation(session, evaluation_id)
+            session.commit()
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete evaluation: {str(e)}"
         )

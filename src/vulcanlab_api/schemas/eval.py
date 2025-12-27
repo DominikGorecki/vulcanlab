@@ -5,9 +5,9 @@ Defines request/response models with validation for evaluation experiments.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ============================================================================
@@ -160,5 +160,88 @@ class AnswerListItem(BaseModel):
     prompt_id: int
     created_at: datetime
     has_evaluation: bool = Field(False, description="Whether this answer has been evaluated")
+    evaluation_id: Optional[int] = Field(None, description="ID of evaluation if exists")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# Evaluation Schemas
+# ============================================================================
+
+class EvaluationSubmitRequest(BaseModel):
+    """Schema for submitting an evaluation."""
+
+    overall_score: int = Field(
+        ...,
+        ge=-10,
+        le=10,
+        description="Overall comparison score (-10 to 10)"
+    )
+    justification: Optional[str] = Field(
+        None,
+        max_length=10000,
+        description="Explanation of evaluation"
+    )
+    dimension_scores: Dict[str, int] = Field(
+        ...,
+        description="Dimension names mapped to scores (-10 to 10)"
+    )
+
+    @field_validator('dimension_scores')
+    @classmethod
+    def validate_dimension_scores(cls, v: Dict[str, int]) -> Dict[str, int]:
+        """Validate dimension scores are in valid range."""
+        for dim_name, score in v.items():
+            if not isinstance(dim_name, str) or not dim_name.strip():
+                raise ValueError("Dimension names must be non-empty strings")
+            if not isinstance(score, int):
+                raise ValueError(f"Score for '{dim_name}' must be an integer")
+            if not -10 <= score <= 10:
+                raise ValueError(
+                    f"Score for '{dim_name}' must be between -10 and 10, got {score}"
+                )
+        return v
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "overall_score": 5,
+                "justification": "Answer A provides more detailed explanation with examples.",
+                "dimension_scores": {
+                    "factual_correctness": 8,
+                    "completeness": 6,
+                    "clarity": 5
+                }
+            }
+        }
+    )
+
+
+class DimensionResultResponse(BaseModel):
+    """Schema for dimension result in evaluation response."""
+
+    dimension_name: str
+    score: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EvaluationResponse(BaseModel):
+    """Schema for evaluation response."""
+
+    id: int
+    answer_id: int
+    overall_score: int
+    justification: Optional[str]
+    dimension_results: list[DimensionResultResponse]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EvalPromptResponse(BaseModel):
+    """Schema for evaluation prompt response."""
+
+    prompt: str = Field(..., description="Resolved evaluation prompt")
+    answer_id: int = Field(..., description="ID of answer pair")

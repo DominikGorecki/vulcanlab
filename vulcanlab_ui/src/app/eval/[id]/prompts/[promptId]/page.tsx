@@ -2,7 +2,7 @@
 
 import { use, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Trash2, Calendar, Plus, AlertCircle } from "lucide-react";
+import { MessageSquare, Trash2, Calendar, Plus, AlertCircle, Copy, ClipboardPaste } from "lucide-react";
 import {
   StickyDetailHeader,
   PageLoadingState,
@@ -17,6 +17,7 @@ import { usePageData } from "@/hooks/use-page-data";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AddAnswersDialog } from "./add-answers-dialog";
+import { PasteResultDialog } from "./paste-result-dialog";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -42,6 +43,7 @@ interface AnswerListItem {
   prompt_id: number;
   created_at: string;
   has_evaluation: boolean;
+  evaluation_id?: number;
 }
 
 interface PageProps {
@@ -54,9 +56,75 @@ interface PageProps {
 interface AnswersTableProps {
   answers: AnswerListItem[];
   loading: boolean;
+  onEvaluationChange: () => void;
 }
 
-function AnswersTable({ answers, loading }: AnswersTableProps) {
+function AnswersTable({ answers, loading, onEvaluationChange }: AnswersTableProps) {
+  const { toast } = useToast();
+  const [copyingId, setCopyingId] = useState<number | null>(null);
+  const [pasteDialogAnswerId, setPasteDialogAnswerId] = useState<number | null>(null);
+  const [deleteEvalDialogOpen, setDeleteEvalDialogOpen] = useState(false);
+  const [deletingEvalId, setDeletingEvalId] = useState<number | null>(null);
+
+  const handleCopyPrompt = async (answerId: number) => {
+    setCopyingId(answerId);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/eval/answers/${answerId}/eval-prompt`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to generate evaluation prompt");
+      }
+
+      const data = await response.json();
+      await navigator.clipboard.writeText(data.prompt);
+
+      toast({
+        title: "Prompt copied",
+        description: "Evaluation prompt copied to clipboard",
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to copy prompt",
+        variant: "destructive",
+      });
+    } finally {
+      setCopyingId(null);
+    }
+  };
+
+  const handleDeleteEvaluation = async (evaluationId: number) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/eval/evaluations/${evaluationId}`,
+        { method: "DELETE" }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete evaluation");
+      }
+
+      toast({
+        title: "Evaluation deleted",
+        description: "The evaluation has been deleted successfully",
+      });
+
+      onEvaluationChange();
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to delete evaluation",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteEvalDialogOpen(false);
+      setDeletingEvalId(null);
+    }
+  };
+
   const columns: DataTableColumn<AnswerListItem>[] = [
     {
       key: "id",
@@ -87,19 +155,82 @@ function AnswersTable({ answers, loading }: AnswersTableProps) {
       sortable: true,
       className: "w-48",
     },
+    {
+      key: "actions",
+      header: "Actions",
+      cell: (answer) => (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleCopyPrompt(answer.id)}
+            disabled={answer.has_evaluation || copyingId === answer.id}
+          >
+            <Copy className="mr-2 h-3 w-3" />
+            {copyingId === answer.id ? "Copying..." : "Copy Eval Prompt"}
+          </Button>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => setPasteDialogAnswerId(answer.id)}
+            disabled={answer.has_evaluation}
+          >
+            <ClipboardPaste className="mr-2 h-3 w-3" />
+            Paste Result
+          </Button>
+          {answer.has_evaluation && answer.evaluation_id && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setDeletingEvalId(answer.evaluation_id!);
+                setDeleteEvalDialogOpen(true);
+              }}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
+        </div>
+      ),
+      className: "w-auto",
+    },
   ];
 
   return (
-    <DataTable
-      data={answers}
-      columns={columns}
-      loading={loading}
-      emptyState={{
-        title: "No answers yet",
-        description: "Add answer pairs to evaluate this prompt",
-        icon: MessageSquare,
-      }}
-    />
+    <>
+      <DataTable
+        data={answers}
+        columns={columns}
+        loading={loading}
+        emptyState={{
+          title: "No answers yet",
+          description: "Add answer pairs to evaluate this prompt",
+          icon: MessageSquare,
+        }}
+      />
+
+      {pasteDialogAnswerId !== null && (
+        <PasteResultDialog
+          open={pasteDialogAnswerId !== null}
+          onOpenChange={(open) => !open && setPasteDialogAnswerId(null)}
+          answerId={pasteDialogAnswerId}
+          onSuccess={() => {
+            setPasteDialogAnswerId(null);
+            onEvaluationChange();
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={deleteEvalDialogOpen}
+        onOpenChange={setDeleteEvalDialogOpen}
+        title="Delete Evaluation"
+        description="Are you sure you want to delete this evaluation? This action cannot be undone."
+        confirmLabel="Delete Evaluation"
+        variant="destructive"
+        onConfirm={() => deletingEvalId && handleDeleteEvaluation(deletingEvalId)}
+      />
+    </>
   );
 }
 
@@ -301,6 +432,7 @@ export default function PromptDetailPage({ params }: PageProps) {
               <AnswersTable
                 answers={answers || []}
                 loading={answersLoading}
+                onEvaluationChange={refetchAnswers}
               />
             )}
           </CardContent>
