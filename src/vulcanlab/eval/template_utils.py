@@ -6,11 +6,15 @@ with placeholder substitution.
 """
 
 import logging
+from sqlalchemy.orm import Session
+from typing import Optional
+
+from vulcanlab.data.models.prompt_template import PromptTemplate
 
 logger = logging.getLogger(__name__)
 
-# Hardcoded template for T04 - will be replaced with database templates in T06
-HARDCODED_EVAL_TEMPLATE = """Please evaluate the following pair of answers to the given prompt. Compare Answer A and Answer B based on the specified dimensions.
+# Fallback template if database lookup fails
+FALLBACK_EVAL_TEMPLATE = """Please evaluate the following pair of answers to the given prompt. Compare Answer A and Answer B based on the 5 core dimensions.
 
 PROMPT:
 {prompt}
@@ -21,17 +25,28 @@ ANSWER A:
 ANSWER B:
 {answer_b}
 
+REQUIRED DIMENSIONS:
+1. factual_correctness - Accuracy of information and facts
+2. completeness - Coverage of all relevant aspects
+3. coherence - Logical flow and organization
+4. hallucination_risk - Presence of unsupported or fabricated information
+5. academic_response - Appropriate academic tone and rigor
+
 Evaluate these answers and provide:
-1. An overall score from -10 to +10 (where -10 means B is much better, 0 means tie, +10 means A is much better)
-2. Scores for each dimension from -10 to +10 (same scale)
-3. A justification explaining your evaluation
+- An overall score from -10 to +10 (where -10 means B is much better, 0 means tie, +10 means A is much better)
+- Scores for each dimension from -10 to +10 (same scale)
+- A justification explaining your evaluation
 
 Respond with valid JSON in this exact format:
 {{
   "overall_score": <integer from -10 to 10>,
-  "justification": "<your explanation>",
+  "justification": "<your detailed explanation>",
   "dimension_scores": {{
-    "dimension_name": <integer from -10 to 10>
+    "factual_correctness": <integer from -10 to 10>,
+    "completeness": <integer from -10 to 10>,
+    "coherence": <integer from -10 to 10>,
+    "hallucination_risk": <integer from -10 to 10>,
+    "academic_response": <integer from -10 to 10>
   }}
 }}"""
 
@@ -84,11 +99,41 @@ def resolve_eval_template(
     return resolved
 
 
-def get_default_template() -> str:
+def get_default_template(session: Optional[Session] = None) -> str:
     """
-    Get the default hardcoded evaluation template.
+    Get the default evaluation template.
+
+    Attempts to load the default template from the database (function_tag='eval_default').
+    Falls back to a hardcoded template if database is unavailable or template not found.
+
+    Args:
+        session: Optional database session. If not provided, uses fallback template.
 
     Returns:
         Default evaluation template string.
     """
-    return HARDCODED_EVAL_TEMPLATE
+    if session:
+        try:
+            # Try to load eval_default template from database
+            template = session.query(PromptTemplate).filter(
+                PromptTemplate.function_tag == "eval_default",
+                PromptTemplate.is_active == True
+            ).order_by(PromptTemplate.version.desc()).first()
+
+            if template:
+                logger.info(
+                    f"Using default eval template from database: "
+                    f"function_tag='eval_default', version={template.version}, id={template.id}"
+                )
+                return template.template_content
+            else:
+                logger.warning(
+                    "Default eval template (function_tag='eval_default') not found in database. "
+                    "Using fallback template. Have you run the seed script?"
+                )
+        except Exception as e:
+            logger.error(f"Error loading default template from database: {e}. Using fallback.")
+    else:
+        logger.debug("No session provided to get_default_template(), using fallback template")
+
+    return FALLBACK_EVAL_TEMPLATE

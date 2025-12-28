@@ -26,8 +26,13 @@ class TestGenerateEvalPrompt:
 
     def test_generate_eval_prompt_success(self):
         """Test successful evaluation prompt generation."""
-        # Mock session
+        # Mock session with query for template (T06 update)
         session = Mock()
+
+        # Mock experiment without eval_template_id (will use default)
+        mock_experiment = Mock()
+        mock_experiment.id = 1
+        mock_experiment.eval_template_id = None
 
         # Mock answer with prompt relationship
         mock_answer = Mock(spec=ExperimentAnswer)
@@ -39,7 +44,15 @@ class TestGenerateEvalPrompt:
 
         mock_prompt = Mock(spec=ExperimentPrompt)
         mock_prompt.prompt_text = "Test prompt"
+        mock_prompt.experiment = mock_experiment
         mock_answer.prompt = mock_prompt
+
+        # Mock query for get_default_template() - no template in DB, will use fallback
+        mock_query = Mock()
+        session.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.first.return_value = None  # No default template in DB
 
         # Mock get_answer_by_id to return the answer
         def mock_get_answer(sess, ans_id):

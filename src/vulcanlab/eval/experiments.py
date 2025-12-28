@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from vulcanlab.data.models.experiment import Experiment
+from vulcanlab.eval.dimensions import create_dimensions_batch
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -26,7 +27,8 @@ def create_experiment(
     model_x: Optional[str] = None,
     model_y: Optional[str] = None,
     judge_model: Optional[str] = None,
-    eval_template_id: Optional[int] = None
+    eval_template_id: Optional[int] = None,
+    dimension_names: Optional[List[str]] = None
 ) -> Experiment:
     """
     Create a new evaluation experiment.
@@ -40,6 +42,7 @@ def create_experiment(
         model_y: Model name for answer set Y.
         judge_model: Model name used as evaluation judge.
         eval_template_id: Foreign key to prompt template (nullable).
+        dimension_names: List of dimension names (if None, uses defaults).
 
     Returns:
         Created Experiment object.
@@ -65,9 +68,45 @@ def create_experiment(
 
     try:
         session.add(experiment)
-        session.flush()  # Get the ID without committing
+        session.flush()  # Get the ID before creating dimensions
+
+        # Create dimensions - always include core 5, plus any additional ones
+        # Core dimensions are mandatory and always present
+        core_dimensions = [
+            "factual_correctness",
+            "completeness",
+            "coherence",
+            "hallucination_risk",
+            "academic_response"
+        ]
+
+        # If additional dimensions provided, append them (after validating no duplicates with core)
+        if dimension_names:
+            # Check for duplicates with core dimensions
+            additional_dims = []
+            for dim in dimension_names:
+                dim_lower = dim.strip().lower()
+                core_lower = [c.lower() for c in core_dimensions]
+                if dim_lower in core_lower:
+                    logger.warning(
+                        f"Skipping dimension '{dim}' as it duplicates a core dimension"
+                    )
+                else:
+                    additional_dims.append(dim.strip())
+
+            final_dimensions = core_dimensions + additional_dims
+        else:
+            final_dimensions = core_dimensions
+
+        create_dimensions_batch(
+            session=session,
+            experiment_id=experiment.id,
+            dimension_names=final_dimensions
+        )
+
         logger.info(
-            f"Created experiment: id={experiment.id}, name='{experiment.name}'"
+            f"Created experiment: id={experiment.id}, name='{experiment.name}', "
+            f"dimensions={len(final_dimensions)}"
         )
         return experiment
     except IntegrityError as e:

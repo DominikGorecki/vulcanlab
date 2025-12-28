@@ -16,8 +16,10 @@ from vulcanlab.data.models.experiment import (
     ExperimentEvaluation,
     ExperimentDimensionResult,
 )
+from vulcanlab.data.models.prompt_template import PromptTemplate
 from vulcanlab.eval.answers import get_answer_by_id
 from vulcanlab.eval.template_utils import resolve_eval_template, get_default_template
+from vulcanlab.eval.dimensions import get_dimension_names_set
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +51,34 @@ def generate_eval_prompt(session: Session, answer_id: int) -> str:
             "Delete the existing evaluation first."
         )
 
-    # Get prompt text (need to access through relationship)
+    # Get prompt text and experiment
     prompt_text = answer.prompt.prompt_text
+    experiment = answer.prompt.experiment
 
-    # Use hardcoded template for T04
-    # TODO: T06 - Load template from experiment.eval_template_id
-    template = get_default_template()
+    # Load eval template (T06)
+    if experiment.eval_template_id:
+        # Load template from database
+        template_obj = session.query(PromptTemplate).filter(
+            PromptTemplate.id == experiment.eval_template_id
+        ).first()
+
+        if not template_obj:
+            logger.warning(
+                f"Experiment {experiment.id} references eval_template_id "
+                f"{experiment.eval_template_id} but template not found. "
+                "Falling back to default."
+            )
+            template = get_default_template(session)
+        else:
+            template = template_obj.template_content
+            logger.info(
+                f"Using eval template id={experiment.eval_template_id} "
+                f"(function_tag='{template_obj.function_tag}') for experiment {experiment.id}"
+            )
+    else:
+        # Use default template from database (function_tag='eval_default')
+        template = get_default_template(session)
+        logger.info(f"Using default eval template for experiment {experiment.id}")
 
     # Resolve template with actual values (uses computed answer_a/answer_b)
     resolved = resolve_eval_template(
@@ -124,6 +148,34 @@ def submit_evaluation(
         if not isinstance(dim_name, str) or not dim_name.strip():
             raise ValueError(
                 f"Dimension name must be a non-empty string, got {dim_name}"
+            )
+
+    # Validate dimension scores against experiment config (T06)
+    experiment = answer.prompt.experiment
+    expected_dimensions = get_dimension_names_set(session, experiment.id)
+
+    if not expected_dimensions:
+        logger.warning(
+            f"Experiment {experiment.id} has no dimensions defined, "
+            "allowing any dimension scores"
+        )
+    else:
+        provided_dimensions = set(dimension_scores.keys())
+
+        # Check for missing required dimensions
+        missing = expected_dimensions - provided_dimensions
+        if missing:
+            raise ValueError(
+                f"Missing required dimensions: {', '.join(sorted(missing))}. "
+                f"Expected: {', '.join(sorted(expected_dimensions))}"
+            )
+
+        # Check for extra dimensions (lenient - log warning, allow)
+        extra = provided_dimensions - expected_dimensions
+        if extra:
+            logger.warning(
+                f"Evaluation for answer {answer_id} includes extra dimensions "
+                f"not in experiment config: {', '.join(sorted(extra))}. Allowing."
             )
 
     # Validate justification

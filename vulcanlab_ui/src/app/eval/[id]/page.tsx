@@ -46,6 +46,13 @@ interface ExperimentStats {
   wilcoxon_p_value: number | null;
 }
 
+interface ExperimentDimension {
+  id: number;
+  experiment_id: number;
+  dimension_name: string;
+  display_order: number;
+}
+
 interface ExperimentDetail {
   id: number;
   name: string;
@@ -57,6 +64,7 @@ interface ExperimentDetail {
   eval_template_id: number | null;
   created_at: string;
   updated_at: string;
+  dimensions: ExperimentDimension[];
   stats?: ExperimentStats;
 }
 
@@ -316,6 +324,26 @@ export default function ExperimentDetailPage({ params }: PageProps) {
                 {data.judge_model || <span className="text-muted-foreground italic">Not specified</span>}
               </p>
             </div>
+
+            {/* Evaluation Dimensions */}
+            {data.dimensions && data.dimensions.length > 0 && (
+              <div className="pt-4 border-t">
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">Evaluation Dimensions</h3>
+                <div className="flex flex-wrap gap-2">
+                  {data.dimensions.map((dimension) => (
+                    <div
+                      key={dimension.id}
+                      className="inline-flex items-center px-3 py-1.5 rounded-md bg-primary/10 text-primary text-sm font-mono"
+                    >
+                      {dimension.dimension_name}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {data.dimensions.length} dimension{data.dimensions.length !== 1 ? "s" : ""} configured for this experiment
+                </p>
+              </div>
+            )}
 
             <div className="pt-4 border-t">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

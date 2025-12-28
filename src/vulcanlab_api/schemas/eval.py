@@ -5,7 +5,7 @@ Defines request/response models with validation for evaluation experiments.
 """
 
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -24,6 +24,30 @@ class ExperimentCreate(BaseModel):
     model_y: Optional[str] = Field(None, max_length=100, description="Model name for answer set Y")
     judge_model: Optional[str] = Field(None, max_length=100, description="Model name for judge")
     eval_template_id: Optional[int] = Field(None, description="Template ID for evaluation prompts")
+    dimension_names: Optional[List[str]] = Field(
+        None,
+        min_length=1,
+        max_length=20,
+        description="Additional dimension names (core 5 always included)"
+    )
+
+    @field_validator('dimension_names')
+    @classmethod
+    def validate_dimension_names(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate dimension names."""
+        if v is None:
+            return v
+
+        # Check for empty strings
+        cleaned = [name.strip() for name in v]
+        if any(not name for name in cleaned):
+            raise ValueError("Dimension names cannot be empty strings")
+
+        # Check for duplicates
+        if len(cleaned) != len(set(cleaned)):
+            raise ValueError("Dimension names must be unique")
+
+        return cleaned
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -34,7 +58,8 @@ class ExperimentCreate(BaseModel):
                 "model_x": "gpt-4",
                 "model_y": "claude-sonnet-3.5",
                 "judge_model": "gpt-4o",
-                "eval_template_id": None
+                "eval_template_id": None,
+                "dimension_names": ["citation_quality", "academic_tone"]
             }
         }
     )
@@ -43,6 +68,17 @@ class ExperimentCreate(BaseModel):
 # ============================================================================
 # Response Schemas
 # ============================================================================
+
+class ExperimentDimensionResponse(BaseModel):
+    """Schema for experiment dimension response."""
+
+    id: int
+    experiment_id: int
+    dimension_name: str
+    display_order: int
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 class ExperimentStats(BaseModel):
     """Schema for experiment statistics."""
@@ -74,6 +110,7 @@ class ExperimentResponse(BaseModel):
     eval_template_id: Optional[int]
     created_at: datetime
     updated_at: datetime
+    dimensions: List[ExperimentDimensionResponse] = Field(default_factory=list)
     stats: Optional[ExperimentStats] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -142,8 +179,8 @@ class PromptListItem(BaseModel):
 class AnswerPairCreate(BaseModel):
     """Schema for creating an answer pair."""
 
-    answer_x: str = Field(..., min_length=1, max_length=10000, description="Answer from model X")
-    answer_y: str = Field(..., min_length=1, max_length=10000, description="Answer from model Y")
+    answer_x: str = Field(..., min_length=1, max_length=100000, description="Answer from model X")
+    answer_y: str = Field(..., min_length=1, max_length=100000, description="Answer from model Y")
 
     model_config = ConfigDict(
         json_schema_extra={

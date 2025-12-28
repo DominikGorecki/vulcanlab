@@ -25,6 +25,7 @@ class PromptTemplate(Base):
         version: Version number (starts at 1, auto-incremented)
         title: Human-readable title for this template version
         template_content: The template string with {variable} placeholders
+        template_type: Template category (e.g., 'rag', 'eval'), nullable for legacy
         is_active: Whether this version is currently active for its function
         created_at: Timestamp when created
         updated_at: Timestamp when last modified
@@ -37,6 +38,7 @@ class PromptTemplate(Base):
     version = Column(Integer, nullable=False)
     title = Column(String(255), nullable=False)
     template_content = Column(Text, nullable=False)
+    template_type = Column(String(50), nullable=True)  # Template category: rag, eval, etc.
     is_active = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))

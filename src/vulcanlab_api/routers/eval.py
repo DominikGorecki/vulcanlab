@@ -37,6 +37,7 @@ from vulcanlab.eval.experiments import (
     get_experiment_by_id,
     delete_experiment,
 )
+from vulcanlab.eval.dimensions import get_dimensions_by_experiment
 from vulcanlab.eval.prompts import (
     create_prompt,
     get_prompts_by_experiment,
@@ -57,6 +58,7 @@ from vulcanlab_api.schemas.eval import (
     ExperimentCreate,
     ExperimentResponse,
     ExperimentListItem,
+    ExperimentDimensionResponse,
     ExperimentStats,
     PromptCreate,
     PromptResponse,
@@ -143,9 +145,13 @@ async def get_experiment(experiment_id: int) -> ExperimentResponse:
             # Compute statistics
             stats_dict = compute_experiment_statistics(session, experiment_id)
 
+            # Get dimensions
+            dimensions = get_dimensions_by_experiment(session, experiment_id)
+
             # Build response
             response = ExperimentResponse.model_validate(experiment)
             response.stats = ExperimentStats(**stats_dict)
+            response.dimensions = [ExperimentDimensionResponse.model_validate(d) for d in dimensions]
 
             return response
 
@@ -184,11 +190,20 @@ async def create_new_experiment(data: ExperimentCreate) -> ExperimentResponse:
                 model_x=data.model_x,
                 model_y=data.model_y,
                 judge_model=data.judge_model,
-                eval_template_id=data.eval_template_id
+                eval_template_id=data.eval_template_id,
+                dimension_names=data.dimension_names
             )
             session.commit()
             session.refresh(experiment)
-            return ExperimentResponse.model_validate(experiment)
+
+            # Get dimensions for response
+            dimensions = get_dimensions_by_experiment(session, experiment.id)
+
+            # Build response
+            response = ExperimentResponse.model_validate(experiment)
+            response.dimensions = [ExperimentDimensionResponse.model_validate(d) for d in dimensions]
+
+            return response
 
     except ValueError as e:
         raise HTTPException(
@@ -233,6 +248,40 @@ async def delete_experiment_endpoint(experiment_id: int):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete experiment: {str(e)}"
+        )
+
+
+# ============================================================================
+# Dimension Endpoints (T06)
+# ============================================================================
+
+@router.get(
+    "/experiments/{experiment_id}/dimensions",
+    response_model=List[ExperimentDimensionResponse],
+    summary="Get experiment dimensions",
+    description="Get all evaluation dimensions for a specific experiment.",
+)
+async def get_experiment_dimensions(experiment_id: int) -> List[ExperimentDimensionResponse]:
+    """Get dimensions for an experiment."""
+    try:
+        with get_session() as session:
+            # Verify experiment exists
+            get_experiment_by_id(session, experiment_id)
+
+            # Get dimensions
+            dimensions = get_dimensions_by_experiment(session, experiment_id)
+
+            return [ExperimentDimensionResponse.model_validate(d) for d in dimensions]
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get dimensions: {str(e)}"
         )
 
 

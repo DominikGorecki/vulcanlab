@@ -4,10 +4,10 @@ API router for prompt template management.
 Provides CRUD endpoints for managing versioned prompt templates.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from typing import List
+from typing import List, Optional
 
 from vulcanlab.data.database import get_db_session
 from vulcanlab.data.models.prompt_template import PromptTemplate
@@ -28,14 +28,26 @@ router = APIRouter(prefix="/settings/templates", tags=["Settings"])
 
 
 @router.get("/", response_model=TemplateListResponse)
-def list_all_templates(session: Session = Depends(get_db_session)):
+def list_all_templates(
+    template_type: Optional[str] = Query(None, description="Filter by template type (rag, eval, etc.)"),
+    session: Session = Depends(get_db_session)
+):
     """List all template functions with version summaries.
 
     Returns a grouped list of all prompt templates organized by function tag,
     with summary information for each version including which version is active.
+
+    Args:
+        template_type: Optional filter by template category (e.g., 'eval', 'rag')
     """
     # Get all templates ordered by function_tag and version
-    all_templates = session.query(PromptTemplate).order_by(
+    query = session.query(PromptTemplate)
+
+    # Apply template_type filter if provided
+    if template_type:
+        query = query.filter(PromptTemplate.template_type == template_type)
+
+    all_templates = query.order_by(
         PromptTemplate.function_tag,
         desc(PromptTemplate.version)
     ).all()

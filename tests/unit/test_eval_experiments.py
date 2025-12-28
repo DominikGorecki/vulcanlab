@@ -44,9 +44,10 @@ class TestCreateExperiment:
         assert experiment.judge_model == "gpt-4o"
         assert experiment.eval_template_id == 1
 
-        # Verify session.add was called
-        mock_session.add.assert_called_once()
-        mock_session.flush.assert_called_once()
+        # Verify session.add was called (1 experiment + 5 core dimensions = 6 calls)
+        assert mock_session.add.call_count == 6
+        # Verify flush was called (1 for experiment + 5 for dimensions = 6 calls)
+        assert mock_session.flush.call_count == 6
 
     def test_create_experiment_minimal(self):
         """Test creating experiment with only required fields."""
@@ -65,8 +66,10 @@ class TestCreateExperiment:
         assert experiment.judge_model is None
         assert experiment.eval_template_id is None
 
-        mock_session.add.assert_called_once()
-        mock_session.flush.assert_called_once()
+        # Verify session.add was called (1 experiment + 5 core dimensions = 6 calls)
+        assert mock_session.add.call_count == 6
+        # Verify flush was called (1 for experiment + 5 for dimensions = 6 calls)
+        assert mock_session.flush.call_count == 6
 
     def test_create_experiment_strips_whitespace(self):
         """Test that whitespace is stripped from fields."""
