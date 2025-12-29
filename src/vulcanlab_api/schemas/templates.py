@@ -58,6 +58,7 @@ class PromptTemplateResponse(PromptTemplateBase):
 
     id: int
     version: int
+    template_type: Optional[str] = Field(None, description="Template category: rag, eval, or NULL for legacy")
     is_active: bool
     created_at: datetime
     updated_at: datetime

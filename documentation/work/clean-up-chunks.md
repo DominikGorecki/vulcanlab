@@ -1,6 +1,0 @@
-# Cleanup Chunks in the UI
-
-Goal: Give the user the ability to remove chunks they do not want to be considered for RAG (remove them from the DB). Provide a new page with a the nav link "Cleanup" that allows users to run a lexical search on the chunks, show the results paginated and allow the user to delete the chunk when the click on the garbage icon for that chunk. When that happens a warning modal should show up and list any chunks that have this chunk for a parent (the child chunks) because they will also be delete it. When the user deletes it, it should delete any child chunks down any level. That is, if a chunk has children multiple generations down, all those children should be deleted. We should not have any missing parents, so children MUST be deleted. We should unit test this functionality thoroughly because it's very important we don't end up with orphans. 
-
-Search functionality:
-Use lexical search on content the way it's setup now for RAG, but also search by keyword or match on title. That is, if I type in Reference, it should search the title as well. The results should be ordered based on the dense results, but show word matches on title first. 

@@ -1,7 +1,0 @@
-# Improve Chunk Searching
-
-When chunking, I want to to record the number of sentences in each **content chunk**. Then based on RAG Settings (a new property in the vulcan.config.json and exposed on `Settings > RAG Settings` page) the search (lexical and dense) will only consider those content chunks that are greater than the settings. There should be the ability to turn off this feature so that ALL settings a considered. There could be two now properties in the config-- "min_sentence_search: true | false" and "min_sentence_search_n: number". So if it's turned on the it's set to 5, the search will only consider the chunks that have at least 5 sentences. 
-
-Research how we determine sentences now--we do it somwhere and with a library, and we should use the same method. 
-
-This should update the settings and settings ui, as well as have a new migration in the migrations folder to include the new column in works as well any new indexes (*.sql) and update db_init.py for fresh installs (as is our current pattern so migrations do not need to be run for fresh installs). As well, we should update the content chunking procedure to count how many sentences are present. Then update the retrieval procedure to abide by the settings. Create a seperate migration python script that can be run to update the new row and count how many headings in existing content chunks (along with a runner). 

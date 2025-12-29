@@ -5,19 +5,20 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2 } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2, FlaskConical } from "lucide-react";
 import { useConversionSettings } from "@/contexts/conversion-settings";
 
 const navItems = [
   { href: "/rag", label: "Research (RAG)", icon: MessageSquare, alwaysVisible: true },
   { href: "/corpus", label: "Corpus", icon: Database, alwaysVisible: true },
-  { href: "/markdown/export", label: "MD Import/Export", icon: FileUp, alwaysVisible: true },
   { href: "/simple-conversion", label: "Simple Conversion", icon: Zap, alwaysVisible: true },
   { href: "/conv", label: "Conversion", icon: FileText, alwaysVisible: false },
   { href: "/sanitization", label: "Sanitization", icon: Eraser, alwaysVisible: false },
   { href: "/chunk", label: "Chunking", icon: Scissors, alwaysVisible: false },
   { href: "/vec", label: "Vectorization", icon: Braces, alwaysVisible: true },
   { href: "/cleanup", label: "Cleanup", icon: Trash2, alwaysVisible: true },
+  { href: "/eval", label: "Eval", icon: FlaskConical, alwaysVisible: true },
+  { href: "/markdown/export", label: "MD Import/Export", icon: FileUp, alwaysVisible: true },
   { href: "/settings", label: "Settings", icon: Settings, alwaysVisible: true },
 ];
 
@@ -46,7 +47,7 @@ export function NavBar() {
           />
           <h1 className="text-xl font-bold tracking-tight text-primary">VulcanLab</h1>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">v0.4.0</p>
+        <p className="text-xs text-muted-foreground mt-1">v0.5.1</p>
       </div>
       <div className="flex-1 px-4 py-2 space-y-1 overflow-y-auto max-h-[calc(100vh-6rem)]">
         {visibleNavItems.map((item) => {
