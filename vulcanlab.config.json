@@ -7,15 +7,15 @@
     "app_user": "psych_rag_app_user_test"
   },
   "llm": {
-    "provider": "gemini",
+    "provider": "openai",
     "models": {
       "openai": {
-        "light": "gpt-4o-mini",
-        "full": "gpt-4o"
+        "light": "gpt-5.2",
+        "full": "gpt-5.2-pro"
       },
       "gemini": {
         "light": "gemini-3-flash-preview",
-        "full": "gemini-3-flash-preview"
+        "full": "gemini-3-pro-preview"
       }
     }
   },

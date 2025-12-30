@@ -40,6 +40,9 @@ class TestExperimentCreation:
         assert experiment.model_y == "claude-sonnet-3.5"
         assert experiment.judge_model == "gpt-4o"
         assert experiment.eval_template_id is None
+        # Auto mode fields should have defaults (server_default only applies after commit)
+        assert experiment.auto_answer_provider is None
+        assert experiment.auto_judge_provider is None
 
     def test_create_experiment_minimal(self):
         """Test creating an Experiment with only name."""
@@ -510,3 +513,96 @@ class TestCascadeDeleteBehavior:
 
         # Verify relationship configuration
         assert len(evaluation.dimension_results) == 2
+
+
+class TestAutomaticModeFields:
+    """Test automatic evaluation mode fields (T01)."""
+
+    def test_create_experiment_with_auto_mode_enabled(self):
+        """Test creating experiment with automatic mode enabled."""
+        experiment = Experiment(
+            name="Auto Mode Test",
+            auto_mode_enabled=True,
+            auto_answer_provider="openai",
+            auto_judge_provider="gemini"
+        )
+
+        assert experiment.auto_mode_enabled is True
+        assert experiment.auto_answer_provider == "openai"
+        assert experiment.auto_judge_provider == "gemini"
+
+    def test_create_experiment_auto_mode_disabled(self):
+        """Test creating experiment with automatic mode disabled."""
+        experiment = Experiment(
+            name="Manual Mode Test",
+            auto_mode_enabled=False
+        )
+
+        assert experiment.auto_mode_enabled is False
+        assert experiment.auto_answer_provider is None
+        assert experiment.auto_judge_provider is None
+
+    def test_create_experiment_auto_mode_all_providers(self):
+        """Test both provider combinations work."""
+        # OpenAI answers, Gemini judges
+        exp1 = Experiment(
+            name="Test 1",
+            auto_mode_enabled=True,
+            auto_answer_provider="openai",
+            auto_judge_provider="gemini"
+        )
+        assert exp1.auto_answer_provider == "openai"
+        assert exp1.auto_judge_provider == "gemini"
+
+        # Gemini answers, OpenAI judges
+        exp2 = Experiment(
+            name="Test 2",
+            auto_mode_enabled=True,
+            auto_answer_provider="gemini",
+            auto_judge_provider="openai"
+        )
+        assert exp2.auto_answer_provider == "gemini"
+        assert exp2.auto_judge_provider == "openai"
+
+    def test_prompt_with_group_id(self):
+        """Test creating prompt with group_id for automatic mode."""
+        prompt = ExperimentPrompt(
+            experiment_id=1,
+            prompt_text="Main prompt",
+            prompt_group_id=1
+        )
+
+        assert prompt.prompt_group_id == 1
+
+    def test_prompt_without_group_id(self):
+        """Test creating prompt without group_id (manual mode)."""
+        prompt = ExperimentPrompt(
+            experiment_id=1,
+            prompt_text="Manual prompt"
+        )
+
+        assert prompt.prompt_group_id is None
+
+    def test_multiple_prompts_same_group_id(self):
+        """Test creating multiple prompts with same group_id."""
+        prompt_main = ExperimentPrompt(
+            experiment_id=1,
+            prompt_text="What is 2+2?",
+            prompt_group_id=1
+        )
+        prompt_x = ExperimentPrompt(
+            experiment_id=1,
+            prompt_text="Answer briefly",
+            prompt_group_id=1
+        )
+        prompt_y = ExperimentPrompt(
+            experiment_id=1,
+            prompt_text="Answer in detail",
+            prompt_group_id=1
+        )
+
+        assert prompt_main.prompt_group_id == 1
+        assert prompt_x.prompt_group_id == 1
+        assert prompt_y.prompt_group_id == 1
+        # All share same group_id
+        assert prompt_main.prompt_group_id == prompt_x.prompt_group_id == prompt_y.prompt_group_id

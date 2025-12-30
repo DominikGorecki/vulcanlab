@@ -18,9 +18,11 @@ Endpoints (T03):
     GET    /api/v1/eval/prompts/{id}/answers           - List answers for prompt
 """
 
+import logging
 from typing import List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, exists, select
 from sqlalchemy.exc import IntegrityError
 
@@ -52,14 +54,19 @@ from vulcanlab.eval.evaluations import (
     generate_eval_prompt,
     submit_evaluation,
     delete_evaluation,
+    export_experiment_evaluations_to_csv,
+    export_experiment_answers_to_jsonl,
 )
 from vulcanlab.eval.statistics import compute_experiment_statistics
+from vulcanlab.eval.auto_mode import validate_api_keys_for_auto_mode, get_opposite_provider
+from vulcanlab.eval.auto_eval import execute_automatic_eval
 from vulcanlab_api.schemas.eval import (
     ExperimentCreate,
     ExperimentResponse,
     ExperimentListItem,
     ExperimentDimensionResponse,
     ExperimentStats,
+    ExperimentUpdateRequest,
     PromptCreate,
     PromptResponse,
     PromptListItem,
@@ -69,7 +76,12 @@ from vulcanlab_api.schemas.eval import (
     EvaluationSubmitRequest,
     EvaluationResponse,
     EvalPromptResponse,
+    AutoEvalRequest,
+    AutoEvalResponse,
 )
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -164,6 +176,145 @@ async def get_experiment(experiment_id: int) -> ExperimentResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get experiment: {str(e)}"
+        )
+
+
+@router.patch(
+    "/experiments/{experiment_id}",
+    response_model=ExperimentResponse,
+    summary="Update experiment automatic mode settings",
+    description="Enable or disable automatic evaluation mode for an experiment.",
+)
+async def update_experiment(
+    experiment_id: int,
+    update_request: ExperimentUpdateRequest
+) -> ExperimentResponse:
+    """Update experiment automatic mode settings."""
+    try:
+        with get_session() as session:
+            # Get experiment
+            experiment = get_experiment_by_id(session, experiment_id)
+
+            # If enabling auto mode, validate API keys
+            if update_request.auto_mode_enabled:
+                is_valid, error_message = validate_api_keys_for_auto_mode()
+                if not is_valid:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=error_message
+                    )
+
+                # Set answer provider and judge provider (opposite of answer)
+                experiment.auto_mode_enabled = True
+                experiment.auto_answer_provider = update_request.auto_answer_provider
+                experiment.auto_judge_provider = get_opposite_provider(
+                    update_request.auto_answer_provider
+                )
+            else:
+                # Disable auto mode and clear providers
+                experiment.auto_mode_enabled = False
+                experiment.auto_answer_provider = None
+                experiment.auto_judge_provider = None
+
+            # Commit changes
+            session.commit()
+            session.refresh(experiment)
+
+            # Get dimensions for response
+            dimensions = get_dimensions_by_experiment(session, experiment_id)
+
+            # Compute statistics for response
+            stats_dict = compute_experiment_statistics(session, experiment_id)
+
+            # Build response
+            response = ExperimentResponse.model_validate(experiment)
+            response.stats = ExperimentStats(**stats_dict)
+            response.dimensions = [ExperimentDimensionResponse.model_validate(d) for d in dimensions]
+
+            return response
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        if "experiment" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e)
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update experiment: {str(e)}"
+        )
+
+
+@router.get(
+    "/experiments/{experiment_id}/export-csv",
+    summary="Export evaluations to CSV",
+    description="Download a CSV file containing all evaluations for a specific experiment.",
+)
+async def export_experiment_evaluations_csv(experiment_id: int) -> Response:
+    """Export evaluations for an experiment to CSV."""
+    try:
+        with get_session() as session:
+            csv_content = export_experiment_evaluations_to_csv(session, experiment_id)
+
+            return Response(
+                content=csv_content,
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": f"attachment; filename=experiment_{experiment_id}_evaluations.csv"
+                }
+            )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export CSV: {str(e)}"
+        )
+
+
+@router.get(
+    "/experiments/{experiment_id}/export-jsonl",
+    summary="Export answer pairs to JSONL",
+    description="Download a JSONL file containing answer pairs with completed evaluations.",
+)
+async def export_experiment_answers_jsonl(experiment_id: int) -> StreamingResponse:
+    """Export answer pairs for an experiment to JSONL."""
+    try:
+        with get_session() as session:
+            # Verify experiment exists first
+            get_experiment_by_id(session, experiment_id)
+
+            # Get the generator for streaming
+            jsonl_generator = export_experiment_answers_to_jsonl(session, experiment_id)
+
+            return StreamingResponse(
+                jsonl_generator,
+                media_type="application/x-ndjson",
+                headers={
+                    "Content-Disposition": f"attachment; filename=experiment_{experiment_id}_answers.jsonl"
+                }
+            )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export JSONL: {str(e)}"
         )
 
 
@@ -683,4 +834,60 @@ async def list_prompt_evaluations(prompt_id: int) -> List[EvaluationResponse]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list evaluations: {str(e)}",
+        )
+
+
+# ============================================================================
+# Automatic Evaluation Endpoints (T04)
+# ============================================================================
+
+@router.post(
+    "/experiments/{experiment_id}/prompts/auto-eval",
+    response_model=AutoEvalResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Execute automatic evaluation",
+    description="Run automatic evaluation workflow: generate answers, create prompts, and evaluate.",
+)
+async def execute_automatic_evaluation(
+    experiment_id: int,
+    data: AutoEvalRequest
+) -> AutoEvalResponse:
+    """Execute automatic evaluation workflow for an experiment."""
+    try:
+        with get_session() as session:
+            # Execute automatic evaluation in a transaction
+            result = execute_automatic_eval(
+                session=session,
+                experiment_id=experiment_id,
+                main_prompt_text=data.main_prompt_text,
+                answer_x_prompt_text=data.answer_x_prompt_text,
+                answer_y_prompt_text=data.answer_y_prompt_text
+            )
+
+            # Commit transaction
+            session.commit()
+
+            # Return response
+            return AutoEvalResponse(**result)
+
+    except ValueError as e:
+        # Handle validation errors (experiment not found, auto mode not enabled, etc.)
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_msg
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+    except Exception as e:
+        # Rollback transaction on any error
+        # (session context manager handles this, but explicit for clarity)
+        logger.error(f"Automatic evaluation failed for experiment {experiment_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Automatic evaluation failed: {str(e)}"
         )

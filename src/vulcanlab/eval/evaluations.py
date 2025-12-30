@@ -6,15 +6,19 @@ submitting evaluations, and managing evaluation lifecycle.
 """
 
 import logging
-from typing import Dict
+import csv
+import io
+import json
+from typing import Dict, List, Set, Generator
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
 from vulcanlab.data.models.experiment import (
     ExperimentAnswer,
     ExperimentEvaluation,
     ExperimentDimensionResult,
+    ExperimentPrompt,
 )
 from vulcanlab.data.models.prompt_template import PromptTemplate
 from vulcanlab.eval.answers import get_answer_by_id
@@ -245,4 +249,209 @@ def delete_evaluation(session: Session, evaluation_id: int) -> None:
     logger.info(
         f"Deleted evaluation: id={evaluation_id}, answer_id={answer_id}, "
         f"overall_score={overall_score} (cascade deleted dimension results)"
+    )
+
+
+def get_experiment_evaluation_data_for_export(
+    session: Session,
+    experiment_id: int
+) -> List[Dict]:
+    """
+    Retrieve all completed evaluation data for an experiment, structured for CSV export.
+
+    Assigns a stable grouping_id to each unique prompt based on its creation time.
+    Only returns evaluations that are linked to the specified experiment.
+
+    Args:
+        session: Database session.
+        experiment_id: ID of the experiment to export.
+
+    Returns:
+        List of dictionaries containing evaluation data and grouping_id.
+    """
+    # 1. Establish stable grouping_id for all prompts in this experiment
+    # Ordered by created_at (primary) and id (fallback)
+    prompts = (
+        session.query(ExperimentPrompt)
+        .filter(ExperimentPrompt.experiment_id == experiment_id)
+        .order_by(ExperimentPrompt.created_at.asc(), ExperimentPrompt.id.asc())
+        .all()
+    )
+
+    prompt_id_to_grouping_id = {
+        prompt.id: index + 1
+        for index, prompt in enumerate(prompts)
+    }
+
+    # 2. Query all evaluations for this experiment
+    # Joined with answer and prompt to filter by experiment_id and access prompt_id
+    evaluations = (
+        session.query(ExperimentEvaluation)
+        .join(ExperimentAnswer, ExperimentEvaluation.answer_id == ExperimentAnswer.id)
+        .join(ExperimentPrompt, ExperimentAnswer.prompt_id == ExperimentPrompt.id)
+        .filter(ExperimentPrompt.experiment_id == experiment_id)
+        .options(
+            joinedload(ExperimentEvaluation.dimension_results),
+            joinedload(ExperimentEvaluation.answer)
+        )
+        .all()
+    )
+
+    # 3. Format data for export
+    export_data = []
+    for evaluation in evaluations:
+        prompt = evaluation.answer.prompt
+        grouping_id = prompt_id_to_grouping_id.get(prompt.id)
+
+        # Skip if for some reason prompt_id not in mapping (shouldn't happen)
+        if grouping_id is None:
+            logger.warning(
+                f"Evaluation {evaluation.id} linked to prompt {prompt.id} "
+                f"which was not found in experiment {experiment_id} prompts."
+            )
+            continue
+
+        # Adjust scores based on blind mapping
+        # If is_x_mapped_to_a is True: A=X, B=Y. Scores are X relative to Y.
+        # If is_x_mapped_to_a is False: A=Y, B=X. Scores are Y relative to X.
+        # So if is_x_mapped_to_a is False, we must invert the scores to represent X vs Y.
+        multiplier = 1 if evaluation.answer.is_x_mapped_to_a else -1
+
+        row = {
+            "prompt": prompt.prompt_text,
+            "grouping_id": grouping_id,
+            "overall_score": evaluation.overall_score * multiplier,
+            "justification": evaluation.justification,
+            "dimension_scores": {
+                dr.dimension_name: dr.score * multiplier
+                for dr in evaluation.dimension_results
+            }
+        }
+        export_data.append(row)
+
+    logger.info(
+        f"Retrieved {len(export_data)} evaluations for export for "
+        f"experiment_id={experiment_id}"
+    )
+
+    return export_data
+
+
+def export_experiment_evaluations_to_csv(
+    session: Session,
+    experiment_id: int
+) -> str:
+    """
+    Export all completed evaluations for an experiment to a CSV string.
+
+    The CSV includes prompt text, grouping ID, overall score, dimension scores,
+    and justification. Dimension columns are generated dynamically.
+
+    Args:
+        session: Database session.
+        experiment_id: ID of the experiment to export.
+
+    Returns:
+        String containing the generated CSV data.
+    """
+    # 1. Retrieve the evaluation data
+    eval_data = get_experiment_evaluation_data_for_export(session, experiment_id)
+
+    if not eval_data:
+        logger.info(f"No evaluations found for experiment {experiment_id} export.")
+        # Return only the header if no data
+        return "prompt,grouping_id,overall_score,justification\n"
+
+    # 2. Collect all unique dimension names to define columns
+    dimension_names: Set[str] = set()
+    for row in eval_data:
+        dimension_names.update(row["dimension_scores"].keys())
+
+    sorted_dimensions = sorted(list(dimension_names))
+
+    # 3. Define CSV fieldnames (R1 order)
+    # prompt, grouping_id, overall_score, [dimensions...], justification
+    fieldnames = ["prompt", "grouping_id", "overall_score"]
+    fieldnames.extend(sorted_dimensions)
+    fieldnames.append("justification")
+
+    # 4. Generate CSV content
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fieldnames, quoting=csv.QUOTE_MINIMAL)
+    writer.writeheader()
+
+    for row in eval_data:
+        # Flatten the row for DictWriter
+        csv_row = {
+            "prompt": row["prompt"],
+            "grouping_id": row["grouping_id"],
+            "overall_score": row["overall_score"],
+            "justification": row["justification"]
+        }
+        # Add dimension scores (missing dimensions will be blank)
+        for dim in sorted_dimensions:
+            csv_row[dim] = row["dimension_scores"].get(dim, "")
+
+        writer.writerow(csv_row)
+
+    csv_string = output.getvalue()
+    output.close()
+
+    logger.info(
+        f"Generated CSV export for experiment {experiment_id} "
+        f"({len(eval_data)} rows, {len(csv_string)} bytes)"
+    )
+
+    return csv_string
+
+
+def export_experiment_answers_to_jsonl(
+    session: Session,
+    experiment_id: int
+) -> Generator[str, None, None]:
+    """
+    Export answer pairs with completed evaluations to JSONL format.
+
+    Generates one JSON object per line (newline-delimited JSON) containing
+    prompt_text, answer_x, and answer_y for each answer pair that has been
+    evaluated. Uses a generator pattern for memory-efficient streaming.
+
+    Args:
+        session: Database session.
+        experiment_id: ID of the experiment to export.
+
+    Yields:
+        JSONL lines (each line is a JSON object followed by newline).
+
+    Example output:
+        {"prompt_text":"...", "answer_x":"...", "answer_y":"..."}\n
+        {"prompt_text":"...", "answer_x":"...", "answer_y":"..."}\n
+    """
+    # Query answer pairs with completed evaluations
+    # Join Answer -> Prompt -> Evaluation to filter by experiment and evaluation existence
+    answer_pairs = (
+        session.query(ExperimentAnswer, ExperimentPrompt)
+        .join(ExperimentPrompt, ExperimentAnswer.prompt_id == ExperimentPrompt.id)
+        .join(ExperimentEvaluation, ExperimentAnswer.id == ExperimentEvaluation.answer_id)
+        .filter(ExperimentPrompt.experiment_id == experiment_id)
+        .order_by(ExperimentPrompt.created_at.asc(), ExperimentAnswer.id.asc())
+        .all()
+    )
+
+    record_count = 0
+    for answer, prompt in answer_pairs:
+        record = {
+            "prompt_text": prompt.prompt_text,
+            "answer_x": answer.answer_x,
+            "answer_y": answer.answer_y
+        }
+
+        # Serialize to JSON with Unicode support, append newline for JSONL format
+        jsonl_line = json.dumps(record, ensure_ascii=False) + "\n"
+        yield jsonl_line
+        record_count += 1
+
+    logger.info(
+        f"Generated JSONL export for experiment {experiment_id} "
+        f"({record_count} records)"
     )
