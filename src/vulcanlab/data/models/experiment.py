@@ -40,6 +40,9 @@ class Experiment(Base):
         model_y: Model name used for answer set Y.
         judge_model: Model name used as the evaluation judge.
         eval_template_id: Foreign key to prompt template used for evaluation.
+        auto_mode_enabled: Whether automatic evaluation mode is enabled.
+        auto_answer_provider: Provider for answer generation (openai or gemini).
+        auto_judge_provider: Provider for judge evaluation (opposite of answer provider).
         created_at: Timestamp when experiment was created.
         updated_at: Timestamp when experiment was last updated.
     """
@@ -58,6 +61,13 @@ class Experiment(Base):
         nullable=True,  # Nullable until T06 integrates with templates
         index=True
     )
+    auto_mode_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false"
+    )
+    auto_answer_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    auto_judge_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP,
         server_default=func.current_timestamp(),
@@ -146,6 +156,7 @@ class ExperimentPrompt(Base):
         id: Primary key.
         experiment_id: Foreign key to parent experiment.
         prompt_text: The actual prompt/question text.
+        prompt_group_id: Groups related prompts (main, answer_x, answer_y) in automatic mode.
         created_at: Timestamp when prompt was added.
     """
 
@@ -159,6 +170,7 @@ class ExperimentPrompt(Base):
         index=True
     )
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_group_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP,
         server_default=func.current_timestamp(),

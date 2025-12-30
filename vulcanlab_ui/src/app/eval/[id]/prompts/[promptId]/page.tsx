@@ -2,7 +2,7 @@
 
 import { use, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Trash2, Calendar, Plus, AlertCircle, Copy, ClipboardPaste } from "lucide-react";
+import { MessageSquare, Trash2, Calendar, Plus, AlertCircle, Copy, ClipboardPaste, Sparkles } from "lucide-react";
 import {
   StickyDetailHeader,
   PageLoadingState,
@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AddAnswersDialog } from "./add-answers-dialog";
 import { PasteResultDialog } from "./paste-result-dialog";
+import { NewEvalDialog } from "./new-eval-dialog";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -36,6 +37,9 @@ interface ExperimentDetail {
   description_y: string | null;
   model_x: string | null;
   model_y: string | null;
+  auto_mode_enabled: boolean;
+  auto_answer_provider: string | null;
+  auto_judge_provider: string | null;
 }
 
 interface AnswerListItem {
@@ -240,6 +244,7 @@ export default function PromptDetailPage({ params }: PageProps) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addAnswersDialogOpen, setAddAnswersDialogOpen] = useState(false);
+  const [newEvalDialogOpen, setNewEvalDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const fetchPrompt = useCallback(async () => {
@@ -336,13 +341,23 @@ export default function PromptDetailPage({ params }: PageProps) {
         backLabel="Back to Experiment"
         actions={
           <>
-            <Button
-              variant="default"
-              onClick={() => setAddAnswersDialogOpen(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Answers
-            </Button>
+            {experiment.auto_mode_enabled ? (
+              <Button
+                variant="default"
+                onClick={() => setNewEvalDialogOpen(true)}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                New Eval
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                onClick={() => setAddAnswersDialogOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Answers
+              </Button>
+            )}
             <Button
               variant="destructive"
               onClick={() => setDeleteDialogOpen(true)}
@@ -457,6 +472,14 @@ export default function PromptDetailPage({ params }: PageProps) {
         promptText={prompt.prompt_text}
         descriptionX={experiment.description_x || "Answer X"}
         descriptionY={experiment.description_y || "Answer Y"}
+        onSuccess={handleAnswersAdded}
+      />
+
+      <NewEvalDialog
+        open={newEvalDialogOpen}
+        onOpenChange={setNewEvalDialogOpen}
+        experimentId={parseInt(experimentId)}
+        promptText={prompt.prompt_text}
         onSuccess={handleAnswersAdded}
       />
     </div>

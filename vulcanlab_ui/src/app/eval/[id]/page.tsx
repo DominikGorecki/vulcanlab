@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   FlaskConical,
   Trash2,
+  Download,
   Calendar,
   ListChecks,
   AlertCircle,
@@ -33,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePageData } from "@/hooks/use-page-data";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AutoModeToggle } from "./auto-mode-toggle";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -62,6 +64,9 @@ interface ExperimentDetail {
   model_y: string | null;
   judge_model: string | null;
   eval_template_id: number | null;
+  auto_mode_enabled: boolean;
+  auto_answer_provider: string | null;
+  auto_judge_provider: string | null;
   created_at: string;
   updated_at: string;
   dimensions: ExperimentDimension[];
@@ -86,9 +91,10 @@ interface PromptsTableProps {
   prompts: PromptListItem[];
   loading: boolean;
   onPromptClick: (prompt: PromptListItem) => void;
+  onDeletePrompt: (prompt: PromptListItem) => void;
 }
 
-function PromptsTable({ prompts, loading, onPromptClick }: PromptsTableProps) {
+function PromptsTable({ prompts, loading, onPromptClick, onDeletePrompt }: PromptsTableProps) {
   const columns: DataTableColumn<PromptListItem>[] = [
     {
       key: "prompt_text",
@@ -118,6 +124,24 @@ function PromptsTable({ prompts, loading, onPromptClick }: PromptsTableProps) {
       sortable: true,
       className: "w-40",
     },
+    {
+      key: "actions",
+      header: "",
+      cell: (prompt) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeletePrompt(prompt);
+          }}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      ),
+      className: "w-12",
+    },
   ];
 
   return (
@@ -141,8 +165,13 @@ export default function ExperimentDetailPage({ params }: PageProps) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportingJsonl, setExportingJsonl] = useState(false);
   const [promptText, setPromptText] = useState("");
   const [submittingPrompt, setSubmittingPrompt] = useState(false);
+  const [promptToDelete, setPromptPromptToDelete] = useState<PromptListItem | null>(null);
+  const [deletePromptDialogOpen, setDeletePromptDialogOpen] = useState(false);
+  const [deletingPrompt, setDeletingPrompt] = useState(false);
 
   const fetchData = useCallback(async () => {
     const response = await fetch(`${API_BASE_URL}/api/v1/eval/experiments/${id}`);
@@ -172,6 +201,66 @@ export default function ExperimentDetailPage({ params }: PageProps) {
   }, [id]);
 
   const { data: prompts, loading: promptsLoading, error: promptsError, refetch: refetchPrompts } = usePageData<PromptListItem[]>(fetchPrompts);
+
+  const handleExportCSV = () => {
+    setExporting(true);
+    try {
+      const url = `${API_BASE_URL}/api/v1/eval/experiments/${id}/export-csv`;
+
+      // Create a temporary link and trigger download
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `experiment_${id}_evaluations.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Export started",
+        description: "Your CSV export is being generated and will download shortly.",
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to start export.",
+        variant: "destructive",
+      });
+    } finally {
+      // We set exporting to false after a short delay since the browser download
+      // doesn't give us a callback when finished.
+      setTimeout(() => setExporting(false), 2000);
+    }
+  };
+
+  const handleExportJsonl = () => {
+    setExportingJsonl(true);
+    try {
+      const url = `${API_BASE_URL}/api/v1/eval/experiments/${id}/export-jsonl`;
+
+      // Create a temporary link and trigger download
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `experiment_${id}_answers.jsonl`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Export started",
+        description: "Your JSONL export is being generated and will download shortly.",
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to start export.",
+        variant: "destructive",
+      });
+    } finally {
+      // We set exportingJsonl to false after a short delay since the browser download
+      // doesn't give us a callback when finished.
+      setTimeout(() => setExportingJsonl(false), 2000);
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -252,6 +341,38 @@ export default function ExperimentDetailPage({ params }: PageProps) {
     router.push(`/eval/${id}/prompts/${prompt.id}`);
   };
 
+  const handleDeletePrompt = async () => {
+    if (!promptToDelete) return;
+
+    setDeletingPrompt(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/eval/prompts/${promptToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete prompt");
+      }
+
+      toast({
+        title: "Prompt deleted",
+        description: "The prompt and all associated data have been deleted.",
+      });
+
+      refetchPrompts();
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to delete prompt",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingPrompt(false);
+      setDeletePromptDialogOpen(false);
+      setPromptPromptToDelete(null);
+    }
+  };
+
   if (loading) {
     return <PageLoadingState title="Loading experiment..." />;
   }
@@ -272,13 +393,31 @@ export default function ExperimentDetailPage({ params }: PageProps) {
         backUrl="/eval"
         backLabel="Back to Experiments"
         actions={
-          <Button
-            variant="destructive"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={exporting}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exporting ? "Exporting..." : "Export CSV"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportJsonl}
+              disabled={exportingJsonl}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exportingJsonl ? "Exporting..." : "Export JSONL"}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </div>
         }
       />
 
@@ -323,6 +462,24 @@ export default function ExperimentDetailPage({ params }: PageProps) {
               <p className="text-base">
                 {data.judge_model || <span className="text-muted-foreground italic">Not specified</span>}
               </p>
+            </div>
+
+            {/* Automatic Mode Toggle */}
+            <div className="pt-4 border-t">
+              <AutoModeToggle
+                experimentId={data.id}
+                enabled={data.auto_mode_enabled}
+                answerProvider={data.auto_answer_provider}
+                judgeProvider={data.auto_judge_provider}
+                onUpdate={refetch}
+                onError={(error) => {
+                  toast({
+                    title: "Error",
+                    description: error,
+                    variant: "destructive",
+                  });
+                }}
+              />
             </div>
 
             {/* Evaluation Dimensions */}
@@ -489,6 +646,10 @@ export default function ExperimentDetailPage({ params }: PageProps) {
                 prompts={prompts || []}
                 loading={promptsLoading}
                 onPromptClick={handlePromptClick}
+                onDeletePrompt={(prompt) => {
+                  setPromptPromptToDelete(prompt);
+                  setDeletePromptDialogOpen(true);
+                }}
               />
             )}
           </CardContent>
@@ -504,6 +665,17 @@ export default function ExperimentDetailPage({ params }: PageProps) {
         variant="destructive"
         onConfirm={handleDelete}
         loading={deleting}
+      />
+
+      <ConfirmDialog
+        open={deletePromptDialogOpen}
+        onOpenChange={setDeletePromptDialogOpen}
+        title="Delete Prompt"
+        description="Are you sure you want to delete this prompt? This will permanently delete all associated answer pairs and evaluations. This action cannot be undone."
+        confirmLabel="Delete Prompt"
+        variant="destructive"
+        onConfirm={handleDeletePrompt}
+        loading={deletingPrompt}
       />
     </div>
   );

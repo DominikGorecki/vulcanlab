@@ -353,12 +353,13 @@ class TestListAnswersEndpoint:
         answer2.created_at = now
 
         mock_query_result = [
-            (answer1, True),
-            (answer2, False),
+            (answer1, 100),  # evaluation_id = 100
+            (answer2, None), # evaluation_id = None
         ]
 
         mock_query = mock_session.query.return_value
-        mock_filter = mock_query.filter.return_value
+        mock_outerjoin = mock_query.outerjoin.return_value
+        mock_filter = mock_outerjoin.filter.return_value
         mock_order_by = mock_filter.order_by.return_value
         mock_order_by.all.return_value = mock_query_result
 

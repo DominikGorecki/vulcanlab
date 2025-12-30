@@ -32,6 +32,14 @@ from .models.prompt_meta import PromptMeta  # noqa: F401
 from .models.parsed_markdown import ParsedMarkdown  # noqa: F401
 from .models.sanitized_markdown import SanitizedMarkdown  # noqa: F401
 from .models.heading_modifications import HeadingModification  # noqa: F401
+from .models.experiment import (  # noqa: F401
+    Experiment,
+    ExperimentDimension,
+    ExperimentPrompt,
+    ExperimentAnswer,
+    ExperimentEvaluation,
+    ExperimentDimensionResult,
+)
 
 # Import seeding functions
 from .seed_templates import seed_prompt_templates

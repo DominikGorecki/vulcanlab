@@ -65,6 +65,35 @@ class ExperimentCreate(BaseModel):
     )
 
 
+class ExperimentUpdateRequest(BaseModel):
+    """Schema for updating experiment automatic mode settings."""
+
+    auto_mode_enabled: bool = Field(..., description="Enable or disable automatic evaluation mode")
+    auto_answer_provider: Optional[str] = Field(
+        None,
+        pattern="^(openai|gemini)$",
+        description="Provider for answer generation (required when enabling auto mode)"
+    )
+
+    @field_validator('auto_answer_provider')
+    @classmethod
+    def validate_provider_when_enabled(cls, v: Optional[str], info) -> Optional[str]:
+        """Validate that provider is specified when enabling auto mode."""
+        # Access auto_mode_enabled from the data being validated
+        if info.data.get('auto_mode_enabled') and not v:
+            raise ValueError("auto_answer_provider is required when enabling automatic mode")
+        return v
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "auto_mode_enabled": True,
+                "auto_answer_provider": "openai"
+            }
+        }
+    )
+
+
 # ============================================================================
 # Response Schemas
 # ============================================================================
@@ -108,6 +137,9 @@ class ExperimentResponse(BaseModel):
     model_y: Optional[str]
     judge_model: Optional[str]
     eval_template_id: Optional[int]
+    auto_mode_enabled: bool = Field(False, description="Whether automatic evaluation mode is enabled")
+    auto_answer_provider: Optional[str] = Field(None, description="Provider for answer generation (openai or gemini)")
+    auto_judge_provider: Optional[str] = Field(None, description="Provider for judge evaluation (opposite of answer provider)")
     created_at: datetime
     updated_at: datetime
     dimensions: List[ExperimentDimensionResponse] = Field(default_factory=list)
@@ -300,3 +332,50 @@ class EvalPromptResponse(BaseModel):
 
     prompt: str = Field(..., description="Resolved evaluation prompt")
     answer_id: int = Field(..., description="ID of answer pair")
+
+
+# ============================================================================
+# Automatic Evaluation Schemas
+# ============================================================================
+
+class AutoEvalRequest(BaseModel):
+    """Schema for automatic evaluation request."""
+
+    main_prompt_text: str = Field(
+        ...,
+        min_length=1,
+        max_length=100000,
+        description="The main prompt text (for reference/grouping)"
+    )
+    answer_x_prompt_text: str = Field(
+        ...,
+        min_length=1,
+        max_length=100000,
+        description="Prompt to generate answer_x"
+    )
+    answer_y_prompt_text: str = Field(
+        ...,
+        min_length=1,
+        max_length=100000,
+        description="Prompt to generate answer_y"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "main_prompt_text": "What is 2+2?",
+                "answer_x_prompt_text": "Answer briefly",
+                "answer_y_prompt_text": "Answer in detail"
+            }
+        }
+    )
+
+
+class AutoEvalResponse(BaseModel):
+    """Schema for automatic evaluation response."""
+
+    evaluation_id: int = Field(..., description="ID of created evaluation")
+    answer_id: int = Field(..., description="ID of created answer pair")
+    prompt_group_id: int = Field(..., description="Group ID linking the three prompts")
+
+    model_config = ConfigDict(from_attributes=True)
