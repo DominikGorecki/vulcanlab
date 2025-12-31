@@ -2,7 +2,7 @@
 
 import { use, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Trash2, Calendar, Plus, AlertCircle, Copy, ClipboardPaste, Sparkles } from "lucide-react";
+import { MessageSquare, Trash2, Calendar, Plus, AlertCircle, Copy, ClipboardPaste, Sparkles, Eye } from "lucide-react";
 import {
   StickyDetailHeader,
   PageLoadingState,
@@ -61,14 +61,17 @@ interface AnswersTableProps {
   answers: AnswerListItem[];
   loading: boolean;
   onEvaluationChange: () => void;
+  experimentId: string;
+  promptId: string;
 }
 
-function AnswersTable({ answers, loading, onEvaluationChange }: AnswersTableProps) {
+function AnswersTable({ answers, loading, onEvaluationChange, experimentId, promptId }: AnswersTableProps) {
+  const router = useRouter();
   const { toast } = useToast();
   const [copyingId, setCopyingId] = useState<number | null>(null);
   const [pasteDialogAnswerId, setPasteDialogAnswerId] = useState<number | null>(null);
-  const [deleteEvalDialogOpen, setDeleteEvalDialogOpen] = useState(false);
-  const [deletingEvalId, setDeletingEvalId] = useState<number | null>(null);
+  const [deleteAnswerDialogOpen, setDeleteAnswerDialogOpen] = useState(false);
+  const [deletingAnswerId, setDeletingAnswerId] = useState<number | null>(null);
 
   const handleCopyPrompt = async (answerId: number) => {
     setCopyingId(answerId);
@@ -100,32 +103,32 @@ function AnswersTable({ answers, loading, onEvaluationChange }: AnswersTableProp
     }
   };
 
-  const handleDeleteEvaluation = async (evaluationId: number) => {
+  const handleDeleteAnswer = async (answerId: number) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/eval/evaluations/${evaluationId}`,
+        `${API_BASE_URL}/api/v1/eval/answers/${answerId}`,
         { method: "DELETE" }
       );
 
       if (!response.ok) {
-        throw new Error("Failed to delete evaluation");
+        throw new Error("Failed to delete answer pair");
       }
 
       toast({
-        title: "Evaluation deleted",
-        description: "The evaluation has been deleted successfully",
+        title: "Answer pair deleted",
+        description: "The answer pair has been deleted successfully",
       });
 
       onEvaluationChange();
     } catch (err) {
       toast({
         title: "Error",
-        description: err instanceof Error ? err.message : "Failed to delete evaluation",
+        description: err instanceof Error ? err.message : "Failed to delete answer pair",
         variant: "destructive",
       });
     } finally {
-      setDeleteEvalDialogOpen(false);
-      setDeletingEvalId(null);
+      setDeleteAnswerDialogOpen(false);
+      setDeletingAnswerId(null);
     }
   };
 
@@ -182,18 +185,24 @@ function AnswersTable({ answers, loading, onEvaluationChange }: AnswersTableProp
             <ClipboardPaste className="mr-2 h-3 w-3" />
             Paste Result
           </Button>
-          {answer.has_evaluation && answer.evaluation_id && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setDeletingEvalId(answer.evaluation_id!);
-                setDeleteEvalDialogOpen(true);
-              }}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => router.push(`/eval/${experimentId}/prompts/${promptId}/answers/${answer.id}`)}
+          >
+            <Eye className="mr-2 h-3 w-3" />
+            View Details
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setDeletingAnswerId(answer.id);
+              setDeleteAnswerDialogOpen(true);
+            }}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
         </div>
       ),
       className: "w-auto",
@@ -226,13 +235,13 @@ function AnswersTable({ answers, loading, onEvaluationChange }: AnswersTableProp
       )}
 
       <ConfirmDialog
-        open={deleteEvalDialogOpen}
-        onOpenChange={setDeleteEvalDialogOpen}
-        title="Delete Evaluation"
-        description="Are you sure you want to delete this evaluation? This action cannot be undone."
-        confirmLabel="Delete Evaluation"
+        open={deleteAnswerDialogOpen}
+        onOpenChange={setDeleteAnswerDialogOpen}
+        title="Delete Answer Pair"
+        description="Are you sure you want to delete this answer pair? This will permanently delete the answer and any associated evaluation. This action cannot be undone."
+        confirmLabel="Delete Answer Pair"
         variant="destructive"
-        onConfirm={() => deletingEvalId && handleDeleteEvaluation(deletingEvalId)}
+        onConfirm={() => deletingAnswerId && handleDeleteAnswer(deletingAnswerId)}
       />
     </>
   );
@@ -448,6 +457,8 @@ export default function PromptDetailPage({ params }: PageProps) {
                 answers={answers || []}
                 loading={answersLoading}
                 onEvaluationChange={refetchAnswers}
+                experimentId={experimentId}
+                promptId={promptId}
               />
             )}
           </CardContent>
