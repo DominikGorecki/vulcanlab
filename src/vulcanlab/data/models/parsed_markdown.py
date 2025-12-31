@@ -16,8 +16,8 @@ class ParsedMarkdown(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     work_id = Column(Integer, ForeignKey('works.id', ondelete='CASCADE'), nullable=False)
     _content = Column('content', LargeBinary, nullable=False)  # Stored as bytes (compressed if >1MB)
-    file_type = Column(SQLEnum(FileType, values_callable=lambda x: [e.value for e in x]), nullable=False)
-    classification = Column(SQLEnum(DocumentClassification, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    file_type = Column(SQLEnum(FileType, name='file_type', values_callable=lambda x: [e.value for e in x]), nullable=False)
+    classification = Column(SQLEnum(DocumentClassification, name='document_classification', values_callable=lambda x: [e.value for e in x]), nullable=False)
     token_count = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 

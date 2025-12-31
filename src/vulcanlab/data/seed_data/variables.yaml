@@ -1,0 +1,91 @@
+variables:
+- function_tag: heading_hierarchy
+  variables:
+  - variable_name: title
+    variable_description: The document title string used to identify the work whose
+      headings and structure are being normalized.
+  - variable_name: authors
+    variable_description: The author or authors of the document, providing context
+      that may help the model recognize the work and its typical structure.
+  - variable_name: toc_text
+    variable_description: The table of contents text from the database, including
+      headings and their order, serving as the authoritative high level outline for
+      aligning heading levels.
+  - variable_name: titles_codeblock
+    variable_description: The raw list of current document headings, each with its
+      original line number and heading text, that must be relabeled with correct markdown
+      levels or removal actions.
+- function_tag: markdown_heading_hierarchy
+  variables:
+  - variable_name: title
+    variable_description: The document title string used to identify the work whose
+      headings and structure are being normalized.
+  - variable_name: authors
+    variable_description: The author or authors of the document, providing context
+      that may help the model recognize the work and its typical structure.
+  - variable_name: toc_text
+    variable_description: The table of contents text from the database, including
+      headings and their order, serving as the authoritative high level outline for
+      aligning heading levels.
+  - variable_name: titles_codeblock
+    variable_description: The raw list of current document headings, each with its
+      original line number and heading text, that must be relabeled with correct markdown
+      levels or removal actions.
+- function_tag: query_expansion
+  variables:
+  - variable_name: n
+    variable_description: The number of alternative query reformulations the assistant
+      must generate for multi-query expansion, controlling how many distinct search-style
+      variants are produced.
+  - variable_name: query
+    variable_description: The original user query or information need, expressed in
+      natural language, that the assistant will expand, answer hypothetically, classify
+      by intent, and use to extract key entities.
+- function_tag: rag_augmentation
+  variables:
+  - variable_name: intent
+    variable_description: The high-level intent label for the user's question (e.g.,
+      DEFINITION, MECHANISM, COMPARISON) that guides how the answer should be structured
+      and emphasized.
+  - variable_name: entities_str
+    variable_description: A string listing the key entities, theories, and constructs
+      relevant to the question, used to focus the explanation on the most important
+      concepts.
+  - variable_name: context_blocks
+    variable_description: The set of retrieved source passages, each labeled with
+      [S#] and optional metadata, that serve as the primary evidence base for constructing
+      the answer and citations.
+  - variable_name: user_question
+    variable_description: The original natural-language question posed by the user
+      that the assistant must answer using the provided context and hybrid evidence
+      policy.
+- function_tag: vectorization_suggestions
+  variables:
+  - variable_name: bib_section
+    variable_description: Optional bibliographic or citation information for the document,
+      providing context about the work whose headings are being evaluated for vectorization.
+  - variable_name: titles_content
+    variable_description: The raw markdown-style list of document headings, including
+      line numbers and title text, that must be analyzed and labeled as SKIP or VECTORIZE.
+- function_tag: simple_sanitize_small
+  variables:
+  - variable_name: markdown
+    variable_description: The raw markdown document content to be sanitized, including
+      headings, text, and any conversion artifacts that need to be cleaned up for RAG indexing.
+- function_tag: simple_sanitize_large
+  variables:
+  - variable_name: condensed_document
+    variable_description: A condensed representation of a large document showing each
+      heading with contextual sentences, used for determining heading-level modifications
+      without processing the entire document.
+- function_tag: eval_default
+  variables:
+  - variable_name: prompt
+    variable_description: The original question or task prompt that both answers are
+      responding to, used as the basis for comparative evaluation.
+  - variable_name: answer_a
+    variable_description: The first answer to be evaluated, presented without indicating
+      which system or approach generated it.
+  - variable_name: answer_b
+    variable_description: The second answer to be evaluated, presented without indicating
+      which system or approach generated it.

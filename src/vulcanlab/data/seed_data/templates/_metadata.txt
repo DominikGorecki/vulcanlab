@@ -1,0 +1,83 @@
+# Prompt Template Metadata
+# Generated from working database
+
+Function Tag: eval_default
+Version: 1
+Title: Default Evaluation Template - Comparative Scoring
+Type: eval
+Is Active: True
+Created: 2025-12-27 22:38:39.443844+00:00
+Updated: 2025-12-27 22:38:39.443844+00:00
+Content File: eval_default.txt
+--------------------------------------------------------------------------------
+
+Function Tag: heading_hierarchy
+Version: 1
+Title: Heading Hierarchy Corrections - ToC Alignment
+Type: N/A
+Is Active: True
+Created: 2025-12-07 16:13:55.173042+00:00
+Updated: 2025-12-07 16:13:55.173042+00:00
+Content File: heading_hierarchy.txt
+--------------------------------------------------------------------------------
+
+Function Tag: query_expansion
+Version: 1
+Title: Query Expansion - Multi-Query Expansion (MQE) and HyDE
+Type: N/A
+Is Active: True
+Created: 2025-12-07 16:13:55.173042+00:00
+Updated: 2025-12-07 16:13:55.173042+00:00
+Content File: query_expansion.txt
+--------------------------------------------------------------------------------
+
+Function Tag: rag_augmentation
+Version: 3
+Title: Eval - No Ref
+Type: N/A
+Is Active: True
+Created: 2025-12-29 14:38:48.403041+00:00
+Updated: 2025-12-30 15:52:04.498184+00:00
+Content File: rag_augmentation.txt
+--------------------------------------------------------------------------------
+
+Function Tag: simple_sanitize_large
+Version: 2
+Title: Simple Conversion - Large Document Analysis
+Type: N/A
+Is Active: True
+Created: 2025-12-14 01:36:57.559012+00:00
+Updated: 2025-12-14 12:24:00.829047+00:00
+Content File: simple_sanitize_large.txt
+--------------------------------------------------------------------------------
+
+Function Tag: simple_sanitize_small
+Version: 1
+Title: Simple Conversion - Small Document Sanitization
+Type: N/A
+Is Active: True
+Created: 2025-12-14 01:36:57.559012+00:00
+Updated: 2025-12-14 01:57:15.532371+00:00
+Content File: simple_sanitize_small.txt
+--------------------------------------------------------------------------------
+
+Function Tag: toc_extraction
+Version: 2
+Title: Markdown
+Type: N/A
+Is Active: True
+Created: 2025-12-07 16:17:58.694164+00:00
+Updated: 2025-12-19 19:49:18.363387+00:00
+Content File: toc_extraction.txt
+--------------------------------------------------------------------------------
+
+Function Tag: vectorization_suggestions
+Version: 1
+Title: Vectorization Suggestions - Heading Analysis
+Type: N/A
+Is Active: True
+Created: 2025-12-07 16:13:55.173042+00:00
+Updated: 2025-12-07 16:13:55.173042+00:00
+Content File: vectorization_suggestions.txt
+--------------------------------------------------------------------------------
+

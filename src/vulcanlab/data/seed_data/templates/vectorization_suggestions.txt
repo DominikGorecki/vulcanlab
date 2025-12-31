@@ -1,0 +1,98 @@
+You are analyzing a document's heading structure to determine which sections contain valuable content worth vectorizing for a RAG (Retrieval Augmented Generation) system. Your goal is to include headings whose underlying sections contain explanatory, conceptual, or narrative content, and to exclude purely structural, navigational, or index-like sections.
+```
+
+{bib_section}
+## Document Headings
+
+{titles_content}
+
+## Task
+
+For each heading line number, determine whether it should be:
+
+* **VECTORIZE**: The section under this heading likely contains meaningful prose or explanatory content that would help answer questions about the document's subject matter.
+* **SKIP**: The section is primarily structural, navigational, index-like, or otherwise not useful as semantic knowledge for RAG.
+
+## Decision Strategy
+
+First, classify each heading based on its title. Then, enforce hierarchy rules so that parent headings are consistent with their children.
+
+### A. Hierarchy rules
+
+* Infer heading levels from markdown markers ("#", "##", "###", etc.) and/or numbering (e.g., "1.", "1.1.", "2.3.4").
+* If any sub-heading is **VECTORIZE**, all of its ancestor headings (its parent, the parent's parent, etc.) MUST also be **VECTORIZE**.
+* If a high-level heading looks structural (e.g., "Appendices", "Back Matter") but has child headings that clearly describe substantive content (e.g., "Appendix A: Experimental Stimuli"), treat those child headings and their ancestors as **VECTORIZE**.
+* Do NOT force children to SKIP just because a parent is SKIP; children can still be **VECTORIZE** if they look like substantive content sections.
+
+### B. Content to SKIP (structural / non-semantic)
+
+Mark a heading as **SKIP** when it clearly indicates one of the following:
+
+* Table of contents and navigation:
+
+  * "Contents", "Table of Contents", "Detailed Contents", "List of Chapters"
+  * "List of Figures", "List of Tables", "List of Boxes", "List of Abbreviations", "List of Acronyms"
+* Indexes:
+
+  * "Index", "Subject Index", "Author Index", "Name Index"
+* References and bibliographic material:
+
+  * "References", "Reference List", "Bibliography", "Works Cited", "Notes" / "Endnotes" sections that are primarily citation notes
+* Pure front matter:
+
+  * "Title Page", "Copyright", "Imprint", "Publication Data", "Dedication"
+  * "Acknowledgments" / "Acknowledgements", "About the Author", "Foreword" (unless clearly domain-explanatory)
+* Pure back matter or raw reference material:
+
+  * Headings that obviously denote only raw data, item lists, or mechanical material such as:
+
+    * "Data Tables", "Codebook", "Questionnaire Items", "Survey Items", "Answer Key"
+    * "Appendix: Tables", "Appendix: Data", "Appendix: Raw Scores"
+* Any heading that is clearly just a navigation/structure label with no real prose under it (e.g., "Part I", "Section I" by itself), **unless** its children are VECTORIZE (in which case the parent must also be VECTORIZE).
+
+Only mark a heading as **SKIP** if it is very likely to be structurally / mechanically focused rather than explanatory content.
+
+### C. Content to VECTORIZE (semantic / explanatory)
+
+Mark a heading as **VECTORIZE** when the section under it is likely to contain any of the following:
+
+* Core chapters and numbered sections that present the main subject matter.
+
+  * e.g., "Chapter 1: Introduction to Cognitive Psychology", "2.3 Working Memory Capacity"
+* Sections that define, explain, or discuss concepts, theories, models, mechanisms, or arguments.
+
+  * e.g., "Theories of Intelligence", "Reinforcement Learning", "Social Identity Theory"
+* Sections that describe methods, procedures, or empirical findings in a way that could answer user questions.
+
+  * e.g., "Method", "Participants", "Procedure", "Results", "Discussion", "Implications", "Limitations"
+* Sections that summarize, synthesize, or generalize information.
+
+  * e.g., "Summary", "Conclusion", "General Discussion", "Practical Applications", "Future Directions"
+* Worked examples, case studies, and explanatory exercises that teach or illustrate concepts.
+
+  * e.g., "Case Study: Phineas Gage", "Example Problems", "Worked Example"
+* Appendices that look conceptual or explanatory rather than purely tabular / raw data.
+
+  * e.g., "Appendix A: Mathematical Derivation", "Appendix B: Scale Construction and Interpretation"
+
+When in doubt, if a heading sounds like it could contain substantive explanatory text that would help answer questions about the topic, prefer **VECTORIZE** over **SKIP**.
+
+## Output Format
+
+Return ONLY a list in this exact format, one line per heading, preserving the original order of headings:
+
+```
+[line_number]: [SKIP|VECTORIZE]
+```
+
+Example:
+
+```
+10: SKIP
+13: SKIP
+18: VECTORIZE
+19: VECTORIZE
+20: VECTORIZE
+```
+
+Do NOT include any other commentary, explanations, or text. Analyze the headings and provide only your final SKIP/VECTORIZE labels:

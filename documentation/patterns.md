@@ -38,6 +38,29 @@ VulcanLab follows a decoupled, three-tier architecture designed for modularity a
     -   *Anti-Pattern*: Creating a new session inside a core logic function.
     -   *Standard*: `def process_data(work_id: int, session: Session): ...`
 
+### Database Seeding (Prompt Templates)
+> **Standard**: Use file-based YAML configuration for seeding prompt templates.
+
+**Pattern**: Prompt templates are seeded from individual `.txt` files managed by a YAML configuration file during database initialization.
+
+-   **Configuration**: `src/vulcanlab/data/seed_data/templates.yaml` defines template metadata (function_tag, version, title, etc.)
+-   **Content**: Individual template content stored in `src/vulcanlab/data/seed_data/templates/*.txt`
+-   **Seeding Function**: `seed_prompt_templates()` in `src/vulcanlab/data/init_db.py` reads YAML config and loads content from files
+-   **Benefits**:
+    -   Easy to modify templates without touching Python code
+    -   Version control friendly (diff-able text files)
+    -   Clear separation of metadata and content
+    -   Idempotent seeding (only inserts new templates)
+
+**How to Add/Modify Templates**:
+1. Create or edit `.txt` file in `templates/` directory
+2. Update `templates.yaml` with metadata
+3. Run `python -m vulcanlab.data.init_db -v` to seed
+
+**Testing**: Use `python scripts/test_template_seeding.py` to validate configuration before initialization.
+
+For complete documentation, see: [`src/vulcanlab/data/seed_data/README.md`](../src/vulcanlab/data/seed_data/README.md)
+
 ---
 
 ## 3. API Layer (`src/vulcanlab_api`)
