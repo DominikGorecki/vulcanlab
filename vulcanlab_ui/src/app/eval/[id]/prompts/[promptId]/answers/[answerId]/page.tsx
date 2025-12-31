@@ -2,13 +2,14 @@
 
 import { use, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Trash2, Calendar, FileText, Award, Shuffle } from "lucide-react";
+import { MessageSquare, Trash2, Calendar, FileText, Award, Shuffle, ClipboardPaste, Copy } from "lucide-react";
 import {
   StickyDetailHeader,
   PageLoadingState,
   PageErrorState,
   ConfirmDialog,
 } from "@/components";
+import { PasteResultDialog } from "../../paste-result-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -79,6 +80,8 @@ export default function AnswerDetailPage({ params }: PageProps) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+  const [copying, setCopying] = useState(false);
 
   // Fetch answer detail
   const fetchAnswer = useCallback(async () => {
@@ -145,6 +148,37 @@ export default function AnswerDetailPage({ params }: PageProps) {
     }
   };
 
+  // Copy eval prompt handler
+  const handleCopyPrompt = async () => {
+    setCopying(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/eval/answers/${answerId}/eval-prompt`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch evaluation prompt");
+      }
+
+      const data = await response.json();
+      await navigator.clipboard.writeText(data.prompt);
+
+      toast({
+        title: "Prompt copied",
+        description: "The evaluation prompt has been copied to your clipboard",
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to copy prompt",
+        variant: "destructive",
+      });
+    } finally {
+      setCopying(false);
+    }
+  };
+
   // Loading state
   if (answerLoading || promptLoading || experimentLoading) {
     return <PageLoadingState title="Loading answer details..." />;
@@ -168,10 +202,24 @@ export default function AnswerDetailPage({ params }: PageProps) {
         backUrl={`/eval/${experimentId}/prompts/${promptId}`}
         backLabel="Back to Prompt"
         actions={
-          <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Answer
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              onClick={handleCopyPrompt}
+              disabled={copying}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              {copying ? "Copying..." : "Copy Eval Prompt"}
+            </Button>
+            <Button variant="outline" onClick={() => setPasteDialogOpen(true)}>
+              <ClipboardPaste className="mr-2 h-4 w-4" />
+              {answer.evaluation ? "Overwrite Evaluation" : "Paste Evaluation"}
+            </Button>
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Answer
+            </Button>
+          </>
         }
       />
 
@@ -346,6 +394,17 @@ export default function AnswerDetailPage({ params }: PageProps) {
           </Card>
         )}
       </div>
+
+      <PasteResultDialog
+        open={pasteDialogOpen}
+        onOpenChange={setPasteDialogOpen}
+        answerId={parseInt(answerId)}
+        hasExistingEvaluation={!!answer.evaluation}
+        onSuccess={() => {
+          setPasteDialogOpen(false);
+          refetchAnswer();  // Refresh to show updated evaluation
+        }}
+      />
 
       <ConfirmDialog
         open={deleteDialogOpen}

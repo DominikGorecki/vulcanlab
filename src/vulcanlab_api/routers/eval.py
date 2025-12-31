@@ -822,13 +822,20 @@ async def get_evaluation_prompt(answer_id: int) -> EvalPromptResponse:
     response_model=EvaluationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Submit evaluation",
-    description="Submit an evaluation for an answer pair with dimension scores.",
+    description="Submit an evaluation for an answer pair with dimension scores. "
+                "Use ?overwrite=true to replace an existing evaluation.",
 )
 async def submit_answer_evaluation(
     answer_id: int,
-    data: EvaluationSubmitRequest
+    data: EvaluationSubmitRequest,
+    overwrite: bool = False
 ) -> EvaluationResponse:
-    """Submit an evaluation for an answer pair."""
+    """
+    Submit an evaluation for an answer pair.
+
+    Set overwrite=true to replace an existing evaluation.
+    Default behavior (overwrite=false) prevents duplicate evaluations.
+    """
     try:
         with get_session() as session:
             evaluation = submit_evaluation(
@@ -836,7 +843,8 @@ async def submit_answer_evaluation(
                 answer_id=answer_id,
                 overall_score=data.overall_score,
                 justification=data.justification,
-                dimension_scores=data.dimension_scores
+                dimension_scores=data.dimension_scores,
+                overwrite=overwrite
             )
             session.commit()
             session.refresh(evaluation)

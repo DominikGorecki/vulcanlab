@@ -171,7 +171,7 @@ function AnswersTable({ answers, loading, onEvaluationChange, experimentId, prom
             size="sm"
             variant="outline"
             onClick={() => handleCopyPrompt(answer.id)}
-            disabled={answer.has_evaluation || copyingId === answer.id}
+            disabled={copyingId === answer.id}
           >
             <Copy className="mr-2 h-3 w-3" />
             {copyingId === answer.id ? "Copying..." : "Copy Eval Prompt"}
@@ -180,10 +180,9 @@ function AnswersTable({ answers, loading, onEvaluationChange, experimentId, prom
             size="sm"
             variant="default"
             onClick={() => setPasteDialogAnswerId(answer.id)}
-            disabled={answer.has_evaluation}
           >
             <ClipboardPaste className="mr-2 h-3 w-3" />
-            Paste Result
+            {answer.has_evaluation ? "Overwrite Result" : "Paste Result"}
           </Button>
           <Button
             size="sm"
@@ -227,6 +226,9 @@ function AnswersTable({ answers, loading, onEvaluationChange, experimentId, prom
           open={pasteDialogAnswerId !== null}
           onOpenChange={(open) => !open && setPasteDialogAnswerId(null)}
           answerId={pasteDialogAnswerId}
+          hasExistingEvaluation={
+            answers?.find(a => a.id === pasteDialogAnswerId)?.has_evaluation ?? false
+          }
           onSuccess={() => {
             setPasteDialogAnswerId(null);
             onEvaluationChange();
