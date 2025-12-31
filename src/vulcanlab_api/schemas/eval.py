@@ -327,6 +327,36 @@ class EvaluationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EvaluationDetailResponse(BaseModel):
+    """Schema for evaluation detail in answer detail response."""
+
+    id: int
+    overall_score: int
+    unblinded_score: int = Field(..., description="Score with blind mapping applied (positive = X wins)")
+    justification: Optional[str]
+    dimension_results: List[DimensionResultResponse]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnswerDetailResponse(BaseModel):
+    """Schema for detailed answer response with optional evaluation."""
+
+    id: int
+    prompt_id: int
+    answer_x: str
+    answer_y: str
+    is_x_mapped_to_a: bool
+    answer_a: str
+    answer_b: str
+    created_at: datetime
+    updated_at: datetime
+    evaluation: Optional[EvaluationDetailResponse] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class EvalPromptResponse(BaseModel):
     """Schema for evaluation prompt response."""
 

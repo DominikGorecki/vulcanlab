@@ -49,6 +49,8 @@ from vulcanlab.eval.prompts import (
 from vulcanlab.eval.answers import (
     create_answer_pair,
     get_answers_by_prompt,
+    delete_answer_pair,
+    get_answer_with_evaluation,
 )
 from vulcanlab.eval.evaluations import (
     generate_eval_prompt,
@@ -73,8 +75,10 @@ from vulcanlab_api.schemas.eval import (
     AnswerPairCreate,
     AnswerResponse,
     AnswerListItem,
+    AnswerDetailResponse,
     EvaluationSubmitRequest,
     EvaluationResponse,
+    EvaluationDetailResponse,
     EvalPromptResponse,
     AutoEvalRequest,
     AutoEvalResponse,
@@ -693,6 +697,94 @@ async def list_prompt_answers(prompt_id: int) -> List[AnswerListItem]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list answers: {str(e)}"
+        )
+
+
+@router.delete(
+    "/answers/{answer_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete answer pair",
+    description="Delete an answer pair and associated evaluation (cascade).",
+)
+async def delete_answer_endpoint(answer_id: int):
+    """Delete an answer pair."""
+    try:
+        with get_session() as session:
+            delete_answer_pair(session, answer_id)
+            session.commit()
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete answer: {str(e)}"
+        )
+
+
+@router.get(
+    "/answers/{answer_id}",
+    response_model=AnswerDetailResponse,
+    summary="Get answer details",
+    description="Get detailed answer information with optional evaluation data.",
+)
+async def get_answer_detail(answer_id: int) -> AnswerDetailResponse:
+    """Get answer by ID with evaluation details."""
+    try:
+        with get_session() as session:
+            answer = get_answer_with_evaluation(session, answer_id)
+
+            # Build base response
+            response_data = {
+                "id": answer.id,
+                "prompt_id": answer.prompt_id,
+                "answer_x": answer.answer_x,
+                "answer_y": answer.answer_y,
+                "is_x_mapped_to_a": answer.is_x_mapped_to_a,
+                "answer_a": answer.answer_a,
+                "answer_b": answer.answer_b,
+                "created_at": answer.created_at,
+                "updated_at": answer.updated_at,
+            }
+
+            # Add evaluation if exists
+            if answer.evaluation:
+                # Compute unblinded_score: positive if X wins, negative if Y wins
+                unblinded_score = (
+                    answer.evaluation.overall_score
+                    if answer.is_x_mapped_to_a
+                    else -answer.evaluation.overall_score
+                )
+
+                response_data["evaluation"] = {
+                    "id": answer.evaluation.id,
+                    "overall_score": answer.evaluation.overall_score,
+                    "unblinded_score": unblinded_score,
+                    "justification": answer.evaluation.justification,
+                    "dimension_results": [
+                        {
+                            "dimension_name": dr.dimension_name,
+                            "score": dr.score
+                        }
+                        for dr in answer.evaluation.dimension_results
+                    ],
+                    "created_at": answer.evaluation.created_at
+                }
+
+            return AnswerDetailResponse(**response_data)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get answer details: {str(e)}"
         )
 
 
