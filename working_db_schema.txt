@@ -1,0 +1,1763 @@
+Database Schema Dump for: psych_rag_test
+Host: 127.0.0.1:5432
+Timestamp: 2025-12-30 17:06:16.751977
+================================================================================
+ENUM TYPES
+================================================================================
+
+Enum: document_classification
+  Values: small, large
+
+Enum: file_type
+  Values: pdf, epub, markdown_import
+
+Enum: filetype
+  Values: INPUT, TO_CONVERT
+
+Enum: modification_action
+  Values: remove, change, keep
+
+================================================================================
+TABLES
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+Table: chunks
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('chunks_id_seq'::regclass)
+  parent_id                      integer                        NULL      
+  work_id                        integer                        NOT NULL  
+  level                          character varying              NOT NULL  
+  content                        text                           NOT NULL  
+  embedding                      vector                         NULL      
+  start_line                     integer                        NOT NULL  
+  end_line                       integer                        NOT NULL  
+  vector_status                  character varying              NOT NULL  
+  content_tsvector               tsvector                       NULL      
+  heading_breadcrumbs            character varying              NULL      
+  sentence_count                 integer                        NULL      
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_answers
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('experiment_answers_id_seq'::regclass)
+  prompt_id                      integer                        NOT NULL  
+  answer_x                       text                           NOT NULL  
+  answer_y                       text                           NOT NULL  
+  is_x_mapped_to_a               boolean                        NOT NULL  
+  created_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_dimension_results
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('experiment_dimension_results_id_seq'::regclass)
+  evaluation_id                  integer                        NOT NULL  
+  dimension_name                 character varying              NOT NULL  
+  score                          integer                        NOT NULL  
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_dimensions
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('experiment_dimensions_id_seq'::regclass)
+  experiment_id                  integer                        NOT NULL  
+  dimension_name                 character varying              NOT NULL  
+  display_order                  integer                        NOT NULL   DEFAULT 0
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_evaluations
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('experiment_evaluations_id_seq'::regclass)
+  answer_id                      integer                        NOT NULL  
+  overall_score                  integer                        NOT NULL  
+  justification                  text                           NULL      
+  created_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_prompts
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('experiment_prompts_id_seq'::regclass)
+  experiment_id                  integer                        NOT NULL  
+  prompt_text                    text                           NOT NULL  
+  created_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+  prompt_group_id                integer                        NULL      
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiments
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('experiments_id_seq'::regclass)
+  name                           character varying              NOT NULL  
+  description_x                  text                           NULL      
+  description_y                  text                           NULL      
+  model_x                        character varying              NULL      
+  model_y                        character varying              NULL      
+  judge_model                    character varying              NULL      
+  eval_template_id               integer                        NULL      
+  created_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+  updated_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+  auto_mode_enabled              boolean                        NOT NULL   DEFAULT false
+  auto_answer_provider           character varying              NULL      
+  auto_judge_provider            character varying              NULL      
+
+────────────────────────────────────────────────────────────────────────────────
+Table: heading_modifications
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('heading_modifications_id_seq'::regclass)
+  work_id                        integer                        NOT NULL  
+  line_number                    integer                        NOT NULL  
+  original_heading               text                           NOT NULL  
+  modified_heading               text                           NULL      
+  action                         modification_action            NOT NULL  
+  vectorize_flag                 boolean                        NOT NULL   DEFAULT false
+  created_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+
+────────────────────────────────────────────────────────────────────────────────
+Table: io_files
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('io_files_id_seq'::regclass)
+  filename                       character varying              NOT NULL  
+  file_type                      filetype                       NOT NULL  
+  file_path                      character varying              NOT NULL  
+  created_at                     timestamp with time zone       NOT NULL  
+  updated_at                     timestamp with time zone       NOT NULL  
+  last_seen_at                   timestamp with time zone       NOT NULL  
+  simple_conversion              boolean                        NULL       DEFAULT false
+
+────────────────────────────────────────────────────────────────────────────────
+Table: parsed_markdown
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('parsed_markdown_id_seq'::regclass)
+  work_id                        integer                        NOT NULL  
+  content                        bytea                          NOT NULL  
+  file_type                      file_type                      NOT NULL  
+  classification                 document_classification        NOT NULL  
+  token_count                    integer                        NOT NULL  
+  created_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+
+────────────────────────────────────────────────────────────────────────────────
+Table: prompt_meta
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('prompt_meta_id_seq'::regclass)
+  function_tag                   character varying              NOT NULL  
+  variables                      jsonb                          NOT NULL   DEFAULT '[]'::jsonb
+  created_at                     timestamp without time zone    NULL       DEFAULT CURRENT_TIMESTAMP
+  updated_at                     timestamp without time zone    NULL       DEFAULT CURRENT_TIMESTAMP
+
+────────────────────────────────────────────────────────────────────────────────
+Table: prompt_templates
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('prompt_templates_id_seq'::regclass)
+  function_tag                   character varying              NOT NULL  
+  version                        integer                        NOT NULL  
+  title                          character varying              NOT NULL  
+  template_content               text                           NOT NULL  
+  is_active                      boolean                        NOT NULL   DEFAULT false
+  created_at                     timestamp with time zone       NULL       DEFAULT now()
+  updated_at                     timestamp with time zone       NULL       DEFAULT now()
+  template_type                  character varying              NULL      
+
+────────────────────────────────────────────────────────────────────────────────
+Table: queries
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('queries_id_seq'::regclass)
+  original_query                 text                           NOT NULL  
+  expanded_queries               json                           NULL      
+  hyde_answer                    text                           NULL      
+  intent                         character varying              NULL      
+  entities                       json                           NULL      
+  embedding_original             vector                         NULL      
+  embeddings_mqe                 json                           NULL      
+  embedding_hyde                 vector                         NULL      
+  vector_status                  character varying              NOT NULL  
+  retrieved_context              json                           NULL      
+  clean_retrieval_context        json                           NULL      
+  created_at                     timestamp with time zone       NOT NULL   DEFAULT now()
+  updated_at                     timestamp with time zone       NOT NULL   DEFAULT now()
+
+────────────────────────────────────────────────────────────────────────────────
+Table: rag_config
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('rag_config_id_seq'::regclass)
+  preset_name                    character varying              NOT NULL  
+  is_default                     boolean                        NOT NULL   DEFAULT false
+  description                    text                           NULL      
+  config                         jsonb                          NOT NULL  
+  created_at                     timestamp without time zone    NULL       DEFAULT CURRENT_TIMESTAMP
+  updated_at                     timestamp without time zone    NULL       DEFAULT CURRENT_TIMESTAMP
+
+────────────────────────────────────────────────────────────────────────────────
+Table: results
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('results_id_seq'::regclass)
+  query_id                       integer                        NOT NULL  
+  response_text                  text                           NOT NULL  
+  created_at                     timestamp with time zone       NOT NULL   DEFAULT now()
+  updated_at                     timestamp with time zone       NOT NULL   DEFAULT now()
+
+────────────────────────────────────────────────────────────────────────────────
+Table: sanitized_markdown
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('sanitized_markdown_id_seq'::regclass)
+  work_id                        integer                        NOT NULL  
+  content                        bytea                          NOT NULL  
+  token_count                    integer                        NOT NULL  
+  created_at                     timestamp without time zone    NOT NULL   DEFAULT CURRENT_TIMESTAMP
+
+────────────────────────────────────────────────────────────────────────────────
+Table: works
+────────────────────────────────────────────────────────────────────────────────
+
+Columns:
+  id                             integer                        NOT NULL   DEFAULT nextval('works_id_seq'::regclass)
+  title                          character varying              NOT NULL  
+  authors                        character varying              NULL      
+  year                           integer                        NULL      
+  publisher                      character varying              NULL      
+  isbn                           character varying              NULL      
+  doi                            character varying              NULL      
+  abstract                       text                           NULL      
+  source_path                    character varying              NULL      
+  markdown_path                  character varying              NULL      
+  work_type                      character varying              NULL      
+  toc                            json                           NULL      
+  content_hash                   character varying              NULL      
+  created_at                     timestamp with time zone       NOT NULL   DEFAULT now()
+  updated_at                     timestamp with time zone       NOT NULL   DEFAULT now()
+  files                          json                           NULL      
+  processing_status              jsonb                          NULL      
+  volume                         character varying              NULL      
+  issue                          character varying              NULL      
+  pages                          character varying              NULL      
+  edition                        character varying              NULL      
+  url                            character varying              NULL      
+  city                           character varying              NULL      
+  institution                    character varying              NULL      
+  editor                         character varying              NULL      
+
+================================================================================
+INDEXES
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+Table: chunks
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: chunks_pkey
+    CREATE UNIQUE INDEX chunks_pkey ON public.chunks USING btree (id)
+
+  Index: idx_chunks_sentence_count
+    CREATE INDEX idx_chunks_sentence_count ON public.chunks USING btree (sentence_count)
+
+  Index: ix_chunks_content_tsvector_gin
+    CREATE INDEX ix_chunks_content_tsvector_gin ON public.chunks USING gin (content_tsvector)
+
+  Index: ix_chunks_embedding_hnsw
+    CREATE INDEX ix_chunks_embedding_hnsw ON public.chunks USING hnsw (embedding vector_cosine_ops)
+
+  Index: ix_chunks_level
+    CREATE INDEX ix_chunks_level ON public.chunks USING btree (level)
+
+  Index: ix_chunks_parent_id
+    CREATE INDEX ix_chunks_parent_id ON public.chunks USING btree (parent_id)
+
+  Index: ix_chunks_vector_status
+    CREATE INDEX ix_chunks_vector_status ON public.chunks USING btree (vector_status)
+
+  Index: ix_chunks_work_id
+    CREATE INDEX ix_chunks_work_id ON public.chunks USING btree (work_id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_answers
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: experiment_answers_pkey
+    CREATE UNIQUE INDEX experiment_answers_pkey ON public.experiment_answers USING btree (id)
+
+  Index: idx_experiment_answers_prompt_id
+    CREATE INDEX idx_experiment_answers_prompt_id ON public.experiment_answers USING btree (prompt_id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_dimension_results
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: experiment_dimension_results_pkey
+    CREATE UNIQUE INDEX experiment_dimension_results_pkey ON public.experiment_dimension_results USING btree (id)
+
+  Index: idx_experiment_dimension_results_evaluation_id
+    CREATE INDEX idx_experiment_dimension_results_evaluation_id ON public.experiment_dimension_results USING btree (evaluation_id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_dimensions
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: experiment_dimensions_pkey
+    CREATE UNIQUE INDEX experiment_dimensions_pkey ON public.experiment_dimensions USING btree (id)
+
+  Index: idx_experiment_dimensions_experiment_id
+    CREATE INDEX idx_experiment_dimensions_experiment_id ON public.experiment_dimensions USING btree (experiment_id)
+
+  Index: uq_experiment_dimension_name
+    CREATE UNIQUE INDEX uq_experiment_dimension_name ON public.experiment_dimensions USING btree (experiment_id, dimension_name)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_evaluations
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: experiment_evaluations_pkey
+    CREATE UNIQUE INDEX experiment_evaluations_pkey ON public.experiment_evaluations USING btree (id)
+
+  Index: idx_experiment_evaluations_answer_id
+    CREATE INDEX idx_experiment_evaluations_answer_id ON public.experiment_evaluations USING btree (answer_id)
+
+  Index: uq_experiment_evaluations_answer_id
+    CREATE UNIQUE INDEX uq_experiment_evaluations_answer_id ON public.experiment_evaluations USING btree (answer_id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_prompts
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: experiment_prompts_pkey
+    CREATE UNIQUE INDEX experiment_prompts_pkey ON public.experiment_prompts USING btree (id)
+
+  Index: idx_experiment_prompts_experiment_id
+    CREATE INDEX idx_experiment_prompts_experiment_id ON public.experiment_prompts USING btree (experiment_id)
+
+  Index: idx_experiment_prompts_group
+    CREATE INDEX idx_experiment_prompts_group ON public.experiment_prompts USING btree (experiment_id, prompt_group_id) WHERE (prompt_group_id IS NOT NULL)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiments
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: experiments_pkey
+    CREATE UNIQUE INDEX experiments_pkey ON public.experiments USING btree (id)
+
+  Index: idx_experiments_eval_template_id
+    CREATE INDEX idx_experiments_eval_template_id ON public.experiments USING btree (eval_template_id)
+
+  Index: idx_experiments_name
+    CREATE INDEX idx_experiments_name ON public.experiments USING btree (name)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: heading_modifications
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: heading_modifications_pkey
+    CREATE UNIQUE INDEX heading_modifications_pkey ON public.heading_modifications USING btree (id)
+
+  Index: ix_heading_modifications_work_id
+    CREATE INDEX ix_heading_modifications_work_id ON public.heading_modifications USING btree (work_id)
+
+  Index: ix_heading_modifications_work_line
+    CREATE INDEX ix_heading_modifications_work_line ON public.heading_modifications USING btree (work_id, line_number)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: io_files
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: io_files_file_path_key
+    CREATE UNIQUE INDEX io_files_file_path_key ON public.io_files USING btree (file_path)
+
+  Index: io_files_pkey
+    CREATE UNIQUE INDEX io_files_pkey ON public.io_files USING btree (id)
+
+  Index: ix_io_files_file_type
+    CREATE INDEX ix_io_files_file_type ON public.io_files USING btree (file_type)
+
+  Index: ix_io_files_filename
+    CREATE INDEX ix_io_files_filename ON public.io_files USING btree (filename)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: parsed_markdown
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: ix_parsed_markdown_work_id
+    CREATE INDEX ix_parsed_markdown_work_id ON public.parsed_markdown USING btree (work_id)
+
+  Index: parsed_markdown_pkey
+    CREATE UNIQUE INDEX parsed_markdown_pkey ON public.parsed_markdown USING btree (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: prompt_meta
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: idx_prompt_meta_function_tag
+    CREATE INDEX idx_prompt_meta_function_tag ON public.prompt_meta USING btree (function_tag)
+
+  Index: prompt_meta_function_tag_key
+    CREATE UNIQUE INDEX prompt_meta_function_tag_key ON public.prompt_meta USING btree (function_tag)
+
+  Index: prompt_meta_pkey
+    CREATE UNIQUE INDEX prompt_meta_pkey ON public.prompt_meta USING btree (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: prompt_templates
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: idx_prompt_templates_active
+    CREATE INDEX idx_prompt_templates_active ON public.prompt_templates USING btree (function_tag, is_active)
+
+  Index: idx_prompt_templates_function_tag
+    CREATE INDEX idx_prompt_templates_function_tag ON public.prompt_templates USING btree (function_tag)
+
+  Index: idx_prompt_templates_type
+    CREATE INDEX idx_prompt_templates_type ON public.prompt_templates USING btree (template_type)
+
+  Index: prompt_templates_pkey
+    CREATE UNIQUE INDEX prompt_templates_pkey ON public.prompt_templates USING btree (id)
+
+  Index: uq_function_tag_version
+    CREATE UNIQUE INDEX uq_function_tag_version ON public.prompt_templates USING btree (function_tag, version)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: queries
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: ix_queries_embedding_hyde_hnsw
+    CREATE INDEX ix_queries_embedding_hyde_hnsw ON public.queries USING hnsw (embedding_hyde vector_cosine_ops)
+
+  Index: ix_queries_embedding_original_hnsw
+    CREATE INDEX ix_queries_embedding_original_hnsw ON public.queries USING hnsw (embedding_original vector_cosine_ops)
+
+  Index: ix_queries_intent
+    CREATE INDEX ix_queries_intent ON public.queries USING btree (intent)
+
+  Index: ix_queries_vector_status
+    CREATE INDEX ix_queries_vector_status ON public.queries USING btree (vector_status)
+
+  Index: queries_pkey
+    CREATE UNIQUE INDEX queries_pkey ON public.queries USING btree (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: rag_config
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: idx_rag_config_is_default
+    CREATE INDEX idx_rag_config_is_default ON public.rag_config USING btree (is_default) WHERE (is_default = true)
+
+  Index: idx_rag_config_preset_name
+    CREATE INDEX idx_rag_config_preset_name ON public.rag_config USING btree (preset_name)
+
+  Index: rag_config_pkey
+    CREATE UNIQUE INDEX rag_config_pkey ON public.rag_config USING btree (id)
+
+  Index: rag_config_preset_name_key
+    CREATE UNIQUE INDEX rag_config_preset_name_key ON public.rag_config USING btree (preset_name)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: results
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: ix_results_created_at
+    CREATE INDEX ix_results_created_at ON public.results USING btree (created_at)
+
+  Index: ix_results_query_id
+    CREATE INDEX ix_results_query_id ON public.results USING btree (query_id)
+
+  Index: results_pkey
+    CREATE UNIQUE INDEX results_pkey ON public.results USING btree (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: sanitized_markdown
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: ix_sanitized_markdown_work_id
+    CREATE INDEX ix_sanitized_markdown_work_id ON public.sanitized_markdown USING btree (work_id)
+
+  Index: sanitized_markdown_pkey
+    CREATE UNIQUE INDEX sanitized_markdown_pkey ON public.sanitized_markdown USING btree (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: works
+────────────────────────────────────────────────────────────────────────────────
+
+  Index: ix_works_content_hash
+    CREATE INDEX ix_works_content_hash ON public.works USING btree (content_hash)
+
+  Index: ix_works_created_at
+    CREATE INDEX ix_works_created_at ON public.works USING btree (created_at DESC)
+
+  Index: ix_works_doi
+    CREATE INDEX ix_works_doi ON public.works USING btree (doi)
+
+  Index: ix_works_isbn
+    CREATE INDEX ix_works_isbn ON public.works USING btree (isbn)
+
+  Index: ix_works_processing_status_gin
+    CREATE INDEX ix_works_processing_status_gin ON public.works USING gin (processing_status)
+
+  Index: ix_works_simple_conversion_created_at
+    CREATE INDEX ix_works_simple_conversion_created_at ON public.works USING btree (created_at DESC) WHERE (processing_status ? 'simple_conversion_mode'::text)
+
+  Index: ix_works_title
+    CREATE INDEX ix_works_title ON public.works USING btree (title)
+
+  Index: ix_works_work_type
+    CREATE INDEX ix_works_work_type ON public.works USING btree (work_type)
+
+  Index: ix_works_year
+    CREATE INDEX ix_works_year ON public.works USING btree (year)
+
+  Index: works_pkey
+    CREATE UNIQUE INDEX works_pkey ON public.works USING btree (id)
+
+================================================================================
+CONSTRAINTS
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+Table: chunks
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_29661_1_not_null                    (None)
+  CHECK           2200_29661_3_not_null                    (None)
+  CHECK           2200_29661_4_not_null                    (None)
+  CHECK           2200_29661_5_not_null                    (None)
+  CHECK           2200_29661_7_not_null                    (None)
+  CHECK           2200_29661_8_not_null                    (None)
+  CHECK           2200_29661_9_not_null                    (None)
+  FOREIGN KEY     chunks_parent_id_fkey                    (parent_id) -> chunks(id)
+  FOREIGN KEY     chunks_work_id_fkey                      (work_id) -> works(id)
+  PRIMARY KEY     chunks_pkey                              (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_answers
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_148728_1_not_null                   (None)
+  CHECK           2200_148728_2_not_null                   (None)
+  CHECK           2200_148728_3_not_null                   (None)
+  CHECK           2200_148728_4_not_null                   (None)
+  CHECK           2200_148728_5_not_null                   (None)
+  CHECK           2200_148728_6_not_null                   (None)
+  FOREIGN KEY     experiment_answers_prompt_id_fkey        (prompt_id) -> experiment_prompts(id)
+  PRIMARY KEY     experiment_answers_pkey                  (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_dimension_results
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_148763_1_not_null                   (None)
+  CHECK           2200_148763_2_not_null                   (None)
+  CHECK           2200_148763_3_not_null                   (None)
+  CHECK           2200_148763_4_not_null                   (None)
+  CHECK           experiment_dimension_results_score_check (None)
+  FOREIGN KEY     experiment_dimension_results_evaluation_id_fkey (evaluation_id) -> experiment_evaluations(id)
+  PRIMARY KEY     experiment_dimension_results_pkey        (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_dimensions
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_148696_1_not_null                   (None)
+  CHECK           2200_148696_2_not_null                   (None)
+  CHECK           2200_148696_3_not_null                   (None)
+  CHECK           2200_148696_4_not_null                   (None)
+  FOREIGN KEY     experiment_dimensions_experiment_id_fkey (experiment_id) -> experiments(id)
+  PRIMARY KEY     experiment_dimensions_pkey               (id)
+  UNIQUE          uq_experiment_dimension_name             (experiment_id)
+  UNIQUE          uq_experiment_dimension_name             (dimension_name)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_evaluations
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_148744_1_not_null                   (None)
+  CHECK           2200_148744_2_not_null                   (None)
+  CHECK           2200_148744_3_not_null                   (None)
+  CHECK           2200_148744_5_not_null                   (None)
+  CHECK           experiment_evaluations_overall_score_check (None)
+  FOREIGN KEY     experiment_evaluations_answer_id_fkey    (answer_id) -> experiment_answers(id)
+  PRIMARY KEY     experiment_evaluations_pkey              (id)
+  UNIQUE          uq_experiment_evaluations_answer_id      (answer_id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiment_prompts
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_148712_1_not_null                   (None)
+  CHECK           2200_148712_2_not_null                   (None)
+  CHECK           2200_148712_3_not_null                   (None)
+  CHECK           2200_148712_4_not_null                   (None)
+  FOREIGN KEY     experiment_prompts_experiment_id_fkey    (experiment_id) -> experiments(id)
+  PRIMARY KEY     experiment_prompts_pkey                  (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: experiments
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_148681_10_not_null                  (None)
+  CHECK           2200_148681_11_not_null                  (None)
+  CHECK           2200_148681_1_not_null                   (None)
+  CHECK           2200_148681_2_not_null                   (None)
+  CHECK           2200_148681_9_not_null                   (None)
+  CHECK           chk_auto_mode_providers                  (None)
+  PRIMARY KEY     experiments_pkey                         (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: heading_modifications
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_131152_1_not_null                   (None)
+  CHECK           2200_131152_2_not_null                   (None)
+  CHECK           2200_131152_3_not_null                   (None)
+  CHECK           2200_131152_4_not_null                   (None)
+  CHECK           2200_131152_6_not_null                   (None)
+  CHECK           2200_131152_7_not_null                   (None)
+  CHECK           2200_131152_8_not_null                   (None)
+  FOREIGN KEY     heading_modifications_work_id_fkey       (work_id) -> works(id)
+  PRIMARY KEY     heading_modifications_pkey               (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: io_files
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_41358_1_not_null                    (None)
+  CHECK           2200_41358_2_not_null                    (None)
+  CHECK           2200_41358_3_not_null                    (None)
+  CHECK           2200_41358_4_not_null                    (None)
+  CHECK           2200_41358_5_not_null                    (None)
+  CHECK           2200_41358_6_not_null                    (None)
+  CHECK           2200_41358_7_not_null                    (None)
+  PRIMARY KEY     io_files_pkey                            (id)
+  UNIQUE          io_files_file_path_key                   (file_path)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: parsed_markdown
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_131120_1_not_null                   (None)
+  CHECK           2200_131120_2_not_null                   (None)
+  CHECK           2200_131120_3_not_null                   (None)
+  CHECK           2200_131120_4_not_null                   (None)
+  CHECK           2200_131120_5_not_null                   (None)
+  CHECK           2200_131120_6_not_null                   (None)
+  CHECK           2200_131120_7_not_null                   (None)
+  FOREIGN KEY     parsed_markdown_work_id_fkey             (work_id) -> works(id)
+  PRIMARY KEY     parsed_markdown_pkey                     (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: prompt_meta
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_90647_1_not_null                    (None)
+  CHECK           2200_90647_2_not_null                    (None)
+  CHECK           2200_90647_3_not_null                    (None)
+  PRIMARY KEY     prompt_meta_pkey                         (id)
+  UNIQUE          prompt_meta_function_tag_key             (function_tag)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: prompt_templates
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_90626_1_not_null                    (None)
+  CHECK           2200_90626_2_not_null                    (None)
+  CHECK           2200_90626_3_not_null                    (None)
+  CHECK           2200_90626_4_not_null                    (None)
+  CHECK           2200_90626_5_not_null                    (None)
+  CHECK           2200_90626_6_not_null                    (None)
+  CHECK           chk_version_positive                     (None)
+  PRIMARY KEY     prompt_templates_pkey                    (id)
+  UNIQUE          uq_function_tag_version                  (version)
+  UNIQUE          uq_function_tag_version                  (function_tag)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: queries
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_29631_10_not_null                   (None)
+  CHECK           2200_29631_13_not_null                   (None)
+  CHECK           2200_29631_14_not_null                   (None)
+  CHECK           2200_29631_1_not_null                    (None)
+  CHECK           2200_29631_2_not_null                    (None)
+  PRIMARY KEY     queries_pkey                             (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: rag_config
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_90673_1_not_null                    (None)
+  CHECK           2200_90673_2_not_null                    (None)
+  CHECK           2200_90673_3_not_null                    (None)
+  CHECK           2200_90673_5_not_null                    (None)
+  PRIMARY KEY     rag_config_pkey                          (id)
+  UNIQUE          rag_config_preset_name_key               (preset_name)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: results
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_46700_1_not_null                    (None)
+  CHECK           2200_46700_2_not_null                    (None)
+  CHECK           2200_46700_3_not_null                    (None)
+  CHECK           2200_46700_4_not_null                    (None)
+  CHECK           2200_46700_5_not_null                    (None)
+  FOREIGN KEY     results_query_id_fkey                    (query_id) -> queries(id)
+  PRIMARY KEY     results_pkey                             (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: sanitized_markdown
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_131136_1_not_null                   (None)
+  CHECK           2200_131136_2_not_null                   (None)
+  CHECK           2200_131136_3_not_null                   (None)
+  CHECK           2200_131136_4_not_null                   (None)
+  CHECK           2200_131136_5_not_null                   (None)
+  FOREIGN KEY     sanitized_markdown_work_id_fkey          (work_id) -> works(id)
+  PRIMARY KEY     sanitized_markdown_pkey                  (id)
+
+────────────────────────────────────────────────────────────────────────────────
+Table: works
+────────────────────────────────────────────────────────────────────────────────
+  CHECK           2200_29644_14_not_null                   (None)
+  CHECK           2200_29644_15_not_null                   (None)
+  CHECK           2200_29644_1_not_null                    (None)
+  CHECK           2200_29644_2_not_null                    (None)
+  PRIMARY KEY     works_pkey                               (id)
+
+================================================================================
+TRIGGERS AND FUNCTIONS
+================================================================================
+
+Triggers:
+
+  Table: chunks
+    Trigger: tsvector_update
+      Timing: BEFORE INSERT
+      Action: EXECUTE FUNCTION chunks_content_tsvector_trigger()
+    Trigger: tsvector_update
+      Timing: BEFORE UPDATE
+      Action: EXECUTE FUNCTION chunks_content_tsvector_trigger()
+
+  Table: experiments
+    Trigger: trigger_update_experiments_updated_at
+      Timing: BEFORE UPDATE
+      Action: EXECUTE FUNCTION update_experiments_updated_at()
+
+  Table: prompt_meta
+    Trigger: trigger_update_prompt_meta_updated_at
+      Timing: BEFORE UPDATE
+      Action: EXECUTE FUNCTION update_prompt_meta_updated_at()
+
+  Table: rag_config
+    Trigger: trigger_ensure_single_default_rag_config
+      Timing: AFTER UPDATE
+      Action: EXECUTE FUNCTION ensure_single_default_rag_config()
+    Trigger: trigger_ensure_single_default_rag_config
+      Timing: AFTER INSERT
+      Action: EXECUTE FUNCTION ensure_single_default_rag_config()
+    Trigger: trigger_update_rag_config_updated_at
+      Timing: BEFORE UPDATE
+      Action: EXECUTE FUNCTION update_rag_config_updated_at()
+
+────────────────────────────────────────────────────────────────────────────────
+Functions:
+────────────────────────────────────────────────────────────────────────────────
+
+array_to_halfvec:
+CREATE OR REPLACE FUNCTION public.array_to_halfvec(numeric[], integer, boolean)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_halfvec$function$
+
+
+array_to_halfvec:
+CREATE OR REPLACE FUNCTION public.array_to_halfvec(integer[], integer, boolean)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_halfvec$function$
+
+
+array_to_halfvec:
+CREATE OR REPLACE FUNCTION public.array_to_halfvec(real[], integer, boolean)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_halfvec$function$
+
+
+array_to_halfvec:
+CREATE OR REPLACE FUNCTION public.array_to_halfvec(double precision[], integer, boolean)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_halfvec$function$
+
+
+array_to_sparsevec:
+CREATE OR REPLACE FUNCTION public.array_to_sparsevec(numeric[], integer, boolean)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_sparsevec$function$
+
+
+array_to_sparsevec:
+CREATE OR REPLACE FUNCTION public.array_to_sparsevec(real[], integer, boolean)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_sparsevec$function$
+
+
+array_to_sparsevec:
+CREATE OR REPLACE FUNCTION public.array_to_sparsevec(integer[], integer, boolean)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_sparsevec$function$
+
+
+array_to_sparsevec:
+CREATE OR REPLACE FUNCTION public.array_to_sparsevec(double precision[], integer, boolean)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_sparsevec$function$
+
+
+array_to_vector:
+CREATE OR REPLACE FUNCTION public.array_to_vector(double precision[], integer, boolean)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_vector$function$
+
+
+array_to_vector:
+CREATE OR REPLACE FUNCTION public.array_to_vector(real[], integer, boolean)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_vector$function$
+
+
+array_to_vector:
+CREATE OR REPLACE FUNCTION public.array_to_vector(numeric[], integer, boolean)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_vector$function$
+
+
+array_to_vector:
+CREATE OR REPLACE FUNCTION public.array_to_vector(integer[], integer, boolean)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$array_to_vector$function$
+
+
+binary_quantize:
+CREATE OR REPLACE FUNCTION public.binary_quantize(vector)
+ RETURNS bit
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$binary_quantize$function$
+
+
+binary_quantize:
+CREATE OR REPLACE FUNCTION public.binary_quantize(halfvec)
+ RETURNS bit
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_binary_quantize$function$
+
+
+chunks_content_tsvector_trigger:
+CREATE OR REPLACE FUNCTION public.chunks_content_tsvector_trigger()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+            BEGIN
+                NEW.content_tsvector := to_tsvector('english', COALESCE(NEW.content, ''));
+                RETURN NEW;
+            END;
+            $function$
+
+
+cosine_distance:
+CREATE OR REPLACE FUNCTION public.cosine_distance(sparsevec, sparsevec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_cosine_distance$function$
+
+
+cosine_distance:
+CREATE OR REPLACE FUNCTION public.cosine_distance(vector, vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$cosine_distance$function$
+
+
+cosine_distance:
+CREATE OR REPLACE FUNCTION public.cosine_distance(halfvec, halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_cosine_distance$function$
+
+
+ensure_single_default_rag_config:
+CREATE OR REPLACE FUNCTION public.ensure_single_default_rag_config()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+            BEGIN
+                IF NEW.is_default = TRUE THEN
+                    UPDATE rag_config SET is_default = FALSE WHERE id != NEW.id;
+                END IF;
+                RETURN NEW;
+            END;
+            $function$
+
+
+halfvec:
+CREATE OR REPLACE FUNCTION public.halfvec(halfvec, integer, boolean)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec$function$
+
+
+halfvec_accum:
+CREATE OR REPLACE FUNCTION public.halfvec_accum(double precision[], halfvec)
+ RETURNS double precision[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_accum$function$
+
+
+halfvec_add:
+CREATE OR REPLACE FUNCTION public.halfvec_add(halfvec, halfvec)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_add$function$
+
+
+halfvec_avg:
+CREATE OR REPLACE FUNCTION public.halfvec_avg(double precision[])
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_avg$function$
+
+
+halfvec_cmp:
+CREATE OR REPLACE FUNCTION public.halfvec_cmp(halfvec, halfvec)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_cmp$function$
+
+
+halfvec_combine:
+CREATE OR REPLACE FUNCTION public.halfvec_combine(double precision[], double precision[])
+ RETURNS double precision[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_combine$function$
+
+
+halfvec_concat:
+CREATE OR REPLACE FUNCTION public.halfvec_concat(halfvec, halfvec)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_concat$function$
+
+
+halfvec_eq:
+CREATE OR REPLACE FUNCTION public.halfvec_eq(halfvec, halfvec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_eq$function$
+
+
+halfvec_ge:
+CREATE OR REPLACE FUNCTION public.halfvec_ge(halfvec, halfvec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_ge$function$
+
+
+halfvec_gt:
+CREATE OR REPLACE FUNCTION public.halfvec_gt(halfvec, halfvec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_gt$function$
+
+
+halfvec_in:
+CREATE OR REPLACE FUNCTION public.halfvec_in(cstring, oid, integer)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_in$function$
+
+
+halfvec_l2_squared_distance:
+CREATE OR REPLACE FUNCTION public.halfvec_l2_squared_distance(halfvec, halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_l2_squared_distance$function$
+
+
+halfvec_le:
+CREATE OR REPLACE FUNCTION public.halfvec_le(halfvec, halfvec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_le$function$
+
+
+halfvec_lt:
+CREATE OR REPLACE FUNCTION public.halfvec_lt(halfvec, halfvec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_lt$function$
+
+
+halfvec_mul:
+CREATE OR REPLACE FUNCTION public.halfvec_mul(halfvec, halfvec)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_mul$function$
+
+
+halfvec_ne:
+CREATE OR REPLACE FUNCTION public.halfvec_ne(halfvec, halfvec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_ne$function$
+
+
+halfvec_negative_inner_product:
+CREATE OR REPLACE FUNCTION public.halfvec_negative_inner_product(halfvec, halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_negative_inner_product$function$
+
+
+halfvec_out:
+CREATE OR REPLACE FUNCTION public.halfvec_out(halfvec)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_out$function$
+
+
+halfvec_recv:
+CREATE OR REPLACE FUNCTION public.halfvec_recv(internal, oid, integer)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_recv$function$
+
+
+halfvec_send:
+CREATE OR REPLACE FUNCTION public.halfvec_send(halfvec)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_send$function$
+
+
+halfvec_spherical_distance:
+CREATE OR REPLACE FUNCTION public.halfvec_spherical_distance(halfvec, halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_spherical_distance$function$
+
+
+halfvec_sub:
+CREATE OR REPLACE FUNCTION public.halfvec_sub(halfvec, halfvec)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_sub$function$
+
+
+halfvec_to_float4:
+CREATE OR REPLACE FUNCTION public.halfvec_to_float4(halfvec, integer, boolean)
+ RETURNS real[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_to_float4$function$
+
+
+halfvec_to_sparsevec:
+CREATE OR REPLACE FUNCTION public.halfvec_to_sparsevec(halfvec, integer, boolean)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_to_sparsevec$function$
+
+
+halfvec_to_vector:
+CREATE OR REPLACE FUNCTION public.halfvec_to_vector(halfvec, integer, boolean)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_to_vector$function$
+
+
+halfvec_typmod_in:
+CREATE OR REPLACE FUNCTION public.halfvec_typmod_in(cstring[])
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_typmod_in$function$
+
+
+hamming_distance:
+CREATE OR REPLACE FUNCTION public.hamming_distance(bit, bit)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$hamming_distance$function$
+
+
+hnsw_bit_support:
+CREATE OR REPLACE FUNCTION public.hnsw_bit_support(internal)
+ RETURNS internal
+ LANGUAGE c
+AS '$libdir/vector', $function$hnsw_bit_support$function$
+
+
+hnsw_halfvec_support:
+CREATE OR REPLACE FUNCTION public.hnsw_halfvec_support(internal)
+ RETURNS internal
+ LANGUAGE c
+AS '$libdir/vector', $function$hnsw_halfvec_support$function$
+
+
+hnsw_sparsevec_support:
+CREATE OR REPLACE FUNCTION public.hnsw_sparsevec_support(internal)
+ RETURNS internal
+ LANGUAGE c
+AS '$libdir/vector', $function$hnsw_sparsevec_support$function$
+
+
+hnswhandler:
+CREATE OR REPLACE FUNCTION public.hnswhandler(internal)
+ RETURNS index_am_handler
+ LANGUAGE c
+AS '$libdir/vector', $function$hnswhandler$function$
+
+
+inner_product:
+CREATE OR REPLACE FUNCTION public.inner_product(vector, vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$inner_product$function$
+
+
+inner_product:
+CREATE OR REPLACE FUNCTION public.inner_product(halfvec, halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_inner_product$function$
+
+
+inner_product:
+CREATE OR REPLACE FUNCTION public.inner_product(sparsevec, sparsevec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_inner_product$function$
+
+
+ivfflat_bit_support:
+CREATE OR REPLACE FUNCTION public.ivfflat_bit_support(internal)
+ RETURNS internal
+ LANGUAGE c
+AS '$libdir/vector', $function$ivfflat_bit_support$function$
+
+
+ivfflat_halfvec_support:
+CREATE OR REPLACE FUNCTION public.ivfflat_halfvec_support(internal)
+ RETURNS internal
+ LANGUAGE c
+AS '$libdir/vector', $function$ivfflat_halfvec_support$function$
+
+
+ivfflathandler:
+CREATE OR REPLACE FUNCTION public.ivfflathandler(internal)
+ RETURNS index_am_handler
+ LANGUAGE c
+AS '$libdir/vector', $function$ivfflathandler$function$
+
+
+jaccard_distance:
+CREATE OR REPLACE FUNCTION public.jaccard_distance(bit, bit)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$jaccard_distance$function$
+
+
+l1_distance:
+CREATE OR REPLACE FUNCTION public.l1_distance(sparsevec, sparsevec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_l1_distance$function$
+
+
+l1_distance:
+CREATE OR REPLACE FUNCTION public.l1_distance(vector, vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$l1_distance$function$
+
+
+l1_distance:
+CREATE OR REPLACE FUNCTION public.l1_distance(halfvec, halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_l1_distance$function$
+
+
+l2_distance:
+CREATE OR REPLACE FUNCTION public.l2_distance(sparsevec, sparsevec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_l2_distance$function$
+
+
+l2_distance:
+CREATE OR REPLACE FUNCTION public.l2_distance(vector, vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$l2_distance$function$
+
+
+l2_distance:
+CREATE OR REPLACE FUNCTION public.l2_distance(halfvec, halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_l2_distance$function$
+
+
+l2_norm:
+CREATE OR REPLACE FUNCTION public.l2_norm(halfvec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_l2_norm$function$
+
+
+l2_norm:
+CREATE OR REPLACE FUNCTION public.l2_norm(sparsevec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_l2_norm$function$
+
+
+l2_normalize:
+CREATE OR REPLACE FUNCTION public.l2_normalize(vector)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$l2_normalize$function$
+
+
+l2_normalize:
+CREATE OR REPLACE FUNCTION public.l2_normalize(halfvec)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_l2_normalize$function$
+
+
+l2_normalize:
+CREATE OR REPLACE FUNCTION public.l2_normalize(sparsevec)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_l2_normalize$function$
+
+
+sparsevec:
+CREATE OR REPLACE FUNCTION public.sparsevec(sparsevec, integer, boolean)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec$function$
+
+
+sparsevec_cmp:
+CREATE OR REPLACE FUNCTION public.sparsevec_cmp(sparsevec, sparsevec)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_cmp$function$
+
+
+sparsevec_eq:
+CREATE OR REPLACE FUNCTION public.sparsevec_eq(sparsevec, sparsevec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_eq$function$
+
+
+sparsevec_ge:
+CREATE OR REPLACE FUNCTION public.sparsevec_ge(sparsevec, sparsevec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_ge$function$
+
+
+sparsevec_gt:
+CREATE OR REPLACE FUNCTION public.sparsevec_gt(sparsevec, sparsevec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_gt$function$
+
+
+sparsevec_in:
+CREATE OR REPLACE FUNCTION public.sparsevec_in(cstring, oid, integer)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_in$function$
+
+
+sparsevec_l2_squared_distance:
+CREATE OR REPLACE FUNCTION public.sparsevec_l2_squared_distance(sparsevec, sparsevec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_l2_squared_distance$function$
+
+
+sparsevec_le:
+CREATE OR REPLACE FUNCTION public.sparsevec_le(sparsevec, sparsevec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_le$function$
+
+
+sparsevec_lt:
+CREATE OR REPLACE FUNCTION public.sparsevec_lt(sparsevec, sparsevec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_lt$function$
+
+
+sparsevec_ne:
+CREATE OR REPLACE FUNCTION public.sparsevec_ne(sparsevec, sparsevec)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_ne$function$
+
+
+sparsevec_negative_inner_product:
+CREATE OR REPLACE FUNCTION public.sparsevec_negative_inner_product(sparsevec, sparsevec)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_negative_inner_product$function$
+
+
+sparsevec_out:
+CREATE OR REPLACE FUNCTION public.sparsevec_out(sparsevec)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_out$function$
+
+
+sparsevec_recv:
+CREATE OR REPLACE FUNCTION public.sparsevec_recv(internal, oid, integer)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_recv$function$
+
+
+sparsevec_send:
+CREATE OR REPLACE FUNCTION public.sparsevec_send(sparsevec)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_send$function$
+
+
+sparsevec_to_halfvec:
+CREATE OR REPLACE FUNCTION public.sparsevec_to_halfvec(sparsevec, integer, boolean)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_to_halfvec$function$
+
+
+sparsevec_to_vector:
+CREATE OR REPLACE FUNCTION public.sparsevec_to_vector(sparsevec, integer, boolean)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_to_vector$function$
+
+
+sparsevec_typmod_in:
+CREATE OR REPLACE FUNCTION public.sparsevec_typmod_in(cstring[])
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$sparsevec_typmod_in$function$
+
+
+subvector:
+CREATE OR REPLACE FUNCTION public.subvector(vector, integer, integer)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$subvector$function$
+
+
+subvector:
+CREATE OR REPLACE FUNCTION public.subvector(halfvec, integer, integer)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_subvector$function$
+
+
+update_experiments_updated_at:
+CREATE OR REPLACE FUNCTION public.update_experiments_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$function$
+
+
+update_prompt_meta_updated_at:
+CREATE OR REPLACE FUNCTION public.update_prompt_meta_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$function$
+
+
+update_rag_config_updated_at:
+CREATE OR REPLACE FUNCTION public.update_rag_config_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $function$
+
+
+vector:
+CREATE OR REPLACE FUNCTION public.vector(vector, integer, boolean)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector$function$
+
+
+vector_accum:
+CREATE OR REPLACE FUNCTION public.vector_accum(double precision[], vector)
+ RETURNS double precision[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_accum$function$
+
+
+vector_add:
+CREATE OR REPLACE FUNCTION public.vector_add(vector, vector)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_add$function$
+
+
+vector_avg:
+CREATE OR REPLACE FUNCTION public.vector_avg(double precision[])
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_avg$function$
+
+
+vector_cmp:
+CREATE OR REPLACE FUNCTION public.vector_cmp(vector, vector)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_cmp$function$
+
+
+vector_combine:
+CREATE OR REPLACE FUNCTION public.vector_combine(double precision[], double precision[])
+ RETURNS double precision[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_combine$function$
+
+
+vector_concat:
+CREATE OR REPLACE FUNCTION public.vector_concat(vector, vector)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_concat$function$
+
+
+vector_dims:
+CREATE OR REPLACE FUNCTION public.vector_dims(vector)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_dims$function$
+
+
+vector_dims:
+CREATE OR REPLACE FUNCTION public.vector_dims(halfvec)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$halfvec_vector_dims$function$
+
+
+vector_eq:
+CREATE OR REPLACE FUNCTION public.vector_eq(vector, vector)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_eq$function$
+
+
+vector_ge:
+CREATE OR REPLACE FUNCTION public.vector_ge(vector, vector)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_ge$function$
+
+
+vector_gt:
+CREATE OR REPLACE FUNCTION public.vector_gt(vector, vector)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_gt$function$
+
+
+vector_in:
+CREATE OR REPLACE FUNCTION public.vector_in(cstring, oid, integer)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_in$function$
+
+
+vector_l2_squared_distance:
+CREATE OR REPLACE FUNCTION public.vector_l2_squared_distance(vector, vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_l2_squared_distance$function$
+
+
+vector_le:
+CREATE OR REPLACE FUNCTION public.vector_le(vector, vector)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_le$function$
+
+
+vector_lt:
+CREATE OR REPLACE FUNCTION public.vector_lt(vector, vector)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_lt$function$
+
+
+vector_mul:
+CREATE OR REPLACE FUNCTION public.vector_mul(vector, vector)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_mul$function$
+
+
+vector_ne:
+CREATE OR REPLACE FUNCTION public.vector_ne(vector, vector)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_ne$function$
+
+
+vector_negative_inner_product:
+CREATE OR REPLACE FUNCTION public.vector_negative_inner_product(vector, vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_negative_inner_product$function$
+
+
+vector_norm:
+CREATE OR REPLACE FUNCTION public.vector_norm(vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_norm$function$
+
+
+vector_out:
+CREATE OR REPLACE FUNCTION public.vector_out(vector)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_out$function$
+
+
+vector_recv:
+CREATE OR REPLACE FUNCTION public.vector_recv(internal, oid, integer)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_recv$function$
+
+
+vector_send:
+CREATE OR REPLACE FUNCTION public.vector_send(vector)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_send$function$
+
+
+vector_spherical_distance:
+CREATE OR REPLACE FUNCTION public.vector_spherical_distance(vector, vector)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_spherical_distance$function$
+
+
+vector_sub:
+CREATE OR REPLACE FUNCTION public.vector_sub(vector, vector)
+ RETURNS vector
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_sub$function$
+
+
+vector_to_float4:
+CREATE OR REPLACE FUNCTION public.vector_to_float4(vector, integer, boolean)
+ RETURNS real[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_to_float4$function$
+
+
+vector_to_halfvec:
+CREATE OR REPLACE FUNCTION public.vector_to_halfvec(vector, integer, boolean)
+ RETURNS halfvec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_to_halfvec$function$
+
+
+vector_to_sparsevec:
+CREATE OR REPLACE FUNCTION public.vector_to_sparsevec(vector, integer, boolean)
+ RETURNS sparsevec
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_to_sparsevec$function$
+
+
+vector_typmod_in:
+CREATE OR REPLACE FUNCTION public.vector_typmod_in(cstring[])
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/vector', $function$vector_typmod_in$function$
+
+
+================================================================================
+SEQUENCES
+================================================================================
+  chunks_id_seq
+  experiment_answers_id_seq
+  experiment_dimension_results_id_seq
+  experiment_dimensions_id_seq
+  experiment_evaluations_id_seq
+  experiment_prompts_id_seq
+  experiments_id_seq
+  heading_modifications_id_seq
+  io_files_id_seq
+  parsed_markdown_id_seq
+  prompt_meta_id_seq
+  prompt_templates_id_seq
+  queries_id_seq
+  rag_config_id_seq
+  results_id_seq
+  sanitized_markdown_id_seq
+  works_id_seq
+
+================================================================================
+DUMP COMPLETE
+================================================================================

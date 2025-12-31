@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import String, Text, Integer, DateTime, func, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -79,7 +80,7 @@ class Work(Base):
     work_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     toc: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     files: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    processing_status: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    processing_status: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

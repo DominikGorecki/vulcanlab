@@ -15,7 +15,9 @@ Example (as library):
 import argparse
 import sys
 import os
+from pathlib import Path
 
+import yaml
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
@@ -195,6 +197,15 @@ def create_enums(verbose: bool = False) -> None:
         print("Creating enum types...")
 
     with engine.connect() as conn:
+        # Create filetype enum for io_files table (matching working database)
+        conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE filetype AS ENUM ('INPUT', 'TO_CONVERT');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+        """))
+
         # Create file_type enum with all values
         conn.execute(text("""
             DO $$ BEGIN
@@ -251,9 +262,63 @@ def create_tables(verbose: bool = False) -> None:
         print("Tables created successfully")
 
 
+def create_io_files_triggers(verbose: bool = False) -> None:
+    """
+    Create triggers for io_files table.
+
+    The table itself is created by SQLAlchemy's create_all(), but we need
+    to manually add the trigger for automatically updating the updated_at column.
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Creating io_files triggers...")
+
+    with engine.connect() as conn:
+        # Create trigger function to automatically update updated_at timestamp
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_io_files_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = NOW();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_io_files_updated_at ON io_files"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_io_files_updated_at
+                BEFORE UPDATE ON io_files
+                FOR EACH ROW
+                EXECUTE FUNCTION update_io_files_updated_at()
+        """))
+
+        conn.commit()
+
+    # Transfer ownership to app user
+    db_config = load_config().database
+    app_user = db_config.app_user
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f'ALTER FUNCTION update_io_files_updated_at() OWNER TO "{app_user}"'))
+            conn.commit()
+            if verbose:
+                print(f"Transferred ownership of io_files trigger function to {app_user}")
+    except Exception as e:
+        if verbose:
+            print(f"Note: Could not transfer ownership (this is okay if running as app user): {e}")
+
+    if verbose:
+        print("io_files triggers created successfully")
+
+
 def create_vector_indexes(verbose: bool = False) -> None:
     """
-    Create HNSW indexes for vector columns.
+    Create HNSW indexes for vector columns and other chunk optimization indexes.
 
     Args:
         verbose: If True, print progress information.
@@ -277,6 +342,13 @@ def create_vector_indexes(verbose: bool = False) -> None:
             CREATE INDEX IF NOT EXISTS ix_queries_embedding_hyde_hnsw
             ON queries USING hnsw (embedding_hyde vector_cosine_ops)
         """))
+
+        # Create index on sentence_count for filtering (migration 019)
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_chunks_sentence_count
+            ON chunks (sentence_count)
+        """))
+
         conn.commit()
 
     if verbose:
@@ -354,6 +426,7 @@ def create_history_indexes(verbose: bool = False) -> None:
     This creates two indexes on the works table:
     1. General timestamp index for sorting all works by created_at
     2. Partial index for filtering simple conversion works with timestamp sorting
+    3. GIN index on processing_status JSONB for efficient JSON queries
 
     The partial index only includes works with simple_conversion_mode in their
     processing_status JSON, making it more efficient for simple conversion queries.
@@ -365,6 +438,12 @@ def create_history_indexes(verbose: bool = False) -> None:
         print("Creating history query indexes...")
 
     with engine.connect() as conn:
+        # Create GIN index on processing_status for JSONB operations (migration 008)
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_works_processing_status_gin
+            ON works USING gin (processing_status)
+        """))
+
         # Create general timestamp index for sorting all works
         conn.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_works_created_at
@@ -457,166 +536,218 @@ def create_prompt_meta_table(verbose: bool = False) -> None:
         print("prompt_meta table created successfully")
 
 
-def seed_simple_conversion_templates(verbose: bool = False) -> None:
+def seed_prompt_templates(verbose: bool = False) -> None:
     """
-    Seed prompt templates for simple conversion.
+    Seed all prompt templates from YAML config and individual template files.
 
-    Creates two templates:
-    - simple_sanitize_small: Full document sanitization
-    - simple_sanitize_large: Condensed document analysis
+    Reads templates.yaml configuration and loads template content from
+    individual .txt files in the seed_data/templates/ directory.
+
+    Also seeds prompt_meta (variable definitions) from variables.yaml.
+
+    This replaces the old hardcoded SQL approach and allows easy modification
+    of templates by editing the .txt files.
     """
     if verbose:
-        print("Seeding simple conversion prompt templates...")
+        print("Seeding prompt templates from configuration files...")
+
+    # Get path to templates directory
+    seed_data_dir = Path(__file__).parent / "seed_data"
+    templates_config_path = seed_data_dir / "templates.yaml"
+    variables_config_path = seed_data_dir / "variables.yaml"
+    templates_dir = seed_data_dir / "templates"
+
+    # Load templates configuration
+    if not templates_config_path.exists():
+        if verbose:
+            print(f"Warning: templates.yaml not found at {templates_config_path}")
+        return
+
+    with open(templates_config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+
+    templates = config.get('templates', [])
+    if not templates:
+        if verbose:
+            print("Warning: No templates found in templates.yaml")
+        return
+
+    # Load variables configuration
+    variables_map = {}
+    if variables_config_path.exists():
+        with open(variables_config_path, 'r', encoding='utf-8') as f:
+            variables_config = yaml.safe_load(f)
+            for var_entry in variables_config.get('variables', []):
+                variables_map[var_entry['function_tag']] = var_entry['variables']
 
     with engine.connect() as conn:
-        # Check if templates already exist
-        result = conn.execute(text("""
-            SELECT COUNT(*) FROM prompt_templates
-            WHERE function_tag IN ('simple_sanitize_small', 'simple_sanitize_large')
-        """))
-        count = result.scalar()
+        seeded_count = 0
+        skipped_count = 0
+        meta_seeded_count = 0
+        meta_skipped_count = 0
 
-        if count > 0:
+        for template_config in templates:
+            function_tag = template_config['function_tag']
+            version = template_config['version']
+            title = template_config['title']
+            template_type = template_config.get('template_type')
+            is_active = template_config.get('is_active', True)
+            content_file = template_config['content_file']
+
+            # Check if template already exists
+            result = conn.execute(
+                text("""
+                    SELECT COUNT(*) FROM prompt_templates
+                    WHERE function_tag = :tag AND version = :ver
+                """),
+                {"tag": function_tag, "ver": version}
+            )
+            exists = result.scalar() > 0
+
+            if exists:
+                if verbose:
+                    print(f"  Template {function_tag} v{version} already exists, skipping")
+                skipped_count += 1
+                continue
+
+            # Load template content from file
+            content_path = templates_dir / content_file
+            if not content_path.exists():
+                if verbose:
+                    print(f"  Warning: Template file not found: {content_path}")
+                continue
+
+            with open(content_path, 'r', encoding='utf-8') as f:
+                template_content = f.read()
+
+            # Insert template
+            conn.execute(
+                text("""
+                    INSERT INTO prompt_templates
+                    (function_tag, version, title, template_content, template_type, is_active, created_at, updated_at)
+                    VALUES (:tag, :ver, :title, :content, :type, :active, NOW(), NOW())
+                """),
+                {
+                    "tag": function_tag,
+                    "ver": version,
+                    "title": title,
+                    "content": template_content,
+                    "type": template_type,
+                    "active": is_active
+                }
+            )
+            seeded_count += 1
+
             if verbose:
-                print("Simple conversion templates already exist, skipping")
-            return
+                print(f"  Seeded: {function_tag} v{version} - {title}")
 
-        # Insert simple_sanitize_small template
-        conn.execute(text("""
-            INSERT INTO prompt_templates (function_tag, version, title, template_content, is_active, created_at, updated_at)
-            VALUES (
-                'simple_sanitize_small',
-                1,
-                'Simple Conversion - Small Document Sanitization',
-                'You are an expert document processor preparing academic and research documents for a Retrieval-Augmented Generation (RAG) system.
+        # Seed prompt_meta (variable definitions)
+        if variables_map:
+            if verbose:
+                print("\n  Seeding variable definitions (prompt_meta)...")
 
-Your task is to process the provided markdown document to ensure it has:
-1. **Proper document hierarchy**: Adjust title heading levels to create appropriate nesting based on context.
-2. **Clean, RAG-relevant content**: Remove all non-topical content and fix conversion artifacts.
+            for function_tag, variables in variables_map.items():
+                # Check if meta already exists
+                result = conn.execute(
+                    text("SELECT COUNT(*) FROM prompt_meta WHERE function_tag = :tag"),
+                    {"tag": function_tag}
+                )
+                meta_exists = result.scalar() > 0
 
-## Instructions
+                if meta_exists:
+                    if verbose:
+                        print(f"    Variables for {function_tag} already exist, skipping")
+                    meta_skipped_count += 1
+                    continue
 
-### Hierarchy Adjustments
-- Review all headings (lines starting with #, ##, ###, etc.)
-- If a heading is NOT actually a title (e.g., page numbers, "References", "Table of Contents"), REMOVE the heading markers (delete the #''s entirely)
-- For actual titles, adjust heading levels (H1-H6) to create proper nesting based on semantic relationships
-- Ensure logical hierarchy: child sections should be one level deeper than their parent
+                # Insert prompt_meta
+                import json
+                conn.execute(
+                    text("""
+                        INSERT INTO prompt_meta (function_tag, variables, created_at, updated_at)
+                        VALUES (:tag, CAST(:vars AS jsonb), NOW(), NOW())
+                    """),
+                    {
+                        "tag": function_tag,
+                        "vars": json.dumps(variables)
+                    }
+                )
+                meta_seeded_count += 1
 
-### Content Sanitization
-- **Fix conversion artifacts**: Replace poorly converted symbols/glyphs with correct text using surrounding context
-- **Remove meta-information**: Delete download sources, file metadata, copyright notices
-- **Remove non-topical sections**: Delete References, Acknowledgments, Table of Contents, page numbers, headers/footers
-- **Remove gibberish**: Delete any garbled text that resulted from poor OCR or conversion
-- **Preserve RAG-relevant content**: Keep all substantive text related to the document''s main topics
-
-### Output Format
-- Return ONLY the sanitized markdown
-- Do NOT add explanations, comments, or metadata
-- Do NOT wrap output in code blocks or additional formatting
-- Maintain markdown syntax (headings with #, lists, emphasis, etc.)
-
----
-
-## Document to Process
-
-{markdown}
-
----
-
-## Sanitized Output',
-                TRUE,
-                NOW(),
-                NOW()
-            )
-        """))
-
-        # Insert simple_sanitize_large template
-        conn.execute(text("""
-            INSERT INTO prompt_templates (function_tag, version, title, template_content, is_active, created_at, updated_at)
-            VALUES (
-                'simple_sanitize_large',
-                1,
-                'Simple Conversion - Large Document Analysis',
-                'You are an expert document processor analyzing a large document''s structure for a RAG system.
-
-You will receive a CONDENSED representation showing each heading with contextual sentences. Your task is to provide heading-level modifications.
-
-## Instructions
-
-For each heading, determine:
-
-1. **Action**: Choose one:
-   - `KEEP`: Heading is valid, keep as-is
-   - `CHANGE`: Heading should be modified (level change, text cleanup)
-   - `REMOVE`: Not a real heading (e.g., page numbers, "References")
-
-2. **Modified Heading**: If action=CHANGE, provide the corrected heading with proper markdown level markers (#, ##, ###)
-   - Adjust heading level for proper hierarchy
-   - Clean up formatting issues (extra spaces, weird characters)
-   - If action=REMOVE or action=KEEP, leave this blank
-
-3. **Vectorize**: Choose one:
-   - `VECTORIZE`: This section contains RAG-relevant content and should be indexed
-   - `SKIP`: This section is not relevant (meta-information, acknowledgments, etc.)
-
-## Output Format
-
-Provide your modifications as a structured list, one per heading:
-
-```
-LINE: {line_number}
-ACTION: {KEEP|CHANGE|REMOVE}
-MODIFIED: {new heading if ACTION=CHANGE, otherwise blank}
-VECTORIZE: {VECTORIZE|SKIP}
----
-```
-
-## Example
-
-Input:
-```
-5: ## Introduction
-  This paper presents a novel approach to machine learning. We focus on neural networks.
-  ...
-  The rest of the paper is organized as follows.
-
-12: ### Page 3
-  Lorem ipsum dolor sit amet.
-```
-
-Output:
-```
-LINE: 5
-ACTION: KEEP
-MODIFIED:
-VECTORIZE: VECTORIZE
----
-LINE: 12
-ACTION: REMOVE
-MODIFIED:
-VECTORIZE: SKIP
----
-```
-
----
-
-## Condensed Document
-
-{condensed_document}
-
----
-
-## Your Modifications',
-                TRUE,
-                NOW(),
-                NOW()
-            )
-        """))
+                if verbose:
+                    print(f"    Seeded variables for: {function_tag} ({len(variables)} variables)")
 
         conn.commit()
 
         if verbose:
-            print("Simple conversion templates seeded successfully")
+            print(f"\nTemplate seeding complete: {seeded_count} seeded, {skipped_count} skipped")
+            if variables_map:
+                print(f"Variable definitions: {meta_seeded_count} seeded, {meta_skipped_count} skipped")
+
+
+def seed_simple_conversion_templates(verbose: bool = False) -> None:
+    """
+    DEPRECATED: Use seed_prompt_templates() instead.
+
+    This function is kept for backwards compatibility but now just calls
+    the new file-based seeding function.
+    """
+    if verbose:
+        print("Note: seed_simple_conversion_templates() is deprecated, using seed_prompt_templates()")
+    seed_prompt_templates(verbose=verbose)
+
+
+def create_experiments_triggers(verbose: bool = False) -> None:
+    """
+    Create triggers for experiments table.
+
+    Creates trigger to auto-update the updated_at timestamp.
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Creating experiments triggers...")
+
+    with engine.connect() as conn:
+        # Create trigger function for updated_at
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_experiments_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_experiments_updated_at ON experiments"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_experiments_updated_at
+                BEFORE UPDATE ON experiments
+                FOR EACH ROW
+                EXECUTE FUNCTION update_experiments_updated_at()
+        """))
+
+        conn.commit()
+
+    # Transfer ownership to app user
+    db_config = load_config().database
+    app_user = db_config.app_user
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f'ALTER FUNCTION update_experiments_updated_at() OWNER TO "{app_user}"'))
+            conn.commit()
+            if verbose:
+                print(f"Transferred ownership of experiments trigger function to {app_user}")
+    except Exception as e:
+        if verbose:
+            print(f"Note: Could not transfer ownership (this is okay if running as app user): {e}")
+
+    if verbose:
+        print("Experiments triggers created successfully")
 
 
 def create_default_rag_config(verbose: bool = False) -> None:
@@ -784,12 +915,13 @@ def init_database(verbose: bool = False) -> None:
     enable_pgvector_extension(verbose=verbose)
     create_enums(verbose=verbose)
     create_tables(verbose=verbose)
+    create_io_files_triggers(verbose=verbose)
+    create_experiments_triggers(verbose=verbose)
     create_vector_indexes(verbose=verbose)
     create_fulltext_search(verbose=verbose)
     create_history_indexes(verbose=verbose)
     create_prompt_meta_table(verbose=verbose)
     seed_prompt_templates(verbose=verbose)
-    seed_simple_conversion_templates(verbose=verbose)
     create_default_rag_config(verbose=verbose)
 
     if verbose:

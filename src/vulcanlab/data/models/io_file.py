@@ -13,8 +13,8 @@ from ..database import Base
 class FileType(str, enum.Enum):
     """File type enumeration."""
 
-    INPUT = "input"
-    TO_CONVERT = "to_convert"
+    INPUT = "INPUT"
+    TO_CONVERT = "TO_CONVERT"
 
 
 class IOFile(Base):
@@ -28,7 +28,11 @@ class IOFile(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     filename: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    file_type: Mapped[FileType] = mapped_column(SQLEnum(FileType), nullable=False, index=True)
+    file_type: Mapped[FileType] = mapped_column(
+        SQLEnum(FileType, name="filetype", values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True
+    )
     file_path: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -45,6 +49,11 @@ class IOFile(Base):
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc)
+    )
+    simple_conversion: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        server_default="false"
     )
 
     def __repr__(self) -> str:

@@ -1,0 +1,62 @@
+# Prompt Template Seeding Configuration
+# Each template will be read from templates/{function_tag}.txt
+#
+# To modify a template: edit the corresponding .txt file in templates/
+# To add a new template: add an entry here and create the .txt file
+
+templates:
+  - function_tag: query_expansion
+    version: 1
+    title: "Query Expansion - Multi-Query Expansion (MQE) and HyDE"
+    template_type: null
+    is_active: true
+    content_file: query_expansion.txt
+
+  - function_tag: rag_augmentation
+    version: 3
+    title: "Eval - No Ref"
+    template_type: null
+    is_active: true
+    content_file: rag_augmentation.txt
+
+  - function_tag: vectorization_suggestions
+    version: 1
+    title: "Vectorization Suggestions - Heading Analysis"
+    template_type: null
+    is_active: true
+    content_file: vectorization_suggestions.txt
+
+  - function_tag: toc_extraction
+    version: 2
+    title: "Markdown"
+    template_type: null
+    is_active: true
+    content_file: toc_extraction.txt
+
+  - function_tag: heading_hierarchy
+    version: 1
+    title: "Heading Hierarchy Corrections - ToC Alignment"
+    template_type: null
+    is_active: true
+    content_file: heading_hierarchy.txt
+
+  - function_tag: simple_sanitize_small
+    version: 1
+    title: "Simple Conversion - Small Document Sanitization"
+    template_type: null
+    is_active: true
+    content_file: simple_sanitize_small.txt
+
+  - function_tag: simple_sanitize_large
+    version: 2
+    title: "Simple Conversion - Large Document Analysis"
+    template_type: null
+    is_active: true
+    content_file: simple_sanitize_large.txt
+
+  - function_tag: eval_default
+    version: 1
+    title: "Default Evaluation Template - Comparative Scoring"
+    template_type: eval
+    is_active: true
+    content_file: eval_default.txt

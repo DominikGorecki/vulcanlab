@@ -48,6 +48,7 @@ class PromptTemplate(Base):
         CheckConstraint('version > 0', name='chk_version_positive'),
         Index('idx_prompt_templates_function_tag', 'function_tag'),
         Index('idx_prompt_templates_active', 'function_tag', 'is_active'),
+        Index('idx_prompt_templates_type', 'template_type'),
     )
 
     @validates('version')
