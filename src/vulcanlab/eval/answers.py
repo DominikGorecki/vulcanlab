@@ -9,10 +9,10 @@ import logging
 import secrets
 from typing import List
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
-from vulcanlab.data.models.experiment import ExperimentAnswer
+from vulcanlab.data.models.experiment import ExperimentAnswer, ExperimentEvaluation
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -119,4 +119,72 @@ def get_answer_by_id(session: Session, answer_id: int) -> ExperimentAnswer:
         raise ValueError(f"Answer with id {answer_id} not found")
 
     logger.debug(f"Retrieved answer: id={answer.id}, prompt_id={answer.prompt_id}")
+    return answer
+
+
+def delete_answer_pair(session: Session, answer_id: int) -> None:
+    """
+    Delete an answer pair (cascade deletes evaluation and dimension results).
+
+    Args:
+        session: Database session.
+        answer_id: ID of the answer to delete.
+
+    Raises:
+        ValueError: If answer_id is not found.
+    """
+    answer = session.query(ExperimentAnswer).filter(
+        ExperimentAnswer.id == answer_id
+    ).first()
+
+    if not answer:
+        logger.warning(f"Cannot delete - answer not found: id={answer_id}")
+        raise ValueError(f"Answer with id {answer_id} not found")
+
+    prompt_id = answer.prompt_id
+
+    session.delete(answer)
+    session.flush()  # Cascade delete happens here
+
+    logger.info(
+        f"Deleted answer pair: id={answer_id}, prompt_id={prompt_id} "
+        f"(cascade deleted evaluation and dimension results)"
+    )
+
+
+def get_answer_with_evaluation(session: Session, answer_id: int) -> ExperimentAnswer:
+    """
+    Get answer by ID with eager-loaded evaluation and dimension results.
+
+    Uses LEFT JOIN to load evaluation relationship if exists.
+
+    Args:
+        session: Database session.
+        answer_id: ID of the answer to retrieve.
+
+    Returns:
+        ExperimentAnswer with evaluation relationship populated.
+
+    Raises:
+        ValueError: If answer_id is not found.
+    """
+    answer = (
+        session.query(ExperimentAnswer)
+        .options(
+            joinedload(ExperimentAnswer.evaluation).joinedload(
+                ExperimentEvaluation.dimension_results
+            )
+        )
+        .filter(ExperimentAnswer.id == answer_id)
+        .first()
+    )
+
+    if not answer:
+        logger.warning(f"Answer not found: id={answer_id}")
+        raise ValueError(f"Answer with id {answer_id} not found")
+
+    logger.debug(
+        f"Retrieved answer with evaluation: id={answer.id}, "
+        f"has_evaluation={answer.evaluation is not None}"
+    )
     return answer

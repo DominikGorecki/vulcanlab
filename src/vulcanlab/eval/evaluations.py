@@ -33,7 +33,8 @@ def generate_eval_prompt(session: Session, answer_id: int) -> str:
     Generate an evaluation prompt for an answer pair.
 
     Retrieves the answer pair, loads the prompt, and resolves the evaluation
-    template with actual values.
+    template with actual values. Can be called for already-evaluated answers
+    to regenerate the prompt.
 
     Args:
         session: Database session.
@@ -43,17 +44,10 @@ def generate_eval_prompt(session: Session, answer_id: int) -> str:
         Resolved evaluation prompt ready to send to judge model.
 
     Raises:
-        ValueError: If answer_id not found or answer already evaluated.
+        ValueError: If answer_id not found.
     """
     # Get answer with eager loading of prompt relationship
     answer = get_answer_by_id(session, answer_id)
-
-    # Check if already evaluated
-    if answer.evaluation is not None:
-        raise ValueError(
-            f"Answer {answer_id} has already been evaluated. "
-            "Delete the existing evaluation first."
-        )
 
     # Get prompt text and experiment
     prompt_text = answer.prompt.prompt_text
@@ -105,13 +99,14 @@ def submit_evaluation(
     answer_id: int,
     overall_score: int,
     justification: str,
-    dimension_scores: Dict[str, int]
+    dimension_scores: Dict[str, int],
+    overwrite: bool = False
 ) -> ExperimentEvaluation:
     """
     Submit an evaluation for an answer pair.
 
     Creates an ExperimentEvaluation and associated ExperimentDimensionResult
-    records. Validates score ranges.
+    records. Validates score ranges. Can optionally overwrite existing evaluation.
 
     Args:
         session: Database session.
@@ -119,21 +114,33 @@ def submit_evaluation(
         overall_score: Overall comparison score (-10 to 10).
         justification: Text explanation of the evaluation.
         dimension_scores: Dict mapping dimension names to scores (-10 to 10).
+        overwrite: If True, deletes existing evaluation before creating new one.
+                  If False (default), raises ValueError if evaluation exists.
 
     Returns:
         Created ExperimentEvaluation object.
 
     Raises:
-        ValueError: If answer not found, already evaluated, or scores invalid.
+        ValueError: If answer not found, already evaluated (when overwrite=False),
+                   or scores invalid.
         IntegrityError: If database constraints violated (e.g., unique constraint).
     """
-    # Validate answer exists and not yet evaluated
+    # Validate answer exists and handle existing evaluation
     answer = get_answer_by_id(session, answer_id)
 
     if answer.evaluation is not None:
-        raise ValueError(
-            f"Answer {answer_id} has already been evaluated. "
-            "Delete the existing evaluation first."
+        if not overwrite:
+            raise ValueError(
+                f"Answer {answer_id} has already been evaluated. "
+                "Delete the existing evaluation first."
+            )
+        # If overwrite=True, delete existing evaluation
+        existing_eval_id = answer.evaluation.id
+        session.delete(answer.evaluation)
+        session.flush()  # CASCADE deletes dimension_results
+        logger.info(
+            f"Deleted existing evaluation id={existing_eval_id} "
+            f"for answer {answer_id} (overwrite=True)"
         )
 
     # Validate overall score range
@@ -209,7 +216,8 @@ def submit_evaluation(
         session.flush()  # Ensure all dimension results are persisted
 
         logger.info(
-            f"Created evaluation: id={evaluation.id}, answer_id={answer_id}, "
+            f"{'Overwrote' if overwrite else 'Created'} evaluation: "
+            f"id={evaluation.id}, answer_id={answer_id}, "
             f"overall_score={overall_score}, dimensions={len(dimension_scores)}"
         )
 

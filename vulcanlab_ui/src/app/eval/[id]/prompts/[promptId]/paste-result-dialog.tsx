@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle, AlertCircle, Info } from "lucide-react";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -22,6 +23,7 @@ interface PasteResultDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   answerId: number;
+  hasExistingEvaluation: boolean;
   onSuccess: () => void;
 }
 
@@ -35,6 +37,7 @@ export function PasteResultDialog({
   open,
   onOpenChange,
   answerId,
+  hasExistingEvaluation,
   onSuccess,
 }: PasteResultDialogProps) {
   const { toast } = useToast();
@@ -42,6 +45,14 @@ export function PasteResultDialog({
   const [parseError, setParseError] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ParsedEvaluation | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [overwriteConfirmed, setOverwriteConfirmed] = useState(false);
+
+  // Reset overwrite confirmation when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setOverwriteConfirmed(false);
+    }
+  }, [open]);
 
   const validateAndParseJSON = (input: string) => {
     if (!input.trim()) {
@@ -126,16 +137,17 @@ export function PasteResultDialog({
     setSubmitting(true);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/eval/answers/${answerId}/evaluation`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(parsedData),
-        }
-      );
+      const url = hasExistingEvaluation
+        ? `${API_BASE_URL}/api/v1/eval/answers/${answerId}/evaluation?overwrite=true`
+        : `${API_BASE_URL}/api/v1/eval/answers/${answerId}/evaluation`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(parsedData),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -143,8 +155,10 @@ export function PasteResultDialog({
       }
 
       toast({
-        title: "Evaluation submitted",
-        description: "The evaluation has been recorded successfully",
+        title: hasExistingEvaluation ? "Evaluation updated" : "Evaluation submitted",
+        description: hasExistingEvaluation
+          ? "The existing evaluation has been overwritten successfully"
+          : "The evaluation has been recorded successfully",
       });
 
       // Reset and close
@@ -182,6 +196,34 @@ export function PasteResultDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Warning Alert for Overwrite */}
+          {hasExistingEvaluation && (
+            <Alert variant="warning">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Warning:</strong> This answer already has an evaluation.
+                Submitting will permanently overwrite the existing evaluation data.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Overwrite Confirmation Checkbox */}
+          {hasExistingEvaluation && (
+            <div className="flex items-center space-x-2 border rounded-md p-3 bg-muted/50">
+              <Checkbox
+                id="overwrite-confirm"
+                checked={overwriteConfirmed}
+                onCheckedChange={(checked) => setOverwriteConfirmed(checked === true)}
+              />
+              <label
+                htmlFor="overwrite-confirm"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                I understand this will permanently overwrite the existing evaluation
+              </label>
+            </div>
+          )}
+
           {/* JSON Input */}
           <div className="space-y-2">
             <Label htmlFor="json-input">Evaluation JSON</Label>
@@ -234,9 +276,15 @@ export function PasteResultDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!parsedData || !!parseError || submitting}
+            disabled={
+              !parsedData ||
+              !!parseError ||
+              submitting ||
+              (hasExistingEvaluation && !overwriteConfirmed)
+            }
           >
-            {submitting ? "Submitting..." : "Submit Evaluation"}
+            {submitting ? "Submitting..." :
+             hasExistingEvaluation ? "Overwrite Evaluation" : "Submit Evaluation"}
           </Button>
         </DialogFooter>
       </DialogContent>
