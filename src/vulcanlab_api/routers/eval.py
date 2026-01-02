@@ -340,6 +340,7 @@ async def create_new_experiment(data: ExperimentCreate) -> ExperimentResponse:
             experiment = create_experiment(
                 session=session,
                 name=data.name,
+                description=data.description,
                 description_x=data.description_x,
                 description_y=data.description_y,
                 model_x=data.model_x,

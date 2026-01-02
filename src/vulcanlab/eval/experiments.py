@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 def create_experiment(
     session: Session,
     name: str,
+    description: Optional[str] = None,
     description_x: Optional[str] = None,
     description_y: Optional[str] = None,
     model_x: Optional[str] = None,
@@ -36,6 +37,7 @@ def create_experiment(
     Args:
         session: Database session (must be passed explicitly).
         name: Human-readable experiment name (required).
+        description: Overall description of the experiment.
         description_x: Description of answer set X.
         description_y: Description of answer set Y.
         model_x: Model name for answer set X.
@@ -58,6 +60,7 @@ def create_experiment(
     # Create experiment instance
     experiment = Experiment(
         name=name.strip(),
+        description=description.strip() if description else None,
         description_x=description_x.strip() if description_x else None,
         description_y=description_y.strip() if description_y else None,
         model_x=model_x.strip() if model_x else None,
