@@ -192,6 +192,22 @@ async def list_corpus_works() -> CorpusWorksResponse:
     """
     with get_session() as session:
         corpus_works = _get_corpus_works(session)
+        corpus_work_ids = [work.id for work in corpus_works]
+
+        # Get vectorized chunk counts per work
+        vectorized_counts = {}
+        if corpus_work_ids:
+            vec_query = (
+                session.query(
+                    Chunk.work_id,
+                    func.count(Chunk.id)
+                )
+                .filter(Chunk.work_id.in_(corpus_work_ids))
+                .filter(Chunk.vector_status == 'vec')
+                .group_by(Chunk.work_id)
+                .all()
+            )
+            vectorized_counts = {work_id: count for work_id, count in vec_query}
 
         # Build work list items
         work_items = []
@@ -207,7 +223,8 @@ async def list_corpus_works() -> CorpusWorksResponse:
                     title=work.title,
                     authors=work.authors,
                     created_at=work.created_at.isoformat(),
-                    status=status
+                    status=status,
+                    vectorized_chunks=vectorized_counts.get(work.id, 0)
                 )
             )
 
