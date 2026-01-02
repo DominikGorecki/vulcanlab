@@ -530,7 +530,7 @@ export default function CleanupPage() {
 
             {/* Descendants List */}
             {!descendantsLoading && !descendantsError && (
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium mb-2">
                   {descendants.length === 0 ? (
                     "No descendant chunks will be deleted"
@@ -539,16 +539,16 @@ export default function CleanupPage() {
                   )}
                 </p>
                 {descendants.length > 0 && (
-                  <ScrollArea className="h-[200px] rounded-md border p-3">
+                  <ScrollArea className="h-[200px] rounded-md border p-3 w-full overflow-hidden">
                     <div className="space-y-2">
                       {descendants.slice(0, 50).map((desc) => (
-                        <div key={desc.id} className="flex items-center gap-2 text-sm py-1">
-                          <Badge variant={getLevelBadgeVariant(desc.level)} className="text-xs">
+                        <div key={desc.id} className="flex items-start gap-2 text-sm py-1 break-words overflow-hidden">
+                          <Badge variant={getLevelBadgeVariant(desc.level)} className="text-xs flex-shrink-0">
                             {desc.level}
                           </Badge>
-                          <span className="text-muted-foreground">ID: {desc.id}</span>
+                          <span className="text-muted-foreground flex-shrink-0">ID: {desc.id}</span>
                           {desc.heading_breadcrumbs && (
-                            <span className="text-xs text-muted-foreground truncate flex-1">
+                            <span className="text-xs text-muted-foreground flex-1 break-words overflow-wrap-anywhere">
                               {desc.heading_breadcrumbs}
                             </span>
                           )}
