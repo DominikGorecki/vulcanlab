@@ -630,23 +630,26 @@ export default function GeneratePage() {
               Model (optional)
             </Label>
             <Select
-              value={showNewModelInput ? "new" : (selectedModelId?.toString() || "")}
+              value={showNewModelInput ? "new" : (selectedModelId?.toString() || "__none__")}
               onValueChange={(value) => {
                 if (value === "new") {
                   setShowNewModelInput(true);
                   setSelectedModelId(null);
+                } else if (value === "__none__") {
+                  setShowNewModelInput(false);
+                  setSelectedModelId(null);
                 } else {
                   setShowNewModelInput(false);
-                  setSelectedModelId(value ? parseInt(value, 10) : null);
+                  setSelectedModelId(parseInt(value, 10));
                 }
               }}
               disabled={modelsLoading}
             >
               <SelectTrigger id="model-select" className="w-full">
-                <SelectValue placeholder={modelsLoading ? "Loading models..." : "Select a model (optional)"} />
+                <SelectValue placeholder={modelsLoading ? "Loading models..." : "None selected"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Unspecified</SelectItem>
+                <SelectItem value="__none__">None</SelectItem>
                 {models.map(model => (
                   <SelectItem key={model.id} value={model.id.toString()}>
                     {model.name}
