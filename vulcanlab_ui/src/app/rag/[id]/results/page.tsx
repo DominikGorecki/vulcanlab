@@ -20,6 +20,7 @@ interface ResultItem {
   id: number;
   query_id: number;
   response_text: string;
+  model_name?: string;
   created_at: string;
 }
 
@@ -85,6 +86,19 @@ export default function ResultsPage() {
           {item.response_text}
         </div>
       ),
+    },
+    {
+      header: "Model",
+      key: "model_name",
+      cell: (item) => {
+        const modelName = item.model_name;
+        return (
+          <span className={modelName ? "text-sm" : "text-sm italic text-muted-foreground"}>
+            {modelName || "Unspecified"}
+          </span>
+        );
+      },
+      className: "w-[200px]",
     },
     {
       header: "Date",
