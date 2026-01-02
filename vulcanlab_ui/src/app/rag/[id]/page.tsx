@@ -4,6 +4,7 @@ import { useCallback, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertCircle,
@@ -14,6 +15,7 @@ import {
   MessageSquare,
   Eye,
   List,
+  ClipboardPaste,
 } from "lucide-react";
 import {
   Dialog,
@@ -88,6 +90,13 @@ export default function GeneratePage() {
   // Results state
   const [hasResults, setHasResults] = useState(false);
 
+  // Model selection states
+  const [models, setModels] = useState<Array<{id: number, name: string}>>([]);
+  const [selectedModelId, setSelectedModelId] = useState<number | null>(null);
+  const [showNewModelInput, setShowNewModelInput] = useState(false);
+  const [newModelName, setNewModelName] = useState("");
+  const [modelsLoading, setModelsLoading] = useState(false);
+
   // Fetch query details to get available source count
   const fetchQueryDetails = useCallback(async () => {
     const response = await fetch(`${API_BASE_URL}/rag/queries/${queryId}`);
@@ -141,6 +150,22 @@ export default function GeneratePage() {
     }
   }, [queryId]);
 
+  // Fetch models for manual result submission
+  const fetchModels = useCallback(async () => {
+    setModelsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/rag/result-models`);
+      if (!response.ok) throw new Error("Failed to load models");
+      const data = await response.json();
+      setModels(data.models || []);
+    } catch (err) {
+      console.error("Failed to fetch models:", err);
+      setOperationError("Failed to load models");
+    } finally {
+      setModelsLoading(false);
+    }
+  }, []);
+
   // Use usePageData for fetching
   const { data: promptData, loading, error, refetch } = usePageData<AugmentPromptResponse>(fetchPrompt, {
     onError: handleFetchError,
@@ -176,6 +201,13 @@ export default function GeneratePage() {
     fetchResultsCount();
   }, [fetchResultsCount]);
 
+  // Fetch models when paste dialog opens
+  useEffect(() => {
+    if (copyDialogOpen) {
+      fetchModels();
+    }
+  }, [copyDialogOpen, fetchModels]);
+
   const handleSourceCountChange = async (value: string) => {
     const newCount = parseInt(value, 10);
     setSelectedSourceCount(newCount);
@@ -198,7 +230,6 @@ export default function GeneratePage() {
       await navigator.clipboard.writeText(promptData.prompt);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
-      setCopyDialogOpen(true);
       setPastedResponse("");
     } catch (err) {
       console.error("Failed to copy:", err);
@@ -216,14 +247,53 @@ export default function GeneratePage() {
     setOperationError(null);
 
     try {
+      let modelIdToUse: number | null = null;
+
+      // Handle new model creation
+      if (showNewModelInput && newModelName.trim()) {
+        const createModelResponse = await fetch(
+          `${API_BASE_URL}/api/v1/rag/result-models`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: newModelName.trim() }),
+          }
+        );
+
+        if (!createModelResponse.ok) {
+          const errorData = await createModelResponse.json().catch(() => ({}));
+          if (createModelResponse.status === 409) {
+            throw new Error("A model with this name already exists");
+          }
+          throw new Error(errorData.detail || "Failed to create model");
+        }
+
+        const modelData = await createModelResponse.json();
+        modelIdToUse = modelData.id;
+      } else if (selectedModelId !== null) {
+        // Use existing model
+        modelIdToUse = selectedModelId;
+      }
+
+      // Save manual result with model information
+      const requestBody: {
+        response_text: string;
+        model_id?: number;
+        new_model_name?: string;
+      } = {
+        response_text: pastedResponse,
+      };
+
+      if (modelIdToUse !== null) {
+        requestBody.model_id = modelIdToUse;
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/rag/queries/${queryId}/augment/manual`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            response_text: pastedResponse,
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -487,6 +557,16 @@ export default function GeneratePage() {
                 </Button>
 
                 <Button
+                  onClick={() => setCopyDialogOpen(true)}
+                  variant="outline"
+                  disabled={running}
+                  className="gap-2"
+                >
+                  <ClipboardPaste className="h-4 w-4" />
+                  Paste Response
+                </Button>
+
+                <Button
                   onClick={() => setRunDialogOpen(true)}
                   disabled={running}
                   className="gap-2"
@@ -524,7 +604,19 @@ export default function GeneratePage() {
       </div>
 
       {/* Manual Paste Dialog */}
-      <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+      <Dialog
+        open={copyDialogOpen}
+        onOpenChange={(open) => {
+          setCopyDialogOpen(open);
+          if (!open) {
+            // Reset model selection state when dialog closes
+            setSelectedModelId(null);
+            setShowNewModelInput(false);
+            setNewModelName("");
+            setPastedResponse("");
+          }
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Paste LLM Response</DialogTitle>
@@ -532,6 +624,49 @@ export default function GeneratePage() {
               Paste the LLM&apos;s response here. This will be saved as a result for this query.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="py-3">
+            <Label htmlFor="model-select" className="text-sm font-medium mb-2">
+              Model (optional)
+            </Label>
+            <Select
+              value={showNewModelInput ? "new" : (selectedModelId?.toString() || "__none__")}
+              onValueChange={(value) => {
+                if (value === "new") {
+                  setShowNewModelInput(true);
+                  setSelectedModelId(null);
+                } else if (value === "__none__") {
+                  setShowNewModelInput(false);
+                  setSelectedModelId(null);
+                } else {
+                  setShowNewModelInput(false);
+                  setSelectedModelId(parseInt(value, 10));
+                }
+              }}
+              disabled={modelsLoading}
+            >
+              <SelectTrigger id="model-select" className="w-full">
+                <SelectValue placeholder={modelsLoading ? "Loading models..." : "None selected"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {models.map(model => (
+                  <SelectItem key={model.id} value={model.id.toString()}>
+                    {model.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value="new">Add New...</SelectItem>
+              </SelectContent>
+            </Select>
+            {showNewModelInput && (
+              <Input
+                value={newModelName}
+                onChange={(e) => setNewModelName(e.target.value)}
+                placeholder="Enter model name (e.g., gpt-4-turbo)"
+                className="mt-2"
+              />
+            )}
+          </div>
 
           <div className="flex-1 overflow-hidden py-4">
             <Textarea
@@ -545,10 +680,7 @@ export default function GeneratePage() {
           <DialogFooter className="flex-shrink-0">
             <Button
               variant="outline"
-              onClick={() => {
-                setCopyDialogOpen(false);
-                setPastedResponse("");
-              }}
+              onClick={() => setCopyDialogOpen(false)}
               disabled={saving}
             >
               Cancel

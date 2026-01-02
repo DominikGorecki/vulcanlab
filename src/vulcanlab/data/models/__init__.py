@@ -3,6 +3,7 @@
 from .chunk import Chunk
 from .query import Query
 from .result import Result
+from .result_model import ResultModel
 from .work import Work
 from .rag_config import RagConfig
 from .parsed_markdown import ParsedMarkdown
@@ -22,6 +23,7 @@ __all__ = [
     "Chunk",
     "Query",
     "Result",
+    "ResultModel",
     "Work",
     "RagConfig",
     "ParsedMarkdown",

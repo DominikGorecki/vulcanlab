@@ -27,7 +27,7 @@ from .database import Base, engine, get_admin_database_url
 from .env_utils import get_required_env_var
 
 # Import all models to register them with Base
-from .models import Chunk, Query, Result, Work, RagConfig  # noqa: F401
+from .models import Chunk, Query, Result, ResultModel, Work, RagConfig  # noqa: F401
 from .models.io_file import IOFile  # noqa: F401
 from .models.prompt_template import PromptTemplate  # noqa: F401
 from .models.prompt_meta import PromptMeta  # noqa: F401
@@ -904,6 +904,118 @@ def create_default_rag_config(verbose: bool = False) -> None:
         print("RAG config table and preset setup complete")
 
 
+def create_result_models_table(verbose: bool = False) -> None:
+    """
+    Create result_models table for tracking LLM models used to generate results.
+
+    This function is idempotent - it creates the table if needed and sets up
+    the trigger for auto-updating the updated_at timestamp.
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Creating result_models table...")
+
+    with engine.connect() as conn:
+        # Create result_models table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS result_models (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(200) UNIQUE NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            )
+        """))
+
+        # Create index on name for unique constraint lookups
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_result_models_name ON result_models(name)
+        """))
+
+        # Create trigger function for auto-updating updated_at timestamp
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_result_models_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = NOW();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_result_models_updated_at ON result_models"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_result_models_updated_at
+                BEFORE UPDATE ON result_models
+                FOR EACH ROW
+                EXECUTE FUNCTION update_result_models_updated_at()
+        """))
+
+        # Add model_id column to results table if not exists
+        conn.execute(text("""
+            DO $$ BEGIN
+                ALTER TABLE results
+                ADD COLUMN IF NOT EXISTS model_id INTEGER NULL
+                REFERENCES result_models(id) ON DELETE SET NULL;
+            EXCEPTION
+                WHEN duplicate_column THEN NULL;
+            END $$;
+        """))
+
+        # Create index on model_id for join performance
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_results_model_id ON results(model_id)
+        """))
+
+        conn.commit()
+
+    # Transfer ownership to app user
+    db_config = load_config().database
+    app_user = db_config.app_user
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f'ALTER FUNCTION update_result_models_updated_at() OWNER TO "{app_user}"'))
+            conn.execute(text(f'ALTER SEQUENCE IF EXISTS result_models_id_seq OWNER TO "{app_user}"'))
+            conn.commit()
+            if verbose:
+                print(f"Transferred ownership of result_models objects to {app_user}")
+    except Exception as e:
+        if verbose:
+            print(f"Note: Could not transfer ownership (this is okay if running as app user): {e}")
+
+    if verbose:
+        print("result_models table created successfully")
+
+
+def seed_default_result_model(verbose: bool = False) -> None:
+    """
+    Seed default "Unspecified" model record in result_models table.
+
+    This function is idempotent - it only inserts the default model if it
+    doesn't already exist.
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Seeding default result model...")
+
+    with engine.connect() as conn:
+        # Seed default "Unspecified" model
+        conn.execute(text("""
+            INSERT INTO result_models (name, created_at, updated_at)
+            VALUES ('Unspecified', NOW(), NOW())
+            ON CONFLICT (name) DO NOTHING
+        """))
+        conn.commit()
+
+        if verbose:
+            print("Default 'Unspecified' result model seeded")
+
+
 def init_database(verbose: bool = False) -> None:
     """
     Initialize the database: create database, user, tables, and indexes.
@@ -921,7 +1033,9 @@ def init_database(verbose: bool = False) -> None:
     create_fulltext_search(verbose=verbose)
     create_history_indexes(verbose=verbose)
     create_prompt_meta_table(verbose=verbose)
+    create_result_models_table(verbose=verbose)
     seed_prompt_templates(verbose=verbose)
+    seed_default_result_model(verbose=verbose)
     create_default_rag_config(verbose=verbose)
 
     if verbose:

@@ -6,11 +6,15 @@ linked to Query objects (one-to-many relationship: one query can have many resul
 """
 
 from datetime import datetime
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Integer, Text, DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+
+if TYPE_CHECKING:
+    from .result_model import ResultModel
 
 
 class Result(Base):
@@ -21,6 +25,7 @@ class Result(Base):
         id: Primary key.
         query_id: Foreign key to queries table.
         response_text: The full LLM response text.
+        model_id: Foreign key to result_models table (nullable).
         created_at: Timestamp when record was created.
         updated_at: Timestamp when record was last updated.
     """
@@ -35,6 +40,12 @@ class Result(Base):
         index=True
     )
     response_text: Mapped[str] = mapped_column(Text, nullable=False)
+    model_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("result_models.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -46,6 +57,9 @@ class Result(Base):
         onupdate=func.now(),
         nullable=False
     )
+
+    # Relationship to ResultModel
+    model: Mapped[Optional["ResultModel"]] = relationship("ResultModel")
 
     def __repr__(self) -> str:
         response_preview = self.response_text[:50] + "..." if len(self.response_text) > 50 else self.response_text

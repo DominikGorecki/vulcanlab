@@ -19,6 +19,7 @@ interface ResultItem {
   id: number;
   query_id: number;
   response_text: string;
+  model_name?: string;
   created_at: string;
 }
 
@@ -88,6 +89,14 @@ export default function ResultDetailPage() {
         backUrl={`/rag/${queryId}/results`}
         actions={
           <div className="flex items-center gap-4">
+            {/* Model Info */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium text-muted-foreground">Model:</span>
+              <span className={data.result.model_name ? "text-foreground" : "italic text-muted-foreground"}>
+                {data.result.model_name || "Unspecified"}
+              </span>
+            </div>
+
             {/* Stats */}
             <TextStats text={data.result.response_text} />
 
