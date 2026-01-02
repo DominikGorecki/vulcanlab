@@ -1,0 +1,87 @@
+Q1) The new "Paste Response" button should appear next to "Copy Prompt" at the bottom of the page. Should both buttons be visible at the same time, or should "Paste Response" only appear after "Copy Prompt" has been clicked?
+
+A. Both buttons visible at all times (Copy Prompt | Paste Response | Run)
+B. Paste Response only appears after Copy Prompt is clicked at least once
+C. Replace the current auto-open behavior with a button, both always visible
+Freeform: Different behavior or layout preference
+
+---
+
+Q2) For the model tracking feature: when a result is generated automatically (using the "Run" button), you mentioned it should use "the model from settings". Where is this model setting currently stored or configured?
+
+A. In the vulcanlab.config.json file (app config)
+B. In environment variables / API settings
+C. Not yet implemented - needs to be added to settings
+Freeform: Different location or implementation
+
+---
+
+Q3) For manually pasted results, the modal should include a dropdown to select the model. Should this dropdown be:
+
+A. Required (user must select a model before saving)
+B. Optional with a default value (e.g., "Unknown" or last used model)
+C. Required with no default (forces user to choose or add new)
+Freeform: Different validation approach
+
+---
+
+Q4) The "add a new model" option in the dropdown - should this:
+
+A. Open an inline input field within the same modal to add a new model name
+B. Open a separate dialog/modal for adding a new model with more details
+C. Be a simple text input that appears in the dropdown when "Add New..." is selected
+Freeform: Different UX flow for adding models
+
+---
+
+Q5) The new `models` table should track models used for generating answers. What information should be stored beyond the model name?
+
+A. Just the model name (e.g., "gpt-4", "claude-sonnet-3.5")
+B. Model name + provider (e.g., "openai", "anthropic")
+C. Model name + provider + optional metadata (version, capabilities, cost tier, etc.)
+Freeform: Different schema requirements
+
+---
+
+Q6) For the relationship between `results` and `models`: Should the model_id in the results table be:
+
+A. Required (NOT NULL) - every result must have an associated model
+B. Optional (NULLABLE) - legacy results or unknown models can be null
+C. Required for new results, but allow NULL for backward compatibility with existing data
+Freeform: Different constraint or migration strategy
+
+---
+
+Q7) Should there be a default/fallback model in the models table that gets auto-selected or used when no model is explicitly chosen?
+
+A. Yes, create a default model record (e.g., "Unknown") during seeding
+B. No, always require explicit model selection
+C. Yes, use the model from settings as the default
+Freeform: Different default handling approach
+
+---
+
+Q8) The migration script naming convention - based on the existing migrations (001-024), the new migration should be `025_add_model_tracking.sql`. Should this migration:
+
+A. Create models table + alter results table + seed default model(s) all in one migration
+B. Split into two migrations: one for tables, one for seeding
+C. Create tables only, handle seeding in init_db.py seed function
+Freeform: Different migration organization preference
+
+---
+
+Q9) When displaying results (in the results list or detail view), should the model information be shown?
+
+A. Yes, show model name in results list and detail pages
+B. Only show in detail page
+C. Out of scope for this spec (UI can be added later)
+Freeform: Specific display requirements
+
+---
+
+Q10) For fresh database installs (via init_db.py), you want the migration logic to be included so migrations don't need to run. Should the init_db.py changes:
+
+A. Add a create_models_table() function that mirrors the migration SQL
+B. Rely on SQLAlchemy's create_all() with the new Model class definition
+C. Both: define the model class AND add explicit table creation for consistency with other tables
+Freeform: Different approach to fresh install handling
