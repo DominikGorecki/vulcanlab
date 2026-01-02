@@ -81,7 +81,8 @@ class CorpusWorkListItem(BaseModel):
             "example": {
                 "id": 5,
                 "title": "Cognitive Psychology: A Student's Handbook",
-                "authors": "Eysenck, Michael W.; Keane, Mark T."
+                "authors": "Eysenck, Michael W.; Keane, Mark T.",
+                "vectorized_chunks": 150
             }
         }
     )
@@ -91,6 +92,7 @@ class CorpusWorkListItem(BaseModel):
     authors: Optional[str] = Field(None, description="Author(s)")
     created_at: str = Field(..., description="Creation timestamp")
     status: str = Field(..., description="Work status for UI badge")
+    vectorized_chunks: int = Field(0, ge=0, description="Number of vectorized chunks for this work")
 
 
 class CorpusWorksResponse(BaseModel):

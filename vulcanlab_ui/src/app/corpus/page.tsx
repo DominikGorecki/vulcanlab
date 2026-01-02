@@ -37,6 +37,7 @@ interface CorpusWork {
   authors: string | null;
   created_at: string;
   status: string;
+  vectorized_chunks: number;
 }
 
 interface PageData {
@@ -124,6 +125,20 @@ export default function CorpusPage() {
       cell: (work) => (
         <div className="break-words whitespace-normal leading-tight">
           {work.authors || "-"}
+        </div>
+      ),
+    },
+    {
+      key: "vectorized_chunks",
+      header: "Vectorized",
+      sortable: true,
+      className: "w-[100px] min-w-[100px] text-center hidden lg:table-cell",
+      cell: (work) => (
+        <div className="flex items-center justify-center gap-1.5">
+          <Database size={14} className="text-green-600 dark:text-green-500 flex-shrink-0" />
+          <span className="font-medium text-green-600 dark:text-green-500">
+            {work.vectorized_chunks.toLocaleString()}
+          </span>
         </div>
       ),
     },
