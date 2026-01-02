@@ -348,12 +348,20 @@ async def run_augment(
     config_preset: str | None = None
 ) -> AugmentRunResponse:
     """Run augmented prompt with LLM and save result."""
+    from vulcanlab.ai.config import LLMSettings
+    from vulcanlab_api.routers.result_models import get_or_create_result_model
+
     try:
         # Generate the prompt
         prompt = generate_augmented_prompt(query_id=query_id, top_n=top_n, config_preset=config_preset)
 
         # Create LangChain chat with FULL model and search
         stack = create_langchain_chat(tier=ModelTier.FULL, search=True, temperature=0.2)
+
+        # Get the model name from config
+        llm_settings = LLMSettings()
+        model_name = llm_settings.get_model(ModelTier.FULL)
+        logger.info(f"Running augmented prompt with model: {model_name}")
 
         # Call LLM
         response = stack.chat.invoke(prompt)
@@ -364,11 +372,16 @@ async def run_augment(
         else:
             response_text = response.content
 
-        # Save result to database
+        # Save result to database with model tracking
         with get_session() as session:
+            # Get or create model
+            model = get_or_create_result_model(model_name, session)
+            logger.info(f"Automatic result using model '{model.name}' (id={model.id})")
+
             result = Result(
                 query_id=query_id,
-                response_text=response_text
+                response_text=response_text,
+                model_id=model.id
             )
             session.add(result)
             session.commit()
@@ -378,6 +391,7 @@ async def run_augment(
             query_id=query_id,
             result_id=result_id,
             response_text=response_text,
+            model_name=model_name,
             message="Augmented prompt executed and result saved"
         )
     except ValueError as e:
@@ -398,6 +412,8 @@ async def save_manual_augment(
     request: AugmentManualRequest
 ) -> AugmentManualResponse:
     """Save manually-run augmented response."""
+    from vulcanlab_api.routers.result_models import get_or_create_result_model
+
     with get_session() as session:
         # Verify query exists
         query = session.query(Query).filter(Query.id == query_id).first()
@@ -407,10 +423,36 @@ async def save_manual_augment(
                 detail=f"Query with ID {query_id} not found"
             )
 
+        # Determine model_id
+        model_id = None
+        model_name = None
+
+        if request.new_model_name:
+            # Create or get model by name
+            model = get_or_create_result_model(request.new_model_name, session)
+            model_id = model.id
+            model_name = model.name
+            logger.info(f"Manual result using new model '{model_name}' (id={model_id})")
+        elif request.model_id:
+            # Verify model exists
+            from vulcanlab.data.models.result_model import ResultModel
+            model = session.query(ResultModel).filter(ResultModel.id == request.model_id).first()
+            if not model:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Model with ID {request.model_id} not found"
+                )
+            model_id = model.id
+            model_name = model.name
+            logger.info(f"Manual result using existing model '{model_name}' (id={model_id})")
+        else:
+            logger.info("Manual result saved without model association")
+
         # Save result
         result = Result(
             query_id=query_id,
-            response_text=request.response_text
+            response_text=request.response_text,
+            model_id=model_id
         )
         session.add(result)
         session.commit()
@@ -418,6 +460,7 @@ async def save_manual_augment(
         return AugmentManualResponse(
             query_id=query_id,
             result_id=result.id,
+            model_name=model_name or "Unspecified",
             message="Manual response saved successfully"
         )
 
@@ -598,6 +641,8 @@ async def run_auto_rag(request: AutoRAGRequest) -> AutoRAGResponse:
 )
 async def list_results(query_id: int) -> ResultListResponse:
     """List all results for a query."""
+    from vulcanlab.data.models.result_model import ResultModel
+
     with get_session() as session:
         # Verify query exists
         query = session.query(Query).filter(Query.id == query_id).first()
@@ -607,8 +652,9 @@ async def list_results(query_id: int) -> ResultListResponse:
                 detail=f"Query with ID {query_id} not found"
             )
 
-        # Get results
-        results = session.query(Result)\
+        # Get results with LEFT JOIN to result_models for denormalization
+        results = session.query(Result, ResultModel.name)\
+            .outerjoin(ResultModel, Result.model_id == ResultModel.id)\
             .filter(Result.query_id == query_id)\
             .order_by(Result.created_at.desc())\
             .all()
@@ -618,9 +664,10 @@ async def list_results(query_id: int) -> ResultListResponse:
                 id=r.id,
                 query_id=r.query_id,
                 response_text=r.response_text,
+                model_name=model_name or "Unspecified",
                 created_at=r.created_at
             )
-            for r in results
+            for r, model_name in results
         ]
 
         return ResultListResponse(
@@ -638,20 +685,27 @@ async def list_results(query_id: int) -> ResultListResponse:
 )
 async def get_result(query_id: int, result_id: int) -> ResultItem:
     """Get a specific result."""
+    from vulcanlab.data.models.result_model import ResultModel
+
     with get_session() as session:
-        result = session.query(Result)\
+        # Get result with LEFT JOIN to result_models
+        result_data = session.query(Result, ResultModel.name)\
+            .outerjoin(ResultModel, Result.model_id == ResultModel.id)\
             .filter(Result.id == result_id, Result.query_id == query_id)\
             .first()
 
-        if not result:
+        if not result_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Result with ID {result_id} not found for query {query_id}"
             )
 
+        result, model_name = result_data
+
         return ResultItem(
             id=result.id,
             query_id=result.query_id,
             response_text=result.response_text,
+            model_name=model_name or "Unspecified",
             created_at=result.created_at
         )

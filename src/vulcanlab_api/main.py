@@ -35,6 +35,7 @@ from vulcanlab_api.routers import (
     markdown,
     rag,
     rag_config,
+    result_models,
     sanitization,
     settings,
     simple_conversion,
@@ -148,6 +149,7 @@ app.include_router(corpus.router, prefix="/corpus", tags=["Corpus"])  # Legacy e
 app.include_router(v1_corpus.router, prefix="/api/v1/corpus", tags=["Corpus V1"])  # New versioned endpoints
 app.include_router(rag.router, prefix="/rag", tags=["RAG"])
 app.include_router(rag_config.router, prefix="/api/rag-config", tags=["RAG Config"])
+app.include_router(result_models.router, prefix="/api/v1/rag", tags=["RAG"])
 app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix
 app.include_router(markdown.router, prefix="/api/v1/markdown", tags=["Markdown"])
 app.include_router(chunks.router, prefix="/api/v1/chunks", tags=["Chunks"])

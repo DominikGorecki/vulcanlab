@@ -218,6 +218,7 @@ class AugmentRunResponse(BaseModel):
     query_id: int = Field(..., description="Query ID")
     result_id: int = Field(..., description="ID of the saved result")
     response_text: str = Field(..., description="The LLM response")
+    model_name: Optional[str] = Field(None, description="Model name associated with result")
     message: str = Field(..., description="Status message")
 
 
@@ -229,6 +230,15 @@ class AugmentManualRequest(BaseModel):
         description="The LLM response text",
         min_length=1
     )
+    model_id: Optional[int] = Field(
+        None,
+        description="ID of existing model to associate with this result"
+    )
+    new_model_name: Optional[str] = Field(
+        None,
+        description="Name of new model to create and associate (e.g., 'gpt-4', 'claude-sonnet-3.5')",
+        max_length=200
+    )
 
 
 class AugmentManualResponse(BaseModel):
@@ -236,6 +246,7 @@ class AugmentManualResponse(BaseModel):
 
     query_id: int = Field(..., description="Query ID")
     result_id: int = Field(..., description="ID of the saved result")
+    model_name: Optional[str] = Field(None, description="Model name associated with result")
     message: str = Field(..., description="Success message")
 
 
@@ -249,6 +260,7 @@ class ResultItem(BaseModel):
     id: int = Field(..., description="Result ID")
     query_id: int = Field(..., description="Associated query ID")
     response_text: str = Field(..., description="The LLM response")
+    model_name: Optional[str] = Field(None, description="Model name used to generate result")
     created_at: datetime = Field(..., description="Creation timestamp")
 
 
