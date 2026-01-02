@@ -37,6 +37,7 @@ interface DimensionField {
 
 interface ExperimentFormData {
   name: string;
+  description: string;
   description_x: string;
   description_y: string;
   model_x: string;
@@ -149,6 +150,7 @@ export default function NewExperimentPage() {
         },
         body: JSON.stringify({
           name: data.name,
+          description: data.description || null,
           description_x: data.description_x || null,
           description_y: data.description_y || null,
           model_x: data.model_x || null,
@@ -241,6 +243,19 @@ export default function NewExperimentPage() {
                 })}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 placeholder="e.g., GPT-4 vs Claude Comparison"
+              />
+            </FormField>
+
+            <FormField
+              label="Experiment Description"
+              error={errors.description?.message}
+              description="Overall description of what this experiment is testing"
+            >
+              <textarea
+                {...register("description")}
+                className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="e.g., Comparing GPT-4 and Claude Sonnet 3.5 responses to academic prompts"
+                rows={3}
               />
             </FormField>
 

@@ -34,6 +34,7 @@ class Experiment(Base):
     Attributes:
         id: Primary key.
         name: Human-readable name for the experiment.
+        description: Overall description of the experiment.
         description_x: Description of answer set X (e.g., "GPT-4 answers").
         description_y: Description of answer set Y (e.g., "Claude answers").
         model_x: Model name used for answer set X.
@@ -51,6 +52,7 @@ class Experiment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description_x: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description_y: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     model_x: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

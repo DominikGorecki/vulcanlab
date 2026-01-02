@@ -18,6 +18,7 @@ class ExperimentCreate(BaseModel):
     """Schema for creating a new experiment."""
 
     name: str = Field(..., min_length=1, max_length=255, description="Experiment name")
+    description: Optional[str] = Field(None, description="Overall description of the experiment")
     description_x: Optional[str] = Field(None, description="Description of answer set X")
     description_y: Optional[str] = Field(None, description="Description of answer set Y")
     model_x: Optional[str] = Field(None, max_length=100, description="Model name for answer set X")
@@ -53,6 +54,7 @@ class ExperimentCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "name": "GPT-4 vs Claude Comparison",
+                "description": "Comparing GPT-4 and Claude Sonnet 3.5 responses to academic prompts",
                 "description_x": "GPT-4 answers",
                 "description_y": "Claude Sonnet 3.5 answers",
                 "model_x": "gpt-4",
@@ -131,6 +133,7 @@ class ExperimentResponse(BaseModel):
 
     id: int
     name: str
+    description: Optional[str]
     description_x: Optional[str]
     description_y: Optional[str]
     model_x: Optional[str]
@@ -153,6 +156,7 @@ class ExperimentListItem(BaseModel):
 
     id: int
     name: str
+    description: Optional[str]
     description_x: Optional[str]
     description_y: Optional[str]
     created_at: datetime
