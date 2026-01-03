@@ -130,6 +130,7 @@ async def list_experiments() -> List[ExperimentListItem]:
                 result.append(ExperimentListItem(
                     id=exp.id,
                     name=exp.name,
+                    description=exp.description,
                     description_x=exp.description_x,
                     description_y=exp.description_y,
                     created_at=exp.created_at,
