@@ -23,18 +23,21 @@ export function truncateToWordLimit(content: string, maxWords: number): string {
 /**
  * Processes RAG response content to identify source references at the bottom,
  * formats them into separate lines, and links them to the search result page.
- * 
- * Expected format: [S1] Source: ... | (work_id=84, start-line=7599, end-line=7643)
- * 
+ *
+ * Expected formats:
+ *   [S1] Source: ... | (work_id=84, start-line=7599, end-line=7643)
+ *   [S1] Title > Section | (work_id=84, start-line=7599, end-line=7643)
+ *
  * @param content The markdown content to process
  * @returns Processed markdown content
  */
 export function processRagSources(content: string): string {
   if (!content) return content;
 
-  // Regex to match the reference pattern: [S#] Source: ... | (work_id=..., start-line=..., end-line=...)
+  // Regex to match the reference pattern: [S#] ... | (work_id=..., start-line=..., end-line=...)
   // We use a broader match first to identify the references section
-  const referenceRegex = /\[S\d+\]\s+Source:.*?\|\s+\(work_id=\d+,\s+start-line=\d+,\s+end-line=\d+\)/g;
+  // Made more flexible to support references with or without "Source:" prefix
+  const referenceRegex = /\[S\d+\]\s+.*?\|\s+\(work_id=\d+,\s+start-line=\d+,\s+end-line=\d+\)/g;
   
   // Find all matches in the entire content
   const matches = Array.from(content.matchAll(referenceRegex));
