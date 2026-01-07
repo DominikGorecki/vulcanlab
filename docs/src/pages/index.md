@@ -9,7 +9,18 @@ This section provides comprehensive documentation for each page and subpage in t
 
 ## Page Overview
 
-The VulcanLab UI is organized into seven main functional areas:
+The VulcanLab UI is organized into twelve main functional areas:
+
+### [Research (RAG)](./RAG.md)
+Retrieval-Augmented Generation pipeline. Create queries, expand them, retrieve relevant chunks, consolidate context, and generate responses.
+
+**Main Pages:**
+- `/rag` - List all queries and manage RAG pipeline
+- `/rag/new` - Create a new query with expansion
+- `/rag/[id]` - Generate response for a query
+- `/rag/[id]/inspect` - Inspect query details and pipeline status
+- `/rag/[id]/results` - List all results for a query
+- `/rag/[id]/results/[resultId]` - View a specific result
 
 ### [Corpus](./Corpus.md)
 Works that have completed chunking and are ready for vectorization and RAG operations. Provides read-only access to sanitized content.
@@ -17,6 +28,15 @@ Works that have completed chunking and are ready for vectorization and RAG opera
 **Main Pages:**
 - `/corpus` - List all corpus works with statistics
 - `/corpus/[id]` - View sanitized markdown content for a specific work
+
+### [Simple Conversion](./SimpleConversion.md)
+Streamlined single-page document conversion workflow that automates PDF/EPUB conversion through the entire pipeline (conversion → sanitization → chunking). Supports automatic (LLM-powered) and manual execution modes.
+
+**Main Pages:**
+- `/simple-conversion` - File selection, metadata entry, and conversion history
+- `/simple-conversion/automatic/[work_id]` - Automated pipeline execution with status tracking
+- `/simple-conversion/manual/[work_id]` - Manual LLM prompt/response workflow
+- `/simple-conversion/history/[work_id]` - View full conversion results
 
 ### [Conversion](./Conversion.md)
 Convert PDF and EPUB files to markdown format. Review and inspect conversion artifacts before adding to the database.
@@ -57,16 +77,34 @@ Generate embeddings for document chunks using embedding models. Process chunks i
 **Main Pages:**
 - `/vec` - Vectorize eligible chunks (all works or specific work)
 
-### [RAG](./RAG.md)
-Retrieval-Augmented Generation pipeline. Create queries, expand them, retrieve relevant chunks, consolidate context, and generate responses.
+### [Search](./Search.md)
+Comprehensive search interface for exploring the document corpus. Supports lexical (keyword-based), dense (semantic/embedding-based), and hybrid search modes using Reciprocal Rank Fusion (RRF).
 
 **Main Pages:**
-- `/rag` - List all queries and manage RAG pipeline
-- `/rag/new` - Create a new query with expansion
-- `/rag/[id]` - Generate response for a query
-- `/rag/[id]/inspect` - Inspect query details and pipeline status
-- `/rag/[id]/results` - List all results for a query
-- `/rag/[id]/results/[resultId]` - View a specific result
+- `/search` - Search interface with configuration options
+- `/search/result/[work_id]/[start_line]/[end_line]` - View full document with highlighted result
+
+### [Cleanup](./Cleanup.md)
+Data management tool for searching and deleting unwanted chunks from the database. Supports descendant deletion and headings-only filtering.
+
+**Main Pages:**
+- `/cleanup` - Search and delete chunks
+
+### [Eval](./Eval.md)
+Blind evaluation system for comparing LLM responses. Create experiments, add test prompts, submit answer pairs, and evaluate using blind randomization with comprehensive statistical analysis.
+
+**Main Pages:**
+- `/eval` - List all evaluation experiments
+- `/eval/new` - Create a new experiment
+- `/eval/[id]` - View and manage experiment
+- `/eval/[id]/prompts/[promptId]` - Manage answer pairs and evaluations
+
+### [Markdown Import/Export](./MarkdownImportExport.md)
+Bidirectional workflow for managing markdown content. Export corpus works as markdown files with metadata, or import markdown files with metadata collection and duplicate detection.
+
+**Main Pages:**
+- `/markdown/export` - Export corpus works as markdown files
+- `/markdown/import` - Import markdown files into the system
 
 ### [Settings](./Settings.md)
 Manage system configuration including database settings, LLM models, file paths, templates, and RAG configuration presets.
@@ -87,11 +125,16 @@ Each page documentation follows this structure:
 
 ## Quick Navigation
 
+- [Research (RAG) Documentation](./RAG.md)
 - [Corpus Documentation](./Corpus.md)
+- [Simple Conversion Documentation](./SimpleConversion.md)
 - [Conversion Documentation](./Conversion.md)
 - [Sanitization Documentation](./Sanitization.md)
 - [Chunking Documentation](./Chunking.md)
 - [Vectorization Documentation](./Vectorization.md)
-- [RAG Documentation](./RAG.md)
+- [Search Documentation](./Search.md)
+- [Cleanup Documentation](./Cleanup.md)
+- [Eval Documentation](./Eval.md)
+- [Markdown Import/Export Documentation](./MarkdownImportExport.md)
 - [Settings Documentation](./Settings.md)
 

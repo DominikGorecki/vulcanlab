@@ -48,7 +48,7 @@ export function NavBar() {
           />
           <h1 className="text-xl font-bold tracking-tight text-primary">VulcanLab</h1>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">v0.5.1</p>
+        <p className="text-xs text-muted-foreground mt-1">v0.6.0</p>
       </div>
       <div className="flex-1 px-4 py-2 space-y-1 overflow-y-auto max-h-[calc(100vh-6rem)]">
         {visibleNavItems.map((item) => {
