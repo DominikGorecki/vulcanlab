@@ -216,6 +216,23 @@ def chunk_headings(work_id: int, verbose: bool = False) -> int:
         headings = _parse_headings(content)
         ranges = _calculate_heading_ranges(headings, total_lines)
 
+        # Build heading hierarchy for full breadcrumbs
+        # Reuse logic from content_chunking.py or implement here
+        hierarchy = {}
+        current_stack = {}  # level -> heading text
+        for h_line, h_level, h_text in headings:
+            # Extract just the heading text (remove # marks)
+            heading_text = re.sub(r'^#+\s+', '', h_text).strip()
+            # Clear deeper levels
+            for lvl in list(current_stack.keys()):
+                if lvl >= h_level:
+                    del current_stack[lvl]
+            # Set current level
+            current_stack[h_level] = heading_text
+            # Build breadcrumb list
+            breadcrumb = [current_stack[lvl] for lvl in sorted(current_stack.keys())]
+            hierarchy[h_line] = " > ".join(breadcrumb)
+
         if verbose:
             print(f"Found {len(headings)} headings, {sum(1 for d in decisions.values() if d == 'VECTORIZE')} to vectorize")
 
@@ -254,6 +271,7 @@ def chunk_headings(work_id: int, verbose: bool = False) -> int:
                 work_id=work_id,
                 level=f"H{level}",
                 content=chunk_content,
+                heading_breadcrumbs=hierarchy.get(line_num),
                 embedding=None,
                 start_line=start_line,
                 end_line=end_line,

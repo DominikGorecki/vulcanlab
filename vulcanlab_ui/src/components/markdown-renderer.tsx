@@ -1,18 +1,23 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Components } from "react-markdown";
+import { processRagSources } from "@/lib/utils";
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
   components?: Components;
+  processSources?: boolean;
 }
 
 export function MarkdownRenderer({
   content,
   className = "",
   components = {},
+  processSources = false,
 }: MarkdownRendererProps) {
+  const displayContent = processSources ? processRagSources(content) : content;
+
   return (
     <div
       className={`prose prose-sm dark:prose-invert max-w-none 
@@ -31,7 +36,7 @@ export function MarkdownRenderer({
         remarkPlugins={[remarkGfm]}
         components={components}
       >
-        {content}
+        {displayContent}
       </ReactMarkdown>
     </div>
   );

@@ -574,3 +574,55 @@ class TestDeleteEndpoint:
         data = response.json()
         assert data["descendants_deleted"] == []
         assert data["total_deleted"] == 1
+
+
+class TestGetChunkMarkdownEndpoint:
+    """Test suite for GET /api/v1/chunks/{chunk_id}/markdown endpoint."""
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    @patch('vulcanlab_api.routers.chunks.get_path_resolver')
+    def test_get_markdown_success(self, mock_get_resolver, mock_get_session):
+        """Test successful markdown retrieval."""
+        # 1. Mock chunk and work
+        chunk = create_mock_chunk(id=123, work_id=5, start_line=10, end_line=20)
+        work = MagicMock()
+        work.id = 5
+        work.title = "Test Work"
+
+        # 2. Mock session query
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        
+        # Mock chunk query
+        mock_session.query.return_value.filter.return_value.first.side_effect = [chunk, work]
+
+        # 3. Mock path resolver and file
+        mock_resolver = MagicMock()
+        mock_get_resolver.return_value = mock_resolver
+        
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.read_text.return_value = "# Header\n\nContent line 1\nContent line 2"
+        mock_resolver.resolve_work_path.return_value = mock_path
+
+        # 4. Make request
+        response = client.get("/api/v1/chunks/123/markdown")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["work_id"] == 5
+        assert data["work_title"] == "Test Work"
+        assert data["markdown_content"] == "# Header\n\nContent line 1\nContent line 2"
+        assert data["chunk_start_line"] == 10
+        assert data["chunk_end_line"] == 20
+
+    @patch('vulcanlab_api.routers.chunks.get_session')
+    def test_get_markdown_chunk_not_found(self, mock_get_session):
+        """Test 404 when chunk not found."""
+        mock_session = MagicMock()
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_session.query.return_value.filter.return_value.first.return_value = None
+
+        response = client.get("/api/v1/chunks/999/markdown")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()

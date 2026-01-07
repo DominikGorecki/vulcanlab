@@ -681,6 +681,9 @@ def create_heading_chunks_simple(work_id: int, session: Session) -> List[Chunk]:
     # Calculate ranges
     ranges = calculate_heading_ranges(headings, total_lines)
 
+    # Build heading hierarchy for full breadcrumbs
+    heading_hierarchy = _build_heading_hierarchy(headings)
+
     # Track chunk IDs by start_line for parent lookup
     chunk_id_map: Dict[int, int] = {}
     chunks = []
@@ -703,6 +706,10 @@ def create_heading_chunks_simple(work_id: int, session: Session) -> List[Chunk]:
         # Extract content
         chunk_content = extract_chunk_content(lines, start_line, end_line)
 
+        # Get full breadcrumb path
+        breadcrumb_list = heading_hierarchy.get(line_num, [])
+        breadcrumb_text = _format_breadcrumb(breadcrumb_list)
+
         # Create chunk
         chunk = Chunk(
             parent_id=parent_id,  # Proper hierarchy
@@ -711,7 +718,7 @@ def create_heading_chunks_simple(work_id: int, session: Session) -> List[Chunk]:
             content=chunk_content,
             start_line=start_line,
             end_line=end_line,
-            heading_breadcrumbs=heading_text,
+            heading_breadcrumbs=breadcrumb_text if breadcrumb_text else heading_text,
             vector_status="no_vec",  # Headings not vectorized
             embedding=None
         )

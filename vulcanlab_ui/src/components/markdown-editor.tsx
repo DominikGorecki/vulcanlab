@@ -15,6 +15,7 @@ interface MarkdownEditorProps {
   viewMode?: "both" | "markdown-only";
   scrollMode?: "container" | "page";
   className?: string;
+  processSources?: boolean;
 }
 
 export function MarkdownEditor({
@@ -24,6 +25,7 @@ export function MarkdownEditor({
   viewMode = "both",
   scrollMode = "container",
   className = "",
+  processSources = false,
 }: MarkdownEditorProps) {
   const [userTab, setUserTab] = useState<string>("rendered");
   const [editorHeight, setEditorHeight] = useState("100%");
@@ -92,7 +94,7 @@ export function MarkdownEditor({
           <Card className={cardClass}>
             <CardContent className="h-full p-0">
               <RenderedWrapper {...renderedWrapperProps}>
-                <MarkdownRenderer content={content} />
+                <MarkdownRenderer content={content} processSources={processSources} />
               </RenderedWrapper>
             </CardContent>
           </Card>

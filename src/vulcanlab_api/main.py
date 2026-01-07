@@ -37,6 +37,7 @@ from vulcanlab_api.routers import (
     rag_config,
     result_models,
     sanitization,
+    search,
     settings,
     simple_conversion,
     templates,
@@ -114,6 +115,10 @@ app = FastAPI(
             "description": "Chunk management operations. Search, preview, and delete chunks with descendants.",
         },
         {
+            "name": "Search",
+            "description": "Document search operations. Lexical, dense, and hybrid search across chunks.",
+        },
+        {
             "name": "Eval",
             "description": "Evaluation experiments. Compare and evaluate LLM responses using blind testing and statistical analysis.",
         },
@@ -153,6 +158,7 @@ app.include_router(result_models.router, prefix="/api/v1/rag", tags=["RAG"])
 app.include_router(simple_conversion.router)  # Simple conversion router has its own prefix
 app.include_router(markdown.router, prefix="/api/v1/markdown", tags=["Markdown"])
 app.include_router(chunks.router, prefix="/api/v1/chunks", tags=["Chunks"])
+app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(eval.router, prefix="/api/v1/eval", tags=["Eval"])
 
 

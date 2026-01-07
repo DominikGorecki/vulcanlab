@@ -25,6 +25,8 @@ from vulcanlab.data.chunk_operations import (
     delete_chunk_cascade,
 )
 from vulcanlab.data.models.chunk import Chunk
+from vulcanlab.data.models.work import Work
+from vulcanlab.utils.file_utils import get_path_resolver
 from vulcanlab_api.schemas.chunks import (
     ChunkSearchResponse,
     ChunkSearchResult,
@@ -419,4 +421,4 @@ async def delete_chunk(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during deletion: {str(e)}"
-        )
+            )

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2, FlaskConical } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2, FlaskConical, Search } from "lucide-react";
 import { useConversionSettings } from "@/contexts/conversion-settings";
 
 const navItems = [
@@ -16,6 +16,7 @@ const navItems = [
   { href: "/sanitization", label: "Sanitization", icon: Eraser, alwaysVisible: false },
   { href: "/chunk", label: "Chunking", icon: Scissors, alwaysVisible: false },
   { href: "/vec", label: "Vectorization", icon: Braces, alwaysVisible: true },
+  { href: "/search", label: "Search", icon: Search, alwaysVisible: true },
   { href: "/cleanup", label: "Cleanup", icon: Trash2, alwaysVisible: true },
   { href: "/eval", label: "Eval", icon: FlaskConical, alwaysVisible: true },
   { href: "/markdown/export", label: "MD Import/Export", icon: FileUp, alwaysVisible: true },

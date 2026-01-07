@@ -119,6 +119,7 @@ export default function ResultDetailPage() {
           readOnly={true}
           viewMode="both"
           scrollMode="page"
+          processSources={true}
         />
       </div>
     </div>
