@@ -21,3 +21,10 @@ class ModificationAction(str, enum.Enum):
     REMOVE = 'remove'
     CHANGE = 'change'
     KEEP = 'keep'
+
+
+class CollectionItemType(str, enum.Enum):
+    """Item type for collection items."""
+    EXCERPT = 'excerpt'
+    RESEARCH_RESULT = 'research_result'
+    RESEARCH_QUERY = 'research_query'

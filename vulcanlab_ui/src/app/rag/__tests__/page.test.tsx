@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
 import RAGPage from '../page';
+import { useAddToCollection } from '@/hooks/use-add-to-collection';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -10,6 +11,11 @@ jest.mock('next/navigation', () => ({
 // Mock the usePageData hook
 jest.mock('@/hooks/use-page-data', () => ({
   usePageData: jest.fn(),
+}));
+
+// Mock useAddToCollection
+jest.mock('@/hooks/use-add-to-collection', () => ({
+  useAddToCollection: jest.fn(),
 }));
 
 // Mock the components
@@ -38,6 +44,9 @@ jest.mock('@/components', () => ({
               <tr key={row.id}>
                 <td>{row.original_query}</td>
                 <td>{row.status}</td>
+                <td>
+                  {columns.find((c: any) => c.key === 'id')?.cell(row)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -55,6 +64,11 @@ jest.mock('@/components', () => ({
       ))}
     </div>
   ),
+  AddToCollectionModal: ({ isOpen, itemType, itemLink }: any) => (
+    <div data-testid="add-to-collection-modal">
+      {isOpen && <span data-testid="modal-info">{itemType}:{itemLink}</span>}
+    </div>
+  ),
 }));
 
 describe('RAGPage', () => {
@@ -65,6 +79,13 @@ describe('RAGPage', () => {
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue({
       push: mockPush,
+    });
+    (useAddToCollection as jest.Mock).mockReturnValue({
+      isOpen: false,
+      openAddToCollection: jest.fn(),
+      closeAddToCollection: jest.fn(),
+      itemType: '',
+      itemLink: '',
     });
   });
 
@@ -154,10 +175,11 @@ describe('RAGPage', () => {
     });
 
     render(<RAGPage />);
-    const statsGrid = screen.getByTestId('stats-card-grid');
-    expect(statsGrid).toHaveTextContent('Total Queries: 3');
-    expect(statsGrid).toHaveTextContent('Ready: 2');
-    expect(statsGrid).toHaveTextContent('Pending: 1');
+    
+    expect(screen.getByText('Pipeline Overview')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument(); // Total
+    expect(screen.getByText('2')).toBeInTheDocument(); // Ready
+    expect(screen.getByText('1')).toBeInTheDocument(); // Pending
   });
 
   it('should display empty state when no queries exist', () => {
@@ -212,5 +234,39 @@ describe('RAGPage', () => {
     fireEvent.click(manualButton);
 
     expect(mockPush).toHaveBeenCalledWith('/rag/new?q=Test%20query');
+  });
+
+  it('should call openAddToCollection when "Add to Collection" button is clicked in the table', () => {
+    const { usePageData } = require('@/hooks/use-page-data');
+    const mockOpenAddToCollection = jest.fn();
+    (useAddToCollection as jest.Mock).mockReturnValue({
+      isOpen: false,
+      openAddToCollection: mockOpenAddToCollection,
+      closeAddToCollection: jest.fn(),
+      itemType: '',
+      itemLink: '',
+    });
+
+    const mockData = {
+      queries: [
+        { id: 1, original_query: 'Query 1', created_at: '2024-01-01T00:00:00Z', status: 'ready', intent: null, entities_count: 0 },
+      ],
+      total: 1,
+    };
+
+    usePageData.mockReturnValue({
+      data: mockData,
+      loading: false,
+      error: null,
+      refetch: mockRefetch,
+    });
+
+    render(<RAGPage />);
+    
+    // Find the button by its title since it's an icon button
+    const addButton = screen.getByTitle('Add to Collection');
+    fireEvent.click(addButton);
+
+    expect(mockOpenAddToCollection).toHaveBeenCalledWith('research_query', '/rag/1');
   });
 });

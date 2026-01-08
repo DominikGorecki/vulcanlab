@@ -11,3 +11,5 @@ export { useTable } from './use-table';
 export type { UseTableReturn, SortDirection } from './use-table';
 
 export { useToast, toast } from './use-toast';
+export { useDebounce } from './use-debounce';
+export { useAddToCollection } from './use-add-to-collection';
