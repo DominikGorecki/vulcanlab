@@ -3,15 +3,17 @@
 import { useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { PlayCircle } from "lucide-react";
+import { PlayCircle, FolderPlus } from "lucide-react";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { TextStats } from "@/components/text-stats";
 import {
   PageLoadingState,
   PageErrorState,
   StickyDetailHeader,
+  AddToCollectionModal,
 } from "@/components";
 import { usePageData } from "@/hooks/use-page-data";
+import { useAddToCollection } from "@/hooks/use-add-to-collection";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -62,6 +64,14 @@ export default function ResultDetailPage() {
 
   const { data, loading, error, refetch } = usePageData<PageData>(fetchPageData);
 
+  const {
+    isOpen,
+    openAddToCollection,
+    closeAddToCollection,
+    itemType,
+    itemLink
+  } = useAddToCollection();
+
   if (loading) {
     return <PageLoadingState />;
   }
@@ -100,6 +110,17 @@ export default function ResultDetailPage() {
             {/* Stats */}
             <TextStats text={data.result.response_text} />
 
+            {/* Add to Collection */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openAddToCollection("research_result", `/rag/${queryId}/results/${resultId}`)}
+              className="gap-2"
+            >
+              <FolderPlus className="h-4 w-4" />
+              Add to Collection
+            </Button>
+
             {/* Query Button */}
             <Button
               onClick={() => router.push(`/rag/${queryId}`)}
@@ -122,6 +143,13 @@ export default function ResultDetailPage() {
           processSources={true}
         />
       </div>
+
+      <AddToCollectionModal
+        isOpen={isOpen}
+        onClose={closeAddToCollection}
+        itemType={itemType}
+        itemLink={itemLink}
+      />
     </div>
   );
 }

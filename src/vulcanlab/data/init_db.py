@@ -27,7 +27,7 @@ from .database import Base, engine, get_admin_database_url
 from .env_utils import get_required_env_var
 
 # Import all models to register them with Base
-from .models import Chunk, Query, Result, ResultModel, Work, RagConfig  # noqa: F401
+from .models import Chunk, Query, Result, ResultModel, Work, RagConfig, Collection, CollectionItem  # noqa: F401
 from .models.io_file import IOFile  # noqa: F401
 from .models.prompt_template import PromptTemplate  # noqa: F401
 from .models.prompt_meta import PromptMeta  # noqa: F401
@@ -235,6 +235,15 @@ def create_enums(verbose: bool = False) -> None:
         conn.execute(text("""
             DO $$ BEGIN
                 CREATE TYPE modification_action AS ENUM ('remove', 'change', 'keep');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+        """))
+
+        # Create collection_item_type enum
+        conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE collection_item_type AS ENUM ('excerpt', 'research_result', 'research_query');
             EXCEPTION
                 WHEN duplicate_object THEN NULL;
             END $$;
@@ -1016,6 +1025,84 @@ def seed_default_result_model(verbose: bool = False) -> None:
             print("Default 'Unspecified' result model seeded")
 
 
+def create_collections_table(verbose: bool = False) -> None:
+    """
+    Create collections and collection_items tables with triggers and indexes.
+    """
+    if verbose:
+        print("Creating collections and collection_items tables...")
+
+    # Tables are created by SQLAlchemy create_all()
+    # But we need manual indexes and triggers matching migration 027
+
+    with engine.connect() as conn:
+        # Create GIN index on collections.tags
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_collections_tags
+            ON collections USING GIN (tags)
+        """))
+
+        # Create trigger function for collections.updated_at
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_collections_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = NOW();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger for collections.updated_at
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_collections_updated_at ON collections"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_collections_updated_at
+                BEFORE UPDATE ON collections
+                FOR EACH ROW
+                EXECUTE FUNCTION update_collections_updated_at()
+        """))
+
+        # Create trigger function for collection_items.last_modified
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_collection_items_last_modified()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.last_modified = NOW();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger for collection_items.last_modified
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_collection_items_last_modified ON collection_items"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_collection_items_last_modified
+                BEFORE UPDATE ON collection_items
+                FOR EACH ROW
+                EXECUTE FUNCTION update_collection_items_last_modified()
+        """))
+
+        conn.commit()
+
+    # Transfer ownership to app user
+    db_config = load_config().database
+    app_user = db_config.app_user
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f'ALTER FUNCTION update_collections_updated_at() OWNER TO "{app_user}"'))
+            conn.execute(text(f'ALTER FUNCTION update_collection_items_last_modified() OWNER TO "{app_user}"'))
+            conn.commit()
+            if verbose:
+                print(f"Transferred ownership of collections trigger functions to {app_user}")
+    except Exception as e:
+        if verbose:
+            print(f"Note: Could not transfer ownership: {e}")
+
+    if verbose:
+        print("Collections and collection_items infrastructure created successfully")
+
+
 def init_database(verbose: bool = False) -> None:
     """
     Initialize the database: create database, user, tables, and indexes.
@@ -1034,6 +1121,7 @@ def init_database(verbose: bool = False) -> None:
     create_history_indexes(verbose=verbose)
     create_prompt_meta_table(verbose=verbose)
     create_result_models_table(verbose=verbose)
+    create_collections_table(verbose=verbose)
     seed_prompt_templates(verbose=verbose)
     seed_default_result_model(verbose=verbose)
     create_default_rag_config(verbose=verbose)

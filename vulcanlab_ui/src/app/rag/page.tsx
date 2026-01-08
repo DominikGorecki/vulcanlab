@@ -19,6 +19,7 @@ import {
   FastForward,
   Files,
   Eye,
+  FolderPlus,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UpdateRetrieveConsolidateButton } from "@/components/rag/update-button";
@@ -29,10 +30,12 @@ import {
   DataTable,
   StatusBadge,
   StatsCardGrid,
+  AddToCollectionModal,
   type DataTableColumn,
   type StatusConfig,
 } from "@/components";
 import { usePageData } from "@/hooks/use-page-data";
+import { useAddToCollection } from "@/hooks/use-add-to-collection";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -164,6 +167,14 @@ export default function RAGPage() {
   }, []);
 
   const { data, loading, error, refetch } = usePageData<QueryListResponse>(fetchFn);
+
+  const {
+    isOpen,
+    openAddToCollection,
+    closeAddToCollection,
+    itemType,
+    itemLink
+  } = useAddToCollection();
 
   const handleNewQuery = useCallback((query: string) => {
     router.push(`/rag/new?q=${encodeURIComponent(query)}`);
@@ -412,6 +423,16 @@ export default function RAGPage() {
           >
             <Eye className="h-3 w-3" />
           </Button>
+          {/* Add to Collection */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => openAddToCollection("research_query", `/rag/${query.id}`)}
+            disabled={isDisabled}
+            title="Add to Collection"
+          >
+            <FolderPlus className="h-3 w-3" />
+          </Button>
           {/* Update R & C */}
           <UpdateRetrieveConsolidateButton
             queryId={query.id}
@@ -434,6 +455,15 @@ export default function RAGPage() {
 
     return (
       <div className="flex gap-2 justify-end">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => openAddToCollection("research_query", `/rag/${query.id}`)}
+          disabled={isDisabled}
+          title="Add to Collection"
+        >
+          <FolderPlus className="h-3 w-3" />
+        </Button>
         {getSingleStepButton()}
         {getRunAllButton()}
       </div>
@@ -607,6 +637,13 @@ export default function RAGPage() {
           />
         </CardContent>
       </Card>
+
+      <AddToCollectionModal
+        isOpen={isOpen}
+        onClose={closeAddToCollection}
+        itemType={itemType}
+        itemLink={itemLink}
+      />
     </div>
   );
 }
