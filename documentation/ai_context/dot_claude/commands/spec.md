@@ -1,7 +1,8 @@
 ---
+
 description: Create a new spec markdown file in documentation/work from a prompt or a markdown file, using documentation/patterns.md as guidance.
 argument-hint: [prompt text OR path/to/input.md]
----
+------------------------------------------------
 
 You generate a new spec markdown file for spec-driven development.
 
@@ -9,7 +10,7 @@ You generate a new spec markdown file for spec-driven development.
 
 ## Hard requirements
 
-* You MUST read `documentation/patterns.md` first. If it does not exist or is empty, stop and ask.
+* You MUST read `documentation/patterns.md` first. If it does not exist or is empty, STOP and ask.
 * You MUST ask clarifying questions first, but ONLY ask the minimum number needed. Maximum is 10 questions total.
 * You MUST wait for the user answers before writing the spec file.
 * You MUST write the spec to `documentation/work/<slug>.spec.md`.
@@ -17,6 +18,7 @@ You generate a new spec markdown file for spec-driven development.
 * If the output spec file already exists, STOP and ask what to do.
 * Markdown output may use Unicode, but DO NOT use emojis or icon-like characters.
 * Separate stable requirements from implementation notes. Requirements should be testable.
+* The spec MUST include an implementation-oriented work breakdown that maps cleanly to tickets (logical decomposition), without prioritizing “vertical slices”.
 
 ## Step 1: Load inputs
 
@@ -29,6 +31,7 @@ You generate a new spec markdown file for spec-driven development.
 
     * YAML frontmatter between `---` and `---` at the start of the file
     * JSON frontmatter between `{` and `}` at the start of the file
+
 * Otherwise:
 
   * Treat $1 as the raw prompt text.
@@ -44,6 +47,7 @@ You generate a new spec markdown file for spec-driven development.
   * go.mod
   * *.csproj, *.sln
   * Dockerfile, docker-compose.yml
+
 * Note what you found; if ambiguous, include it as an assumption to confirm in questions.
 
 ## Step 2: Ask clarifying questions (must ask, then wait)
@@ -69,53 +73,14 @@ Your questions MUST cover the following topics ONLY if they are unclear or missi
 * Acceptance criteria (bullet checklist)
 * Risks and alternatives
 * How patterns.md applies, and where you might deviate (ask for approval if deviating)
+* Implementation breakdown needs (modules/components/migrations) ONLY if missing and necessary to make a sane work breakdown
 
-### Output formatting rule for questions (critical, non-negotiable)
+### Output formatting rule for questions
 
-The questions section MUST preserve line breaks in all renderers.
-
-To guarantee this, you MUST output the entire questions section inside a single fenced code block (and nothing else before or after it), like:
-
-```text
-...questions here...
-```
-
-Inside that code block:
-
-* Every question line MUST be on its own line: `Q1) ...`
-* There MUST be exactly one blank line after each `Qn)` line.
-* Each option MUST be on its own line and MUST start at column 1 with exactly `A.`, `B.`, `C.`.
-* The Freeform line MUST be on its own line and MUST start at column 1 with `Freeform:`.
-* The separator MUST be a line that contains exactly `---` and nothing else.
-* There MUST be a blank line above and below each separator line.
-* Do NOT put multiple options or Freeform on the same line as each other.
-* Do NOT put any option on the same line as the `Qn)` line.
-
-Before you output, perform a strict self-check:
-
-* If any line contains both `Q` and `A.` (or `B.` or `C.` or `Freeform:`), rewrite until compliant.
-* If any line contains more than one of `A.`, `B.`, `C.`, `Freeform:`, rewrite until compliant.
-* If there is no blank line between `Qn)` and `A.`, rewrite until compliant.
-
-Use exactly this internal layout:
-
-Q1) <question text>
-
-A. <option>
-B. <option>
-C. <option>
-Freeform: <what you need if none of the options fit>
-
----
-
-Q2) <question text>
-
-A. <option>
-B. <option>
-C. <option>
-Freeform: <what you need if none of the options fit>
-
-After asking questions, STOP. Do not create or write the spec file yet.
+* Do NOT put questions inside fenced code blocks.
+* Use normal markdown with a simple numbered list: `Q1. ...`, `Q2. ...`
+* If options help, include them as bullets under the question.
+* After asking questions, STOP. Do not create or write the spec file yet.
 
 ## Step 3: Write the spec file after answers
 
@@ -133,6 +98,7 @@ After the user answers:
 * Keep total length around 1 to 2 pages equivalent. Be concise, but do not omit critical constraints or acceptance criteria.
 * Use precise, testable language.
 * Do not invent endpoints, tables, or components that are not implied by the prompt; mark unknowns as TBD and add them to Open Questions.
+* Work breakdown should be implementation-friendly and logical (layers/modules), not “vertical slices”. Prefer sequencing like: foundations/migrations → core domain/modules → APIs/contracts → UI/clients → integration/observability → rollout.
 
 ## Step 5: Spec markdown template (must follow)
 
@@ -206,6 +172,39 @@ Write the spec using this structure. If a section is not applicable, include it 
 ## UX / Workflows
 
 * <bullets describing key user flows; or Not applicable>
+
+## Work Breakdown (Ticket Seed)
+
+Provide a logical implementation breakdown that can be turned into tickets. Keep it concrete and ordered. Prefer grouping by dependency and cohesion.
+
+### Phase 0: Foundations (if applicable)
+
+* <repo setup, feature flags, scaffolding, permissions, shared libs>
+
+### Phase 1: Data / Migrations (if applicable)
+
+* <schema changes, migrations, backfills, data validation, rollback notes>
+
+### Phase 2: Core Domain / Modules
+
+* <services/modules with clear responsibilities>
+* <key internal APIs or interfaces between modules>
+
+### Phase 3: External APIs / Integrations (if applicable)
+
+* <endpoint work, auth, rate limiting, third-party integrations>
+
+### Phase 4: UI / Client (if applicable)
+
+* <screens/components, state, validation, error handling>
+
+### Phase 5: Testing + Observability + Hardening
+
+* <integration tests, logging/metrics/tracing, alerts, perf checks>
+
+### Phase 6: Rollout
+
+* <deploy steps, migrations sequencing, feature flag plan, monitoring, rollback>
 
 ## Testing Plan
 
