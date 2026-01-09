@@ -9,7 +9,9 @@ from .rag_config import RagConfig
 from .parsed_markdown import ParsedMarkdown
 from .sanitized_markdown import SanitizedMarkdown
 from .heading_modifications import HeadingModification
-from .enums import FileType, DocumentClassification, ModificationAction
+from .collection import Collection
+from .collection_item import CollectionItem
+from .enums import FileType, DocumentClassification, ModificationAction, CollectionItemType
 from .experiment import (
     Experiment,
     ExperimentDimension,
@@ -29,9 +31,12 @@ __all__ = [
     "ParsedMarkdown",
     "SanitizedMarkdown",
     "HeadingModification",
+    "Collection",
+    "CollectionItem",
     "FileType",
     "DocumentClassification",
     "ModificationAction",
+    "CollectionItemType",
     "Experiment",
     "ExperimentDimension",
     "ExperimentPrompt",

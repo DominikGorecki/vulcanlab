@@ -6,8 +6,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, Loader2, AlertCircle, BookOpen } from "lucide-react";
+import { ChevronLeft, Loader2, AlertCircle, BookOpen, FolderPlus } from "lucide-react";
 import { usePageData } from "@/hooks/use-page-data";
+import { useAddToCollection } from "@/hooks/use-add-to-collection";
+import { AddToCollectionModal } from "@/components/collections/AddToCollectionModal";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -40,6 +42,14 @@ export default function DocumentViewerPage() {
 
   const { data, loading, error } = usePageData<MarkdownResponse>(fetchMarkdown, { autoFetch: !!workId });
   
+  const { 
+    isOpen, 
+    openAddToCollection, 
+    closeAddToCollection, 
+    itemType, 
+    itemLink 
+  } = useAddToCollection();
+
   const highlightRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -147,9 +157,20 @@ export default function DocumentViewerPage() {
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => router.push("/search")} className="shrink-0 hidden sm:flex">
-            New Search
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={() => openAddToCollection("excerpt", `/search/result/${workId}/${startLine}/${endLine}`)}
+            >
+              <FolderPlus className="h-4 w-4" />
+              <span className="hidden xs:inline">Add to Collection</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => router.push("/search")} className="shrink-0 hidden sm:flex">
+              New Search
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -158,7 +179,7 @@ export default function DocumentViewerPage() {
       </div>
       
       {/* Footer helper */}
-      <div className="fixed bottom-6 right-6 z-30">
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-2">
         <Button 
           variant="secondary" 
           size="sm" 
@@ -168,6 +189,13 @@ export default function DocumentViewerPage() {
           Back to Highlight
         </Button>
       </div>
+
+      <AddToCollectionModal
+        isOpen={isOpen}
+        onClose={closeAddToCollection}
+        itemType={itemType}
+        itemLink={itemLink}
+      />
     </div>
   );
 }

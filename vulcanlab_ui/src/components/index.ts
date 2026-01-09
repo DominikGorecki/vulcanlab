@@ -44,3 +44,8 @@ export type { FormFieldProps } from './form-field'
 
 export { ConfirmDialog } from './confirm-dialog'
 export type { ConfirmDialogProps, ConfirmDialogVariant } from './confirm-dialog'
+
+// Collections Components (T07)
+export { NewCollectionModal } from './collections/NewCollectionModal'
+export { AddToCollectionModal } from './collections/AddToCollectionModal'
+export { MetadataCard } from './collections/MetadataCard'
