@@ -38,6 +38,55 @@ VulcanLab follows a decoupled, three-tier architecture designed for modularity a
     -   *Anti-Pattern*: Creating a new session inside a core logic function.
     -   *Standard*: `def process_data(work_id: int, session: Session): ...`
 
+#### Enum Value Capitalization (CRITICAL)
+> **CRITICAL RULE**: Python enum values MUST exactly match database CHECK constraint values (typically lowercase).
+
+**Context**: SQLAlchemy enums map Python Enum classes to database VARCHAR columns. The database enforces values through CHECK constraints, not PostgreSQL enum types.
+
+**Pattern**:
+```python
+# Python Enum Definition (src/vulcanlab/data/models/enums.py)
+class SessionType(str, enum.Enum):
+    """
+    IMPORTANT: Values MUST match database CHECK constraint exactly (lowercase):
+    CHECK (session_type IN ('manual', 'automated'))
+    """
+    MANUAL = 'manual'      # Python constant is UPPERCASE
+    AUTOMATED = 'automated'  # But value is lowercase to match DB
+
+# Database Schema (migrations/*.sql or schema/specialized_tables.py)
+CREATE TABLE research_sessions (
+    session_type VARCHAR(20) NOT NULL,
+    CONSTRAINT chk_session_type CHECK (session_type IN ('manual', 'automated'))
+);
+```
+
+**Why This Matters**:
+- Database CHECK constraints enforce exact value matches (case-sensitive)
+- Python enum constant names (e.g., `MANUAL`) can be any case, but values (e.g., `'manual'`) must match DB
+- Mismatches cause runtime failures when inserting/updating records
+
+**Verification Checklist** (when adding new enums):
+1. ✅ Check migration file for CHECK constraint values
+2. ✅ Verify `schema/specialized_tables.py` matches migration
+3. ✅ Document expected values in Python enum docstring
+4. ✅ Use lowercase values unless DB explicitly uses uppercase
+5. ✅ Import new models in `src/vulcanlab/data/init_db.py`
+
+**Example Enum Documentation**:
+```python
+class SessionStatus(str, enum.Enum):
+    """
+    IMPORTANT: Values MUST match database CHECK constraint exactly (lowercase):
+    CHECK (status IN ('in_progress', 'completed', 'failed', 'paused'))
+    See: migrations/028_add_research_tables.sql and schema/specialized_tables.py
+    """
+    IN_PROGRESS = 'in_progress'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
+    PAUSED = 'paused'
+```
+
 ### Database Seeding (Prompt Templates)
 > **Standard**: Use file-based YAML configuration for seeding prompt templates.
 
@@ -189,7 +238,75 @@ function MyPage() {
     -   **Required Extensions**:
         -   `pgvector`: For vector similarity search.
         -   `age`: For Apache AGE graph database functionality.
-    -   **Migration**: SQL-based migrations or `alembic` (check specific project setup).
+    -   **Migration**: SQL-based migrations in `migrations/` directory (see Migration Patterns below).
+
+### 5.1 Database Initialization Module Structure
+> **Standard**: Database initialization logic must be organized into focused modules.
+
+The `src/vulcanlab/data/` directory follows a modular structure to keep initialization logic maintainable:
+
+```
+src/vulcanlab/data/
+├── init_db.py                          # Orchestration only (~100 lines max)
+├── database_setup.py                   # Database/user creation, extensions
+├── schema/
+│   ├── __init__.py
+│   ├── enums.py                        # PostgreSQL enum types
+│   ├── tables.py                       # SQLAlchemy ORM table creation
+│   ├── indexes.py                      # Vector, fulltext, history indexes
+│   ├── triggers.py                     # Timestamp triggers and helpers
+│   └── specialized_tables.py           # Feature-specific tables (research, collections)
+├── seeding/
+│   ├── __init__.py
+│   ├── prompt_templates.py             # Template seeding from YAML/files
+│   └── defaults.py                     # Default data (result models, RAG config)
+└── seed_data/
+    ├── templates.yaml
+    ├── variables.yaml
+    └── templates/*.txt
+```
+
+**Rules for new database initialization functions:**
+1. **Keep init_db.py thin**: Only orchestration logic (`init_database()`) and CLI (`main()`)
+2. **Group by responsibility**: Enums, tables, indexes, triggers, and seeding go in their respective modules
+3. **Use shared helpers**: Extract common patterns (ownership transfer, trigger creation) into reusable functions
+4. **Document dependencies**: Each function should document which tables/objects it depends on
+
+**Shared Helper Patterns** (in `schema/triggers.py`):
+```python
+def transfer_function_ownership(conn, function_names: list[str], app_user: str, verbose: bool = False):
+    """Transfer ownership of PostgreSQL functions to app user."""
+    for func_name in function_names:
+        conn.execute(text(f'ALTER FUNCTION {func_name}() OWNER TO "{app_user}"'))
+
+def create_timestamp_trigger(conn, table_name: str, column_name: str = "updated_at"):
+    """Create standard updated_at trigger for a table."""
+    func_name = f"update_{table_name}_{column_name}"
+    trigger_name = f"trigger_{func_name}"
+    # ... implementation
+```
+
+### 5.2 Migration Patterns
+> **Standard**: Database migrations follow a dual-track approach.
+
+**Dual-Track Migration System:**
+1. **Migrations** (`migrations/*.sql`): Applied to existing databases via manual execution
+2. **init_db.py modules**: Replicate migration changes for fresh database installs
+
+**Migration File Naming**: `NNN_description.sql` (e.g., `028_add_research_tables.sql`)
+
+**Migration Rules:**
+-   Use `IF NOT EXISTS` / `IF EXISTS` for idempotency
+-   Include verification queries at the end
+-   No rollback logic (forward-only migrations)
+-   Complex migrations with Python logic: create `NNN_backfill_*.py` alongside SQL
+
+**Keeping init_db.py in Sync:**
+When creating a new migration:
+1. Create the SQL migration file in `migrations/`
+2. Add corresponding function in the appropriate `schema/` or `seeding/` module
+3. Call the new function from `init_database()` in proper order
+4. Transfer ownership of functions/sequences to app_user
 
 ---
 

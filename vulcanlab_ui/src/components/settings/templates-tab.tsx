@@ -67,41 +67,52 @@ export function TemplatesTabContent() {
           <TableHeader>
             <TableRow>
               <TableHead>Function</TableHead>
+              <TableHead>Title</TableHead>
               <TableHead>Active Version</TableHead>
               <TableHead>Total Versions</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {templates.map((template) => (
-              <TableRow key={template.function_tag}>
-                <TableCell className="font-medium">
-                  {FUNCTION_LABELS[template.function_tag] || template.function_tag}
-                </TableCell>
-                <TableCell>
-                  {template.active_version ? (
-                    <Badge variant="default">v{template.active_version}</Badge>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">No active version</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <span className="text-sm text-muted-foreground">
-                    {template.versions.length} version{template.versions.length !== 1 ? 's' : ''}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => router.push(`/settings/templates/${template.function_tag}`)}
-                  >
-                    <PenSquare className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {templates.map((template) => {
+              const activeTemplate = template.versions.find(v => v.is_active);
+              return (
+                <TableRow key={template.function_tag}>
+                  <TableCell className="font-medium">
+                    {FUNCTION_LABELS[template.function_tag] || template.function_tag}
+                  </TableCell>
+                  <TableCell>
+                    {activeTemplate ? (
+                      <span className="text-sm">{activeTemplate.title}</span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">No active template</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {template.active_version ? (
+                      <Badge variant="default">v{template.active_version}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">No active version</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm text-muted-foreground">
+                      {template.versions.length} version{template.versions.length !== 1 ? 's' : ''}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(`/settings/templates/${template.function_tag}`)}
+                    >
+                      <PenSquare className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

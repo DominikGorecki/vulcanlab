@@ -44,6 +44,7 @@ from vulcanlab_api.routers import (
     v1_corpus,
     vectorization,
     collections,
+    research_sessions,
 )
 
 settings_config = get_settings()
@@ -127,6 +128,10 @@ app = FastAPI(
             "name": "Collections",
             "description": "Research organization and item grouping. Create and manage collections of excerpts, results, and queries.",
         },
+        {
+            "name": "Research Sessions",
+            "description": "Core CRUD endpoints for research workflows, sessions, sections, and reports.",
+        },
     ],
     # Additional metadata
     contact={
@@ -166,6 +171,7 @@ app.include_router(chunks.router, prefix="/api/v1/chunks", tags=["Chunks"])
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(eval.router, prefix="/api/v1/eval", tags=["Eval"])
 app.include_router(collections.router, prefix="/api/v1/collections", tags=["Collections"])
+app.include_router(research_sessions.router, prefix="/api/v1", tags=["Research Sessions"])
 
 
 @app.get("/", include_in_schema=False)

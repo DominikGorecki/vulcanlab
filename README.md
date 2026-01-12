@@ -37,3 +37,6 @@ Simple conversion (recommended) gives you less control, but it's streamlined and
 
 ### Repo Active Documentation
 [docs/](/docs/) Folder
+
+## Features
+*   **[Collection Deep Research](/documentation/features/collection-deep-research.md)**: Curate items and perform academic-quality research with automated refinement and result reuse.

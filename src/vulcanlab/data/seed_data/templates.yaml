@@ -60,3 +60,59 @@ templates:
     template_type: eval
     is_active: true
     content_file: eval_default.txt
+
+  - function_tag: research_planning
+    version: 1
+    title: "Research Planning - Structured Plan Generation"
+    template_type: research
+    is_active: true
+    content_file: research_planning.txt
+
+  - function_tag: result_matching
+    version: 1
+    title: "Result Matching - Existing Research Evaluation"
+    template_type: research
+    is_active: false
+    content_file: result_matching.txt
+
+  - function_tag: context_assembly_new
+    version: 1
+    title: "Context Assembly - New Generation"
+    template_type: research
+    is_active: false
+    content_file: context_assembly_new.txt
+
+  - function_tag: context_assembly_ensemble
+    version: 1
+    title: "Context Assembly - Ensemble Reuse"
+    template_type: research
+    is_active: false
+    content_file: context_assembly_ensemble.txt
+
+  - function_tag: section_generation
+    version: 1
+    title: "Section Generation - Synthesis from Context"
+    template_type: research
+    is_active: false
+    content_file: section_generation.txt
+
+  - function_tag: section_synthesis
+    version: 1
+    title: "Section Synthesis - Research Answer Generation"
+    template_type: research
+    is_active: true
+    content_file: section_synthesis.txt
+
+  - function_tag: synthesis
+    version: 1
+    title: "Synthesis - Final Report Integration"
+    template_type: research
+    is_active: true
+    content_file: synthesis.txt
+
+  - function_tag: quality_evaluation
+    version: 2
+    title: "Quality Evaluation - Comprehensive Review"
+    template_type: research
+    is_active: true
+    content_file: quality_evaluation.txt

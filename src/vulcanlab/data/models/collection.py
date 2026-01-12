@@ -46,6 +46,7 @@ class Collection(Base):
 
     # Relationships
     items = relationship("CollectionItem", back_populates="collection", cascade="all, delete-orphan")
+    research_sessions = relationship("ResearchSession", back_populates="collection", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Collection(id={self.id}, name='{self.name}')>"

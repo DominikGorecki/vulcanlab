@@ -15,7 +15,7 @@
       },
       "gemini": {
         "light": "gemini-3-flash-preview",
-        "full": "gemini-3-flash-preview"
+        "full": "gemini-3-pro-preview"
       }
     }
   },
@@ -26,10 +26,5 @@
   "logging": {
     "enabled": true,
     "log_dir": "logs"
-  },
-  "conversion": {
-    "token_threshold": 30000,
-    "advanced_mode_enabled": false,
-    "use_full_model": false
   }
 }

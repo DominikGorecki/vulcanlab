@@ -32,11 +32,14 @@ import { usePageData } from "@/hooks/use-page-data";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MetadataCard } from "@/components/collections/MetadataCard";
+import { DeepResearchModal } from "@/components/research/DeepResearchModal";
+import { AutomatedResearchProgress } from "@/components/research/AutomatedResearchProgress";
+import { ResearchReportList } from "@/components/research/ResearchReportList";
 import { cn } from "@/lib/utils";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -181,9 +184,12 @@ export default function CollectionDetailPage() {
   const [isSavingDesc, setIsSavingDesc] = useState(false);
 
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [isDeepResearchModalOpen, setIsDeepResearchModalOpen] = useState(false);
+  const [resumeSessionId, setResumeSessionId] = useState<number | undefined>();
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [isDeletingItems, setIsDeletingItems] = useState(false);
   const [showDeleteConfirm, setShowShowDeleteConfirm] = useState(false);
+  const [reportsKey, setReportsKey] = useState(0);
 
   const fetchCollection = useCallback(async () => {
     const response = await fetch(`${API_BASE_URL}/api/v1/collections/${id}`);
@@ -196,6 +202,39 @@ export default function CollectionDetailPage() {
   }, [id]);
 
   const { data, loading, error, refetch } = usePageData<Collection>(fetchCollection);
+
+  const fetchSessions = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/collections/${id}/research-sessions`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.sessions.filter((s: any) => s.status === 'in_progress');
+  }, [id]);
+
+  const { data: sessions, loading: loadingSessions, refetch: refetchSessions } = usePageData<any[]>(fetchSessions);
+
+  const manualSessions = useMemo(() => sessions?.filter(s => s.session_type === 'manual') || [], [sessions]);
+  const automatedSessions = useMemo(() => sessions?.filter(s => s.session_type === 'automated') || [], [sessions]);
+
+  const handleResumeSession = async (sessionId: number) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/research-sessions/${sessionId}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      
+      if (!response.ok) throw new Error("Failed to resume session");
+      
+      setResumeSessionId(sessionId);
+      setIsDeepResearchModalOpen(true);
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to resume session.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSaveDescription = async () => {
     setIsSavingDesc(true);
@@ -404,8 +443,75 @@ export default function CollectionDetailPage() {
         <PageHeader
           title={data.name}
           description={`Created ${new Date(data.created_at).toLocaleDateString()}`}
+          actions={
+            data.item_count >= 5 && (
+              <Button onClick={() => {
+                setResumeSessionId(undefined);
+                setIsDeepResearchModalOpen(true);
+              }}>
+                Deep Research
+              </Button>
+            )
+          }
         />
       </div>
+
+      {(manualSessions.length > 0 || automatedSessions.length > 0) && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold tracking-tight">In-Progress Research</h3>
+            <Badge variant="secondary" className="bg-orange-500/10 text-orange-600 border-orange-500/20">
+              {manualSessions.length + automatedSessions.length}
+            </Badge>
+          </div>
+
+          {manualSessions.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {manualSessions.map((session: any) => (
+                <Card key={session.id} className="border-orange-500/20 bg-orange-500/5">
+                  <CardHeader className="py-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-sm font-bold capitalize">
+                          {session.session_type} Research
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Started {new Date(session.created_at).toLocaleDateString()}
+                        </CardDescription>
+                      </div>
+                      <Badge variant="outline" className="capitalize bg-background">
+                        {session.current_phase?.replace('_', ' ') || 'Planning'}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex justify-end pt-0 pb-4">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      className="h-8 border-orange-500/30 hover:bg-orange-500/10 hover:text-orange-700"
+                      onClick={() => handleResumeSession(session.id)}
+                    >
+                      Resume Session
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {automatedSessions.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {automatedSessions.map((session: any) => (
+                <AutomatedResearchProgress 
+                  key={session.id} 
+                  sessionId={session.id} 
+                  onComplete={refetchSessions}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-2">
@@ -510,6 +616,10 @@ export default function CollectionDetailPage() {
         />
       </div>
 
+      <div id="reports">
+        <ResearchReportList key={reportsKey} collectionId={id} />
+      </div>
+
       <ConfirmDialog
         open={showDeleteConfirm}
         onOpenChange={setShowShowDeleteConfirm}
@@ -519,6 +629,18 @@ export default function CollectionDetailPage() {
         variant="destructive"
         onConfirm={handleBulkDelete}
         isLoading={isDeletingItems}
+      />
+
+      <DeepResearchModal
+        isOpen={isDeepResearchModalOpen}
+        onClose={() => {
+          setIsDeepResearchModalOpen(false);
+          setResumeSessionId(undefined);
+          refetchSessions();
+          setReportsKey(prev => prev + 1);
+        }}
+        collectionId={id}
+        initialSessionId={resumeSessionId}
       />
     </div>
   );

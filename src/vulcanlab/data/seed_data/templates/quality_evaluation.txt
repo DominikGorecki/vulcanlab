@@ -1,0 +1,24 @@
+Evaluate the quality of the following research content based on the provided sources.
+
+Research Content:
+{content}
+
+Sources:
+{sources_list}
+
+Evaluate based on:
+1. Citation Accuracy: Are claims supported by the cited sources?
+2. Source Diversity: Are multiple sources used effectively?
+3. Coherence: Is the narrative logical and well-structured?
+4. Completeness: Does it address the research question comprehensively?
+5. Depth: Does it provide sufficiently deep analysis of the evidence?
+
+Return a JSON object with:
+{{
+    "citation_accuracy": "High/Medium/Low",
+    "source_diversity_score": "High/Medium/Low",
+    "coherence": "High/Medium/Low",
+    "completeness": "High/Medium/Low",
+    "depth": "High/Medium/Low",
+    "feedback": "Detailed feedback for improvement"
+}}
