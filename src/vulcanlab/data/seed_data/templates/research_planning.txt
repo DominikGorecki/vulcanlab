@@ -1,0 +1,43 @@
+You are a research planning assistant. Analyze the following collection and generate a structured research plan.
+
+Collection Information:
+- Name: {name}
+- Description: {description}
+- Tags: {tags}
+- Total Items: {item_count}
+- Items by Type:
+  * Excerpts: {excerpt_count}
+  * Research Results: {research_result_count}
+  * Research Queries: {query_count}
+
+Items in Collection:
+{items_list}
+
+Generate a research plan with the following JSON structure:
+{{
+    "research_goal": "A clear statement of the overall research objective",
+    "key_themes": ["theme1", "theme2", "theme3"],
+    "sub_questions": [
+        {{
+            "id": "sq1",
+            "question": "A specific research question",
+            "rationale": "Why this question is important",
+            "estimated_tokens": 30000,
+            "relevant_items": [1, 2, 3]
+        }}
+    ],
+    "synthesis_approach": "Description of how answers will be synthesized into a final report"
+}}
+
+Guidelines:
+- Generate 3-7 sub-questions that break down the research goal
+- Each sub-question should estimate 20,000-40,000 tokens for answering
+- Map sub-questions to relevant collection item IDs
+- Ensure questions are specific and answerable from the collection items
+- The research_goal should synthesize the collection's purpose based on items and description
+- Key themes should emerge from analyzing the items, their notes, and types
+- Sub-questions should be ordered logically, building from foundational to more complex
+- Each sub-question's relevant_items should reference actual item IDs from the collection
+- The synthesis_approach should describe how answers will be integrated into a coherent report
+
+Return ONLY the JSON, no other text.

@@ -11,7 +11,19 @@ from .sanitized_markdown import SanitizedMarkdown
 from .heading_modifications import HeadingModification
 from .collection import Collection
 from .collection_item import CollectionItem
-from .enums import FileType, DocumentClassification, ModificationAction, CollectionItemType
+from .research_session import ResearchSession
+from .research_section import ResearchSection
+from .research_report import ResearchReport
+from .enums import (
+    FileType,
+    DocumentClassification,
+    ModificationAction,
+    CollectionItemType,
+    SessionType,
+    SessionStatus,
+    ResearchPhase,
+    QualityStatus,
+)
 from .experiment import (
     Experiment,
     ExperimentDimension,
@@ -33,10 +45,17 @@ __all__ = [
     "HeadingModification",
     "Collection",
     "CollectionItem",
+    "ResearchSession",
+    "ResearchSection",
+    "ResearchReport",
     "FileType",
     "DocumentClassification",
     "ModificationAction",
     "CollectionItemType",
+    "SessionType",
+    "SessionStatus",
+    "ResearchPhase",
+    "QualityStatus",
     "Experiment",
     "ExperimentDimension",
     "ExperimentPrompt",

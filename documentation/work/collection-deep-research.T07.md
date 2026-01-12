@@ -95,14 +95,14 @@
 
 ## Acceptance criteria (checklist)
 
-* [ ] generate_section calls LLM and returns markdown section
-* [ ] extract_metadata calculates word_count, citation_count, source_diversity
-* [ ] evaluate_quality calculates citation_coverage and coherence_score
-* [ ] check_citation_coverage validates citations against sources
-* [ ] Section generation prompt template created (inline or seed_data)
-* [ ] Quality evaluation prompt template created (optional, for manual Step 6)
-* [ ] All functions work with existing VulcanLab LLM infrastructure
-* [ ] Unit tests pass for synthesis and quality evaluation logic
+* [x] generate_section calls LLM and returns markdown section
+* [x] extract_metadata calculates word_count, citation_count, source_diversity
+* [x] evaluate_quality calculates citation_coverage and coherence_score
+* [x] check_citation_coverage validates citations against sources
+* [x] Section generation prompt template created (inline or seed_data)
+* [x] Quality evaluation prompt template created (optional, for manual Step 6)
+* [x] All functions work with existing VulcanLab LLM infrastructure
+* [x] Unit tests pass for synthesis and quality evaluation logic
 
 ## Manual verification
 

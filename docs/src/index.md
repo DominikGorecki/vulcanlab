@@ -46,10 +46,12 @@ Many high-value domains aren’t well covered online: internal engineering docs,
 
 Instead of manually searching across folders, PDFs, and bookmarks, you can ask:
 
-* “What’s the core argument across these 5 papers?”
-* “Define this concept the way my textbook uses it.”
-* “Compare these two frameworks and list their assumptions.”
-* “What does my documentation say about X edge case?”
+* "What's the core argument across these 5 papers?"
+* "Define this concept the way my textbook uses it."
+* "Compare these two frameworks and list their assumptions."
+* "What does my documentation say about X edge case?"
+
+Or use [Collections](./pages/collections.md) to organize materials and let [Deep Research](./pages/deep-research-collections-guide.md) automatically synthesize comprehensive reports from your curated sources.
 
 ### Better learning and synthesis
 
@@ -101,6 +103,12 @@ LLMs are powerful, but without grounding they can drift. VulcanLab treats your l
 ## In one sentence
 
 **VulcanLab makes your private knowledge base conversational—so you can get deep, accurate answers grounded in your own trusted sources, not internet guesswork.**
+
+## Key Features
+
+### Collections & Deep Research
+* [Collections](./pages/collections.md) - Organize research materials into curated topic-specific repositories
+* [Deep Research on Collections](./pages/deep-research-collections-guide.md) - Automatically synthesize collections into comprehensive research reports
 
 ## Setup
 * [Docker Container Setup](./docker_setup.md)

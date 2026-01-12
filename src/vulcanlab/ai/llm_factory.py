@@ -73,7 +73,8 @@ def create_langchain_chat(
     settings: LLMSettings | None = None,
     tier: ModelTier = ModelTier.LIGHT,
     search: bool = False,
-    temperature: float = 0.2
+    temperature: float = 0.2,
+    request_timeout: int = 120
 ) -> LangChainStack:
     """Create a LangChain ChatModel based on the configured provider.
 
@@ -82,6 +83,7 @@ def create_langchain_chat(
         tier: Model tier to use (LIGHT or FULL)
         search: Enable web search capability (default: False)
         temperature: Model temperature (default 0.2)
+        request_timeout: Timeout in seconds (default 120)
     """
     if settings is None:
         settings = LLMSettings()
@@ -96,12 +98,9 @@ def create_langchain_chat(
             model=model_name,
             api_key=settings.openai_api_key,
             temperature=temperature,
+            timeout=request_timeout,
         )
-        # Note: OpenAI web search would require additional tools/plugins
-        # This is a placeholder for future implementation
-        if search:
-            # Web search for OpenAI would be implemented via function calling
-            pass
+        # ...
     elif settings.provider == LLMProvider.GEMINI:
         # Lazy import - only load langchain_google_genai when needed
         from langchain_google_genai import ChatGoogleGenerativeAI
@@ -113,6 +112,7 @@ def create_langchain_chat(
             model=model_name,
             google_api_key=settings.google_api_key,
             temperature=temperature,
+            timeout=request_timeout,
         )
     else:
         raise ValueError(f"Unsupported provider: {settings.provider}")

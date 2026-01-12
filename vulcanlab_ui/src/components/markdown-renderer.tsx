@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
 import { Components } from "react-markdown";
 import { processRagSources } from "@/lib/utils";
 
@@ -8,6 +9,7 @@ interface MarkdownRendererProps {
   className?: string;
   components?: Components;
   processSources?: boolean;
+  sanitize?: boolean;
 }
 
 export function MarkdownRenderer({
@@ -15,6 +17,7 @@ export function MarkdownRenderer({
   className = "",
   components = {},
   processSources = false,
+  sanitize = true,
 }: MarkdownRendererProps) {
   const displayContent = processSources ? processRagSources(content) : content;
 
@@ -34,6 +37,7 @@ export function MarkdownRenderer({
     >
       <ReactMarkdown 
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={sanitize ? [rehypeSanitize] : []}
         components={components}
       >
         {displayContent}

@@ -89,3 +89,49 @@ variables:
   - variable_name: answer_b
     variable_description: The second answer to be evaluated, presented without indicating
       which system or approach generated it.
+- function_tag: research_planning
+  variables:
+  - variable_name: name
+    variable_description: The name of the research collection being analyzed.
+  - variable_name: description
+    variable_description: A description of the research collection and its purpose.
+  - variable_name: tags
+    variable_description: Comma-separated tags associated with the research collection.
+  - variable_name: item_count
+    variable_description: The total number of items in the collection.
+  - variable_name: excerpt_count
+    variable_description: The number of excerpt items in the collection.
+  - variable_name: research_result_count
+    variable_description: The number of previous research results in the collection.
+  - variable_name: query_count
+    variable_description: The number of research queries in the collection.
+  - variable_name: items_list
+    variable_description: A formatted list of all items in the collection with their
+      types and content previews.
+- function_tag: section_synthesis
+  variables:
+  - variable_name: question_text
+    variable_description: The specific research sub-question to be answered in this
+      section.
+  - variable_name: context
+    variable_description: The assembled context from relevant collection items including
+      excerpts and research results.
+  - variable_name: sources_list
+    variable_description: A formatted list of source citations with author, title,
+      and year information for proper attribution.
+- function_tag: synthesis
+  variables:
+  - variable_name: research_goal
+    variable_description: The overarching research goal statement that guides the
+      synthesis of all sections.
+  - variable_name: section_contents
+    variable_description: The combined content from all generated research sections
+      that need to be synthesized into a cohesive final report.
+- function_tag: quality_evaluation
+  variables:
+  - variable_name: content
+    variable_description: The research section content to be evaluated for quality,
+      citation coverage, and coherence.
+  - variable_name: sources_list
+    variable_description: The list of available sources that should be cited in the
+      content for comprehensive coverage assessment.
