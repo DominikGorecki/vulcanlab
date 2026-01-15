@@ -5,13 +5,14 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2, FlaskConical, Search, FolderOpen } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Eraser, Scissors, Braces, MessageSquare, Database, Zap, FileUp, Trash2, FlaskConical, Search, FolderOpen, BookOpen } from "lucide-react";
 import { useConversionSettings } from "@/contexts/conversion-settings";
 
 const navItems = [
   { href: "/rag", label: "Research (RAG)", icon: MessageSquare, alwaysVisible: true },
   { href: "/collections", label: "Collections", icon: FolderOpen, alwaysVisible: true },
   { href: "/corpus", label: "Corpus", icon: Database, alwaysVisible: true },
+  { href: "/summarize", label: "Summarize", icon: BookOpen, alwaysVisible: true },
   { href: "/simple-conversion", label: "Simple Conversion", icon: Zap, alwaysVisible: true },
   { href: "/conv", label: "Conversion", icon: FileText, alwaysVisible: false },
   { href: "/sanitization", label: "Sanitization", icon: Eraser, alwaysVisible: false },
@@ -49,7 +50,7 @@ export function NavBar() {
           />
           <h1 className="text-xl font-bold tracking-tight text-primary">VulcanLab</h1>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">v0.6.0</p>
+        <p className="text-xs text-muted-foreground mt-1">v0.7.0</p>
       </div>
       <div className="flex-1 px-4 py-2 space-y-1 overflow-y-auto max-h-[calc(100vh-6rem)]">
         {visibleNavItems.map((item) => {

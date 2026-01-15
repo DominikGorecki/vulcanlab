@@ -1,0 +1,51 @@
+You are a technical analyst performing a structured summarization of a specific section of a document.
+
+### Context
+Document Section: {heading_path}
+Line Range: {line_start} - {line_end}
+Keyphrases to look for: {keyphrases}
+
+### Task
+Analyze the provided snippets and produce a structured summary. Your summary must be strictly anchored to the provided text using the line numbers found in the snippets.
+
+### Input Snippets
+{snippets}
+
+### Output Format
+Return your analysis as a JSON object with the following structure:
+{{
+  "gist": "A 1-2 sentence high-level summary of this section.",
+  "key_points": [
+    {{
+      "point": "Specific finding or argument",
+      "start_line": 0,
+      "end_line": 0,
+      "confidence": 0.0-1.0
+    }}
+  ],
+  "definitions": [
+    {{
+      "term": "Technical term",
+      "definition": "Definition as provided in text",
+      "start_line": 0,
+      "end_line": 0
+    }}
+  ],
+  "key_terms": ["list", "of", "important", "technical", "terms"],
+  "examples": [
+    {{
+      "description": "Brief description of the example or case study",
+      "start_line": 0,
+      "end_line": 0
+    }}
+  ],
+  "insufficient_evidence": false,
+  "missing_concepts": ["list", "of", "keyphrases", "not", "found", "or", "insufficiently", "explained"]
+}}
+
+### Constraints
+1. **Line Anchoring**: ONLY use line numbers that appear in the provided snippets. If a point spans multiple snippets, use the most relevant range.
+2. **Insufficient Evidence**: Set `insufficient_evidence` to true if the snippets do not contain enough information to provide a meaningful gist or key points, or if the keyphrases are missing context.
+3. **Missing Concepts**: List any keyphrases from the input that were not found or were not clearly explained in the snippets.
+4. **Tone**: Maintain a neutral, academic, and technical tone.
+5. **No Hallucination**: Do not include information not present in the snippets.

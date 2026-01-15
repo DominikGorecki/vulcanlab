@@ -257,6 +257,66 @@ describe('NavBar', () => {
     });
   });
 
+  describe('Summarize Navigation Item', () => {
+    it('includes Summarize nav item', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      render(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('Summarize');
+      expect(screen.getByTestId('nav-item-summarize')).toBeInTheDocument();
+    });
+
+    it('Summarize nav item is always visible', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      render(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('Summarize');
+      expect(screen.getByTestId('nav-item-summarize')).toBeInTheDocument();
+    });
+
+    it('Summarize nav item links to /summarize', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token_threshold: 15000,
+          advanced_mode_enabled: false,
+        }),
+      });
+
+      render(
+        <ConversionSettingsProvider>
+          <NavBar />
+        </ConversionSettingsProvider>
+      );
+
+      await screen.findByText('Summarize');
+      const navItem = screen.getByTestId('nav-item-summarize');
+      expect(navItem).toHaveAttribute('href', '/summarize');
+    });
+  });
+
   describe('Always Visible Items', () => {
     it('shows Simple Conversion nav item regardless of toggle state', async () => {
       // Test with OFF
@@ -334,7 +394,7 @@ describe('NavBar', () => {
       expect(screen.getByTestId('nav-item-vectorization')).toBeInTheDocument();
     });
 
-    it('shows RAG nav item regardless of toggle state', async () => {
+    it('shows Research (RAG) nav item regardless of toggle state', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -349,8 +409,8 @@ describe('NavBar', () => {
         </ConversionSettingsProvider>
       );
 
-      await screen.findByText('RAG');
-      expect(screen.getByTestId('nav-item-rag')).toBeInTheDocument();
+      await screen.findByText('Research (RAG)');
+      expect(screen.getByTestId('nav-item-research-(rag)')).toBeInTheDocument();
     });
 
     it('shows Settings nav item regardless of toggle state', async () => {
@@ -443,14 +503,19 @@ describe('NavBar', () => {
 
       // Expected order from navItems array
       expect(labels).toEqual([
+        'Research (RAG)',
+        'Collections',
         'Corpus',
-        'MD Import/Export',
+        'Summarize',
         'Simple Conversion',
         'Conversion',
         'Sanitization',
         'Chunking',
         'Vectorization',
-        'RAG',
+        'Search',
+        'Cleanup',
+        'Eval',
+        'MD Import/Export',
         'Settings',
       ]);
     });
@@ -477,11 +542,16 @@ describe('NavBar', () => {
 
       // Expected order without advanced items
       expect(labels).toEqual([
+        'Research (RAG)',
+        'Collections',
         'Corpus',
-        'MD Import/Export',
+        'Summarize',
         'Simple Conversion',
         'Vectorization',
-        'RAG',
+        'Search',
+        'Cleanup',
+        'Eval',
+        'MD Import/Export',
         'Settings',
       ]);
     });

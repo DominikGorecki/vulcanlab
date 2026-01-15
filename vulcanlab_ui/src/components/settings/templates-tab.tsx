@@ -32,9 +32,12 @@ interface TemplateListResponse {
 const FUNCTION_LABELS: Record<string, string> = {
   query_expansion: "Query Expansion",
   rag_augmentation: "RAG Augmented Prompt",
-  vectorization_suggestions: "Vectorization Suggestions",
+  vectorization_suggestions: "Query Expansion - Vectorization Suggestions",
   heading_hierarchy: "Heading Hierarchy Corrections",
   toc_extraction: "Manual ToC Extraction",
+  summarize_node: "Summarization - Node Summary",
+  synthesize_abstract: "Summarization - Abstract",
+  organize_key_concepts: "Summarization - Key Concepts",
 };
 
 export function TemplatesTabContent() {

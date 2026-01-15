@@ -9,6 +9,10 @@ import { Label } from "@/components/ui/label"
  */
 export interface FormFieldProps {
   /**
+   * Optional ID for the field (associates label with input)
+   */
+  id?: string
+  /**
    * The label text for the field
    */
   label: string
@@ -72,6 +76,7 @@ export interface FormFieldProps {
  * ```
  */
 export function FormField({
+  id,
   label,
   error,
   required = false,
@@ -81,7 +86,7 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <div className={cn("space-y-2", className)}>
-      <Label>
+      <Label htmlFor={id}>
         {label}
         {required && <span className="text-destructive ml-1">*</span>}
       </Label>

@@ -39,6 +39,9 @@ const FUNCTION_LABELS: Record<string, string> = {
   rag_augmentation: "RAG Augmented Prompt",
   vectorization_suggestions: "Vectorization Suggestions",
   heading_hierarchy: "Heading Hierarchy Corrections",
+  summarize_node: "Summarization - Node Summary",
+  synthesize_abstract: "Summarization - Abstract",
+  organize_key_concepts: "Summarization - Key Concepts",
 };
 
 export default function TemplateEditorPage() {

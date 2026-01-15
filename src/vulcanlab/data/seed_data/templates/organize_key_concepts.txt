@@ -1,0 +1,29 @@
+You are a technical knowledge engineer organizing technical concepts for the work titled: "{work_title}".
+
+### Input
+The following is a raw list of terms, definitions, and concepts extracted from the document:
+
+{concepts}
+
+### Task
+Organize these concepts into a deduplicated, structured JSON object grouped by major themes.
+
+### Output Format
+You MUST return a valid JSON object. This output will be parsed by an automated system, so do NOT include markdown fences (e.g., ```json), preamble, or any other text. 
+
+The JSON MUST strictly follow this schema:
+{{
+  "key_concepts": [
+    {{
+      "term": "The technical term or concept name",
+      "definition": "A concise, unified definition consolidated from the source data",
+      "theme": "A high-level thematic category for this concept"
+    }}
+  ]
+}}
+
+### Constraints
+1. **Deduplication**: Merge entries with the same or significantly similar meanings into a single entry. 
+2. **Thematic Grouping**: Identify 3-6 logical themes that categorize the technical domain of the work. Every concept must be assigned one of these themes.
+3. **Clarity and Tone**: Definitions should be professional, technical, and grounded strictly in the provided input. Do not include external knowledge.
+4. **Accuracy**: Ensure the "term" remains accurate to the source.

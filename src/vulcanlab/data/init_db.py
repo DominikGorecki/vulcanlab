@@ -28,6 +28,9 @@ from .models import (  # noqa: F401
     ResearchSession,
     ResearchSection,
     ResearchReport,
+    SummarizeSettings,
+    SummaryNode,
+    WorkSummary,
 )
 from .models.io_file import IOFile  # noqa: F401
 from .models.prompt_template import PromptTemplate  # noqa: F401
@@ -59,8 +62,13 @@ from .schema import (
     create_default_rag_config,
     create_collections_table,
     create_research_tables,
+    create_summary_tables,
 )
-from .seeding import seed_prompt_templates, seed_default_result_model
+from .seeding import (
+    seed_prompt_templates,
+    seed_default_result_model,
+    seed_summarize_settings,
+)
 
 
 def init_database(verbose: bool = False) -> None:
@@ -92,11 +100,13 @@ def init_database(verbose: bool = False) -> None:
     create_result_models_table(verbose=verbose)
     create_collections_table(verbose=verbose)
     create_research_tables(verbose=verbose)
+    create_summary_tables(verbose=verbose)
 
     # Phase 6: Seed data
     seed_prompt_templates(verbose=verbose)
     seed_default_result_model(verbose=verbose)
     create_default_rag_config(verbose=verbose)
+    seed_summarize_settings(verbose=verbose)
 
     if verbose:
         print("Database initialization complete")
