@@ -116,3 +116,24 @@ templates:
     template_type: research
     is_active: true
     content_file: quality_evaluation.txt
+
+  - function_tag: summarize_node
+    version: 1
+    title: "Summarization - Node Evidence to Structured Summary"
+    template_type: summarize
+    is_active: true
+    content_file: summarize_node.txt
+
+  - function_tag: synthesize_abstract
+    version: 1
+    title: "Summarization - Abstract Synthesis"
+    template_type: summarize
+    is_active: true
+    content_file: synthesize_abstract.txt
+
+  - function_tag: organize_key_concepts
+    version: 1
+    title: "Summarization - Key Concepts Organization"
+    template_type: summarize
+    is_active: true
+    content_file: organize_key_concepts.txt

@@ -509,3 +509,106 @@ def create_research_tables(verbose: bool = False) -> None:
 
     if verbose:
         print("Research tables created successfully")
+
+
+def create_summary_tables(verbose: bool = False) -> None:
+    """
+    Create summary_nodes, work_summaries, and summarize_settings tables.
+
+    Implementation of Ticket: work-summarization.T03
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Creating summary and settings tables...")
+
+    with engine.connect() as conn:
+        # 1. Create summarize_settings table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS summarize_settings (
+                id SERIAL PRIMARY KEY,
+                h1_always_summarize BOOLEAN DEFAULT true,
+                h2_top_percent INTEGER DEFAULT 100,
+                h3_salience_threshold FLOAT DEFAULT 0.5,
+                h4_salience_threshold FLOAT DEFAULT 0.7,
+                definition_density_weight FLOAT DEFAULT 0.3,
+                list_density_weight FLOAT DEFAULT 0.2,
+                keyphrase_novelty_weight FLOAT DEFAULT 0.2,
+                location_prior_weight FLOAT DEFAULT 0.15,
+                heading_depth_weight FLOAT DEFAULT 0.15,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+            )
+        """))
+
+        # 2. Create summary_nodes table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS summary_nodes (
+                id SERIAL PRIMARY KEY,
+                chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+                work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+                gist TEXT NOT NULL,
+                key_points JSONB NOT NULL DEFAULT '[]',
+                definitions JSONB NOT NULL DEFAULT '[]',
+                key_terms JSONB NOT NULL DEFAULT '[]',
+                examples JSONB NOT NULL DEFAULT '[]',
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                salience_score FLOAT NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+            )
+        """))
+
+        # 3. Create work_summaries table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS work_summaries (
+                id SERIAL PRIMARY KEY,
+                work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+                type VARCHAR(30) NOT NULL,
+                content JSONB NOT NULL,
+                line_references JSONB NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                CONSTRAINT chk_work_summary_type CHECK (type IN ('abstract', 'outline', 'key_concepts', 'chapter_summaries')),
+                CONSTRAINT unq_work_summary_work_type UNIQUE (work_id, type)
+            )
+        """))
+
+        # Indexes for summary_nodes
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_nodes_work_id ON summary_nodes(work_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_nodes_chunk_id ON summary_nodes(chunk_id)"))
+
+        # Index for work_summaries
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_work_summaries_work_id ON work_summaries(work_id)"))
+
+        # Trigger function for summarize_settings.updated_at
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_summarize_settings_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Trigger for summarize_settings.updated_at
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_summarize_settings_updated_at ON summarize_settings"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_summarize_settings_updated_at
+                BEFORE UPDATE ON summarize_settings
+                FOR EACH ROW
+                EXECUTE FUNCTION update_summarize_settings_updated_at()
+        """))
+
+        conn.commit()
+
+    # Transfer ownership to app user
+    transfer_function_ownership(
+        function_names=["update_summarize_settings_updated_at"],
+        sequence_names=["summarize_settings_id_seq", "summary_nodes_id_seq", "work_summaries_id_seq"],
+        verbose=verbose
+    )
+
+    if verbose:
+        print("Summary and settings tables created successfully")

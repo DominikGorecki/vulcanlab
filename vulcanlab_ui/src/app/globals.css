@@ -143,3 +143,35 @@
   /* Highlight on hover */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
+
+/* Monaco Editor Line Highlighting */
+@keyframes highlight-pulse {
+  0% { background-color: rgba(254, 243, 199, 0.4); }
+  50% { background-color: rgba(254, 243, 199, 1); }
+  100% { background-color: rgba(254, 243, 199, 0.8); }
+}
+
+@keyframes highlight-pulse-dark {
+  0% { background-color: rgba(120, 53, 15, 0.1); }
+  50% { background-color: rgba(120, 53, 15, 0.5); }
+  100% { background-color: rgba(120, 53, 15, 0.3); }
+}
+
+.line-highlight {
+  background-color: rgba(254, 243, 199, 0.8) !important;
+  animation: highlight-pulse 2s ease-in-out;
+}
+
+.dark .line-highlight {
+  background-color: rgba(120, 53, 15, 0.3) !important;
+  animation: highlight-pulse-dark 2s ease-in-out;
+}
+
+.line-highlight-margin {
+  background-color: #f59e0b !important; /* bg-amber-500 */
+  width: 5px !important;
+}
+
+.dark .line-highlight-margin {
+  background-color: #d97706 !important; /* bg-amber-600 */
+}

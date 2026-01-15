@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,6 +16,8 @@ interface MarkdownEditorProps {
   scrollMode?: "container" | "page";
   className?: string;
   processSources?: boolean;
+  highlightLines?: { start: number; end: number } | null;
+  onHighlightClear?: () => void;
 }
 
 export function MarkdownEditor({
@@ -26,15 +28,25 @@ export function MarkdownEditor({
   scrollMode = "container",
   className = "",
   processSources = false,
+  highlightLines = null,
+  onHighlightClear,
 }: MarkdownEditorProps) {
   const [userTab, setUserTab] = useState<string>("rendered");
   const [editorHeight, setEditorHeight] = useState("100%");
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const decorationIdsRef = useRef<string[]>([]);
   
   // Force light theme (white background) as requested
   const monacoTheme = "light";
 
   const activeTab = viewMode === "markdown-only" ? "markdown" : userTab;
+
+  // Automatically switch to markdown tab if highlightLines is provided
+  useEffect(() => {
+    if (highlightLines && viewMode === "both" && userTab !== "markdown") {
+      setUserTab("markdown");
+    }
+  }, [highlightLines, viewMode, userTab]);
 
   const handleEditorChange = (value: string | undefined) => {
     if (onChange && value !== undefined) {
@@ -42,8 +54,65 @@ export function MarkdownEditor({
     }
   };
 
+  const applyHighlight = (editor: editor.IStandaloneCodeEditor, range: { start: number; end: number }) => {
+    const start = Math.max(1, range.start);
+    const end = Math.max(start, range.end);
+    
+    decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, [
+      {
+        range: { startLineNumber: start, startColumn: 1, endLineNumber: end, endColumn: 1 },
+        options: {
+          isWholeLine: true,
+          className: "line-highlight",
+          marginClassName: "line-highlight-margin",
+        },
+      },
+    ]);
+
+    // Scroll to the highlighted range
+    editor.revealRangeInCenter(
+      { 
+        startLineNumber: start, 
+        startColumn: 1, 
+        endLineNumber: end, 
+        endColumn: 1 
+      }, 
+      1 // 1 is Smooth scroll
+    );
+  };
+
+  const clearHighlight = useCallback(() => {
+    if (editorRef.current && decorationIdsRef.current.length > 0) {
+      decorationIdsRef.current = editorRef.current.deltaDecorations(decorationIdsRef.current, []);
+      if (onHighlightClear) {
+        onHighlightClear();
+      }
+    }
+  }, [onHighlightClear]);
+
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    
+    if (highlightLines) {
+      applyHighlight(editor, highlightLines);
+    }
+
+    // Add click listener to clear highlight
+    const mouseDownListener = editor.onMouseDown((e) => {
+      if (decorationIdsRef.current.length > 0) {
+        // If the user clicks elsewhere, clear the highlight
+        // We check if the click is within the highlighted lines
+        if (highlightLines) {
+          const clickedLine = e.target.position?.lineNumber;
+          if (clickedLine && (clickedLine < highlightLines.start || clickedLine > highlightLines.end)) {
+            clearHighlight();
+          }
+        } else {
+          clearHighlight();
+        }
+      }
+    });
+
     if (scrollMode === "page") {
       const updateHeight = () => {
         const contentHeight = editor.getContentHeight();
@@ -54,7 +123,22 @@ export function MarkdownEditor({
       // Initial update
       updateHeight();
     }
+
+    return () => {
+      mouseDownListener.dispose();
+    };
   };
+
+  // Handle highlightLines updates after mount
+  useEffect(() => {
+    if (editorRef.current) {
+      if (highlightLines) {
+        applyHighlight(editorRef.current, highlightLines);
+      } else if (decorationIdsRef.current.length > 0) {
+        decorationIdsRef.current = editorRef.current.deltaDecorations(decorationIdsRef.current, []);
+      }
+    }
+  }, [highlightLines]);
 
   // Re-measure when tab changes or content updates in page mode
   useEffect(() => {

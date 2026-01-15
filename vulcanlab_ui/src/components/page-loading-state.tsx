@@ -44,6 +44,7 @@ export function PageLoadingState({
 }: PageLoadingStateProps) {
   return (
     <div
+      role="status"
       className={cn(
         "flex min-h-[400px] flex-col items-center justify-center gap-3 text-center",
         className

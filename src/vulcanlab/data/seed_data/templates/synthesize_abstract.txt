@@ -1,0 +1,16 @@
+You are a technical editor synthesizing an abstract for the work titled: "{work_title}".
+
+### Input
+The following is a list of section summaries (gists) from the document:
+
+{gists}
+
+### Task
+Write a cohesive, 2-4 paragraph abstract that synthesizes these gists into a high-level overview of the work.
+
+### Constraints
+1. **Scope**: The abstract should cover the primary goals, methodology, key findings, and conclusions of the work as described in the gists.
+2. **Cohesion**: Ensure smooth transitions between the concepts described in different sections.
+3. **Tone**: Maintain a professional, academic, and technical tone.
+4. **Length**: 2-4 paragraphs.
+5. **No New Info**: Do not introduce concepts or findings not mentioned in the provided gists.

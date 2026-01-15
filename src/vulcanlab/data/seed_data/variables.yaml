@@ -135,3 +135,27 @@ variables:
   - variable_name: sources_list
     variable_description: The list of available sources that should be cited in the
       content for comprehensive coverage assessment.
+- function_tag: summarize_node
+  variables:
+  - variable_name: heading_path
+    variable_description: The full path of the heading being summarized (e.g., "Introduction > Background").
+  - variable_name: line_start
+    variable_description: The starting line number of the section in the original document.
+  - variable_name: line_end
+    variable_description: The ending line number of the section in the original document.
+  - variable_name: snippets
+    variable_description: The actual text snippets from the section, including line numbers.
+  - variable_name: keyphrases
+    variable_description: A list of key concepts or phrases to specifically look for in this section.
+- function_tag: synthesize_abstract
+  variables:
+  - variable_name: work_title
+    variable_description: The title of the document being summarized.
+  - variable_name: gists
+    variable_description: A compiled list of gists (summaries) from all sections of the document.
+- function_tag: organize_key_concepts
+  variables:
+  - variable_name: concepts
+    variable_description: A raw list of extracted concepts, terms, and definitions to be organized.
+  - variable_name: work_title
+    variable_description: The title of the document from which the concepts were extracted.

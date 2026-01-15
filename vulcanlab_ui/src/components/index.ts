@@ -45,6 +45,9 @@ export type { FormFieldProps } from './form-field'
 export { ConfirmDialog } from './confirm-dialog'
 export type { ConfirmDialogProps, ConfirmDialogVariant } from './confirm-dialog'
 
+export { SummarizationProgressModal } from './summarization-progress-modal'
+export type { SummarizationProgress } from './summarization-progress-modal'
+
 // Collections Components (T07)
 export { NewCollectionModal } from './collections/NewCollectionModal'
 export { AddToCollectionModal } from './collections/AddToCollectionModal'

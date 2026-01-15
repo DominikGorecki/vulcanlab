@@ -15,7 +15,7 @@
       },
       "gemini": {
         "light": "gemini-3-flash-preview",
-        "full": "gemini-3-pro-preview"
+        "full": "gemini-3-flash-preview"
       }
     }
   },

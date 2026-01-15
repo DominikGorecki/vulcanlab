@@ -74,7 +74,7 @@ def create_langchain_chat(
     tier: ModelTier = ModelTier.LIGHT,
     search: bool = False,
     temperature: float = 0.2,
-    request_timeout: int = 120
+    request_timeout: int = 600
 ) -> LangChainStack:
     """Create a LangChain ChatModel based on the configured provider.
 

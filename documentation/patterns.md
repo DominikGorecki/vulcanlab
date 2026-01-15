@@ -87,24 +87,94 @@ class SessionStatus(str, enum.Enum):
     PAUSED = 'paused'
 ```
 
-### Database Seeding (Prompt Templates)
-> **Standard**: Use file-based YAML configuration for seeding prompt templates.
+### Prompt Templates (CRITICAL)
+> **CRITICAL RULE**: Prompt templates are stored in the database and MUST be editable via the Settings > Templates UI. Templates are NEVER read from the filesystem at runtime.
 
-**Pattern**: Prompt templates are seeded from individual `.txt` files managed by a YAML configuration file during database initialization.
+#### Architecture Overview
 
--   **Configuration**: `src/vulcanlab/data/seed_data/templates.yaml` defines template metadata (function_tag, version, title, etc.)
--   **Content**: Individual template content stored in `src/vulcanlab/data/seed_data/templates/*.txt`
--   **Seeding Function**: `seed_prompt_templates()` in `src/vulcanlab/data/init_db.py` reads YAML config and loads content from files
--   **Benefits**:
-    -   Easy to modify templates without touching Python code
-    -   Version control friendly (diff-able text files)
-    -   Clear separation of metadata and content
-    -   Idempotent seeding (only inserts new templates)
+```
+Seeding (one-time):     .txt files + templates.yaml  -->  prompt_templates table
+Runtime (always):       Core module  -->  prompt_templates table (via get_active_template)
+User editing:           Settings UI  -->  prompt_templates table (via API)
+```
 
-**How to Add/Modify Templates**:
-1. Create or edit `.txt` file in `templates/` directory
-2. Update `templates.yaml` with metadata
-3. Run `python -m vulcanlab.data.init_db -v` to seed
+#### The Two-Phase Pattern
+
+**Phase 1: Seeding (Database Initialization)**
+- Templates are seeded from `.txt` files + `templates.yaml` during `init_db`
+- This is a ONE-TIME operation to populate initial template content
+- Files: `src/vulcanlab/data/seed_data/templates/*.txt`
+- Config: `src/vulcanlab/data/seed_data/templates.yaml`
+
+**Phase 2: Runtime (Application Usage)**
+- Templates are ALWAYS read from the `prompt_templates` database table
+- Use `get_active_template(function_tag, session)` to query the active version
+- Users can edit templates via Settings > Templates UI
+- Core module code NEVER reads from filesystem for templates
+
+#### Adding New Prompt Templates (Checklist)
+
+1. **Create the template file**: `src/vulcanlab/data/seed_data/templates/{function_tag}.txt`
+2. **Add metadata to templates.yaml**:
+   ```yaml
+   - function_tag: my_new_template
+     version: 1
+     title: "Human-Readable Title"
+     template_type: feature_area  # e.g., summarize, research, eval
+     is_active: true
+     content_file: my_new_template.txt
+   ```
+3. **Add variable documentation to variables.yaml** (for prompt_meta table):
+   ```yaml
+   - function_tag: my_new_template
+     variables:
+       - variable_name: input_text
+         variable_description: "The text to process"
+   ```
+4. **Update FUNCTION_LABELS in UI** (both files):
+   - `vulcanlab_ui/src/components/settings/templates-tab.tsx`
+   - `vulcanlab_ui/src/app/settings/templates/[function_tag]/page.tsx`
+5. **In core module code, load from database**:
+   ```python
+   def get_active_template(function_tag: str, session: Session) -> str:
+       template = session.query(PromptTemplate).filter(
+           PromptTemplate.function_tag == function_tag,
+           PromptTemplate.is_active == True
+       ).first()
+       if not template:
+           raise ValueError(f"No active template for {function_tag}")
+       return template.template_content
+   ```
+6. **Run seeding**: `python -m vulcanlab.data.init_db -v`
+7. **Verify in UI**: Navigate to Settings > Templates and confirm template appears
+
+#### Common Mistakes to Avoid
+
+- **WRONG**: Reading template from filesystem at runtime
+  ```python
+  # NEVER DO THIS
+  with open("templates/my_template.txt") as f:
+      template = f.read()
+  ```
+- **RIGHT**: Reading template from database
+  ```python
+  # ALWAYS DO THIS
+  template = get_active_template("my_template", session)
+  ```
+
+- **WRONG**: Hardcoding template content in Python code
+- **RIGHT**: Storing in database, editable via UI
+
+- **WRONG**: Forgetting to add FUNCTION_LABELS (template shows as raw function_tag in UI)
+- **RIGHT**: Adding human-readable labels to both UI files
+
+#### Template Type Categories
+
+Use `template_type` to group templates in the UI:
+- `null` - General/legacy templates
+- `eval` - Evaluation templates
+- `research` - Research session templates
+- `summarize` - Summarization templates
 
 **Testing**: Use `python scripts/test_template_seeding.py` to validate configuration before initialization.
 
