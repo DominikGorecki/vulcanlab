@@ -12,6 +12,8 @@ theme:
     - js
   logo: img/logo-sm.png
   favicon: img/favicon.ico
+plugins:
+  - glightbox
 nav:
   - Home: index.md
   - Getting Started:
