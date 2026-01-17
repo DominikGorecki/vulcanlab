@@ -35,6 +35,7 @@ const FUNCTION_LABELS: Record<string, string> = {
   vectorization_suggestions: "Vectorization Suggestions",
   heading_hierarchy: "Heading Hierarchy Corrections",
   toc_extraction: "Manual ToC Extraction",
+  summarize_sections: "Section Summarization",
 };
 
 export function TemplatesTabContent() {

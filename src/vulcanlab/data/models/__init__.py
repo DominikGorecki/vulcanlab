@@ -14,6 +14,9 @@ from .collection_item import CollectionItem
 from .research_session import ResearchSession
 from .research_section import ResearchSection
 from .research_report import ResearchReport
+from .summarize_settings import SummarizeSettings
+from .summary_chunk import SummaryChunk
+from .summary_result import SummaryResult
 from .enums import (
     FileType,
     DocumentClassification,
@@ -48,6 +51,9 @@ __all__ = [
     "ResearchSession",
     "ResearchSection",
     "ResearchReport",
+    "SummarizeSettings",
+    "SummaryChunk",
+    "SummaryResult",
     "FileType",
     "DocumentClassification",
     "ModificationAction",

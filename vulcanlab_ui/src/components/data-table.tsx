@@ -70,6 +70,10 @@ export interface DataTableProps<TData> {
     title: string
     description?: string
     icon?: React.ComponentType<{ className?: string }>
+    action?: {
+      label: string
+      onClick: () => void
+    }
   }
   /**
    * Optional className for the table container
@@ -142,6 +146,7 @@ export function DataTable<TData>({
         title={emptyState?.title || 'No data'}
         description={emptyState?.description}
         icon={emptyState?.icon}
+        action={emptyState?.action}
       />
     )
   }

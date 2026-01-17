@@ -7,6 +7,7 @@ record to the database.
 """
 
 import logging
+import re
 from typing import Tuple
 from datetime import datetime, UTC
 
@@ -23,6 +24,34 @@ logger = logging.getLogger(__name__)
 
 # Tiktoken encoding for token counting (matches OpenAI's cl100k_base)
 ENCODING = tiktoken.get_encoding("cl100k_base")
+
+
+def normalize_whitespace(text: str) -> str:
+    """
+    Normalize whitespace in text extracted from PDFs.
+
+    PDF text extraction often produces tabs or multiple spaces between words
+    due to how PDFs store text with absolute positioning (especially in
+    justified text). This function normalizes those to single spaces while
+    preserving paragraph breaks (newlines).
+
+    Args:
+        text: Markdown text with potentially irregular whitespace
+
+    Returns:
+        Text with normalized whitespace (single spaces, preserved newlines)
+    """
+    if not text:
+        return text
+
+    # Replace any whitespace (except newlines) with single space
+    # This handles tabs, multiple spaces, and other whitespace chars
+    text = re.sub(r'[^\S\n]+', ' ', text)
+
+    # Normalize multiple blank lines to double newline (paragraph break)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    return text
 
 
 def count_tokens(text: str) -> int:
@@ -149,6 +178,9 @@ def parse_and_classify(work_id: int, session: Session) -> ParsedMarkdown:
         
     if not markdown_content:
         raise ValueError("Conversion produced empty output")
+
+    # Normalize whitespace (PDF extraction often produces tabs/multiple spaces)
+    markdown_content = normalize_whitespace(markdown_content)
 
     # Count tokens
     token_count = count_tokens(markdown_content)

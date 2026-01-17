@@ -20,6 +20,7 @@ nav:
     - Running Locally: running_locally.md
     - Windows Setup (WSL): windows_setup.md
   - Guide:
+    - RAG Walkthrough: pages/Walkthrough-RAG.md
     - VulcanLab Pages: pages/index.md
     - Settings Guide: settings-guide.md
     - RAG Settings Guide: rag-settings-guide.md

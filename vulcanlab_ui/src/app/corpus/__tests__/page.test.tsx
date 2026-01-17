@@ -29,17 +29,17 @@ global.fetch = mockFetch;
 
 describe('CorpusPage', () => {
   const mockWorks = [
-    { id: 1, title: 'Test Work 1', authors: 'Author A', created_at: '2023-01-01T00:00:00', status: 'Standard' },
-    { id: 2, title: 'Test Work 2', authors: 'Author B, Author C', created_at: '2023-01-02T00:00:00', status: 'Automatic' },
+    { id: 1, title: 'Test Work 1', authors: 'Author A', created_at: '2023-01-01T00:00:00', status: 'Standard', vectorized_chunks: 25, has_summary: true },
+    { id: 2, title: 'Test Work 2', authors: 'Author B, Author C', created_at: '2023-01-02T00:00:00', status: 'Automatic', vectorized_chunks: 15, has_summary: false },
   ];
 
   const mockStats = {
     total_works: 2,
     chunk_stats: {
-      no_vec: 10,
-      to_vec: 5,
-      vec: 20,
-      vec_err: 1,
+      no_vec: 111,
+      to_vec: 222,
+      vec: 333,
+      vec_err: 444,
     },
   };
 
@@ -70,9 +70,17 @@ describe('CorpusPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Total Works')).toBeInTheDocument();
-      expect(screen.getAllByText('2')).toHaveLength(1); // One for total works
+      // "2" appears in both the stats card and as the ID for Test Work 2
+      expect(screen.getAllByText('2')).toHaveLength(2);
       expect(screen.getByText('To Vectorize')).toBeInTheDocument();
-      expect(screen.getByText('5')).toBeInTheDocument();
+      expect(screen.getByText('222')).toBeInTheDocument();
+      expect(screen.getByText('Not Queued')).toBeInTheDocument();
+      expect(screen.getByText('111')).toBeInTheDocument();
+      // "Vectorized" appears in both stats card and table header
+      expect(screen.getAllByText('Vectorized')).toHaveLength(2);
+      expect(screen.getByText('333')).toBeInTheDocument();
+      expect(screen.getByText('Errors')).toBeInTheDocument();
+      expect(screen.getByText('444')).toBeInTheDocument();
     });
   });
 
@@ -97,6 +105,48 @@ describe('CorpusPage', () => {
     });
 
     expect(mockPush).toHaveBeenCalledWith('/corpus/1');
+  });
+
+  it('renders Summarize button in each row', async () => {
+    render(<CorpusPage />);
+
+    await waitFor(() => {
+      const summarizeButtons = screen.getAllByLabelText(/Summarize work/i);
+      expect(summarizeButtons).toHaveLength(2);
+    });
+  });
+
+  it('navigates to summarization workflow page when Summarize button is clicked', async () => {
+    render(<CorpusPage />);
+
+    await waitFor(() => {
+      const summarizeButtons = screen.getAllByLabelText(/Summarize work/i);
+      fireEvent.click(summarizeButtons[0]);
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/summaries/workflow/1');
+  });
+
+  it('shows summary indicator when work has a summary', async () => {
+    render(<CorpusPage />);
+
+    await waitFor(() => {
+      const work1 = screen.getByText('Test Work 1').closest('div');
+      // The indicator is a CheckCircle2 which is rendered as an svg or div with title "Summarized"
+      expect(screen.getByTitle('Summarized')).toBeInTheDocument();
+    });
+  });
+
+  it('hides summary indicator when work has no summary', async () => {
+    render(<CorpusPage />);
+
+    await waitFor(() => {
+      const work2 = screen.getByText('Test Work 2');
+      // Work 2 has has_summary: false, so it shouldn't have the indicator
+      // In our mock, only one work has a summary
+      const indicators = screen.queryAllByTitle('Summarized');
+      expect(indicators).toHaveLength(1);
+    });
   });
 
   it('opens ConfirmDialog when delete button is clicked', async () => {

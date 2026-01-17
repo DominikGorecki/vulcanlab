@@ -22,6 +22,7 @@ from sqlalchemy import func
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.work import Work
 from vulcanlab.data.models.chunk import Chunk
+from vulcanlab.data.models.summary_result import SummaryResult
 from vulcanlab.data.models.sanitized_markdown import SanitizedMarkdown
 from vulcanlab.utils.file_utils import get_path_resolver
 
@@ -196,7 +197,9 @@ async def list_corpus_works() -> CorpusWorksResponse:
 
         # Get vectorized chunk counts per work
         vectorized_counts = {}
+        summary_exists = set()
         if corpus_work_ids:
+            # Vectorized chunk counts
             vec_query = (
                 session.query(
                     Chunk.work_id,
@@ -208,6 +211,15 @@ async def list_corpus_works() -> CorpusWorksResponse:
                 .all()
             )
             vectorized_counts = {work_id: count for work_id, count in vec_query}
+
+            # Check for existing summaries
+            summary_query = (
+                session.query(SummaryResult.work_id)
+                .filter(SummaryResult.work_id.in_(corpus_work_ids))
+                .distinct()
+                .all()
+            )
+            summary_exists = {row[0] for row in summary_query}
 
         # Build work list items
         work_items = []
@@ -224,7 +236,8 @@ async def list_corpus_works() -> CorpusWorksResponse:
                     authors=work.authors,
                     created_at=work.created_at.isoformat(),
                     status=status,
-                    vectorized_chunks=vectorized_counts.get(work.id, 0)
+                    vectorized_chunks=vectorized_counts.get(work.id, 0),
+                    has_summary=work.id in summary_exists
                 )
             )
 

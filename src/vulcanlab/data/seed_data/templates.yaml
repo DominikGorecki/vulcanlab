@@ -116,3 +116,10 @@ templates:
     template_type: research
     is_active: true
     content_file: quality_evaluation.txt
+
+  - function_tag: summarize_sections
+    version: 1
+    title: "Section Summarization - Chunk-based Summary Generation"
+    template_type: summarize
+    is_active: true
+    content_file: summarize_sections.txt

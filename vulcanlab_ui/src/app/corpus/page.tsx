@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Database, Trash2, BookOpen, Layers, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { Database, Trash2, BookOpen, Layers, CheckCircle2, AlertCircle, Clock, ListTree } from "lucide-react";
 import {
   PageHeader,
   DataTable,
@@ -38,6 +38,7 @@ interface CorpusWork {
   created_at: string;
   status: string;
   vectorized_chunks: number;
+  has_summary: boolean;
 }
 
 interface PageData {
@@ -112,8 +113,13 @@ export default function CorpusPage() {
       sortable: true,
       className: "min-w-[200px] max-w-[400px]",
       cell: (work) => (
-        <div className="font-medium break-words whitespace-normal leading-tight py-1">
+        <div className="flex items-center gap-2 font-medium break-words whitespace-normal leading-tight py-1">
           {work.title}
+          {work.has_summary && (
+            <div className="flex-shrink-0" title="Summarized">
+              <CheckCircle2 size={14} className="text-blue-500" />
+            </div>
+          )}
         </div>
       ),
     },
@@ -180,18 +186,32 @@ export default function CorpusPage() {
     {
       key: "actions" as keyof CorpusWork,
       header: "",
-      className: "w-[50px] text-right",
+      className: "w-[80px] text-right",
       cell: (work) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setWorkToDelete(work);
-          }}
-          className="p-2 rounded hover:bg-muted transition-colors group"
-          aria-label="Delete work"
-        >
-          <Trash2 size={16} className="text-muted-foreground group-hover:text-destructive" />
-        </button>
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/summaries/workflow/${work.id}`);
+            }}
+            className="p-2 rounded hover:bg-muted transition-colors group"
+            title="Generate summary for this work"
+            aria-label="Summarize work"
+          >
+            <ListTree size={16} className="text-muted-foreground group-hover:text-primary" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setWorkToDelete(work);
+            }}
+            className="p-2 rounded hover:bg-muted transition-colors group"
+            title="Delete work"
+            aria-label="Delete work"
+          >
+            <Trash2 size={16} className="text-muted-foreground group-hover:text-destructive" />
+          </button>
+        </div>
       ),
     },
   ], []);

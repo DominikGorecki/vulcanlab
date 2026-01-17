@@ -45,6 +45,7 @@ from vulcanlab_api.routers import (
     vectorization,
     collections,
     research_sessions,
+    summarize,
 )
 
 settings_config = get_settings()
@@ -132,6 +133,10 @@ app = FastAPI(
             "name": "Research Sessions",
             "description": "Core CRUD endpoints for research workflows, sessions, sections, and reports.",
         },
+        {
+            "name": "Summarization",
+            "description": "Document summarization operations. Prepare and generate prompts for summarizing long documents.",
+        },
     ],
     # Additional metadata
     contact={
@@ -172,6 +177,7 @@ app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(eval.router, prefix="/api/v1/eval", tags=["Eval"])
 app.include_router(collections.router, prefix="/api/v1/collections", tags=["Collections"])
 app.include_router(research_sessions.router, prefix="/api/v1", tags=["Research Sessions"])
+app.include_router(summarize.router, prefix="/api/v1/summarize", tags=["Summarization"])
 
 
 @app.get("/", include_in_schema=False)

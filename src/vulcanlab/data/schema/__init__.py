@@ -24,6 +24,7 @@ from .specialized_tables import (
     create_default_rag_config,
     create_collections_table,
     create_research_tables,
+    create_summarization_tables,
 )
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "create_default_rag_config",
     "create_collections_table",
     "create_research_tables",
+    "create_summarization_tables",
 ]

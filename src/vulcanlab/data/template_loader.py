@@ -5,14 +5,45 @@ Provides functions to load LangChain PromptTemplates from the database
 with fallback to hardcoded defaults.
 """
 
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 import logging
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 from langchain_core.prompts import PromptTemplate as LCPromptTemplate
 
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models.prompt_template import PromptTemplate
 
 logger = logging.getLogger(__name__)
+
+
+def get_active_template(function_tag: str, session: Session) -> str:
+    """
+    Load the active template content for a given function_tag from the database.
+
+    Args:
+        function_tag: The function tag to load (e.g., 'summarize_sections')
+        session: Database session
+
+    Returns:
+        The template content string
+
+    Raises:
+        ValueError: If no active template is found for the function_tag
+    """
+    stmt = (
+        select(PromptTemplate.template_content)
+        .where(PromptTemplate.function_tag == function_tag)
+        .where(PromptTemplate.is_active == True)
+        .order_by(PromptTemplate.id.desc())
+        .limit(1)
+    )
+    result = session.execute(stmt).scalar_one_or_none()
+
+    if result is None:
+        raise ValueError(f"No active template found for function_tag: {function_tag}")
+
+    return result
 
 
 def load_template(
