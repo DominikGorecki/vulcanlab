@@ -12,6 +12,7 @@ const navItems = [
   { href: "/rag", label: "Research (RAG)", icon: MessageSquare, alwaysVisible: true },
   { href: "/collections", label: "Collections", icon: FolderOpen, alwaysVisible: true },
   { href: "/corpus", label: "Corpus", icon: Database, alwaysVisible: true },
+  { href: "/summaries", label: "Summaries", icon: FileText, alwaysVisible: true },
   { href: "/simple-conversion", label: "Simple Conversion", icon: Zap, alwaysVisible: true },
   { href: "/conv", label: "Conversion", icon: FileText, alwaysVisible: false },
   { href: "/sanitization", label: "Sanitization", icon: Eraser, alwaysVisible: false },

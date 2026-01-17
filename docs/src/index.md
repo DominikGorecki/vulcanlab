@@ -4,9 +4,14 @@ VulcanLab is a research and knowledge assistant that lets you query *your own* l
 
 If you’ve ever wished you could “talk to your PDFs” without losing rigor, or run deep academic/technical queries without the model drifting into confident guesswork, that’s the problem VulcanLab is built to solve.
 
+**Example:** Inspecting References from a RAG Results
+![Inspecting sources](./img/walkthrough__RAG_05.png)
+
 ---
 
 ## What it does
+
+*Quick example:* [Simple RAG Research Walkthrough](./pages/Walthrough-RAG.md)
 
 ### 1) Turns a private library into a conversational knowledge base
 

@@ -93,6 +93,7 @@ class CorpusWorkListItem(BaseModel):
     created_at: str = Field(..., description="Creation timestamp")
     status: str = Field(..., description="Work status for UI badge")
     vectorized_chunks: int = Field(0, ge=0, description="Number of vectorized chunks for this work")
+    has_summary: bool = Field(False, description="Whether the work has any existing summaries")
 
 
 class CorpusWorksResponse(BaseModel):

@@ -135,3 +135,11 @@ variables:
   - variable_name: sources_list
     variable_description: The list of available sources that should be cited in the
       content for comprehensive coverage assessment.
+- function_tag: summarize_sections
+  variables:
+  - variable_name: sections_content
+    variable_description: Formatted sections with heading IDs and ranked chunks for
+      summarization.
+  - variable_name: context_headings
+    variable_description: Headings above and below the current batch of sections to
+      provide document structure context.

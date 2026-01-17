@@ -509,3 +509,143 @@ def create_research_tables(verbose: bool = False) -> None:
 
     if verbose:
         print("Research tables created successfully")
+
+
+def create_summarization_tables(verbose: bool = False) -> None:
+    """
+    Create summarization related tables: summarize_settings, summary_chunks, summary_results.
+
+    These tables support the work summarization feature, storing configuration,
+    intermediate chunk selections, and final generated summaries.
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Creating summarization tables...")
+
+    with engine.connect() as conn:
+        # Create summarize_settings table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS summarize_settings (
+                id SERIAL PRIMARY KEY,
+                min_heading_word_count INTEGER DEFAULT 500,
+                max_total_heading_words INTEGER DEFAULT 2500,
+                dense_top_k INTEGER DEFAULT 7,
+                lexical_top_k INTEGER DEFAULT 7,
+                rrf_k INTEGER DEFAULT 60,
+                rrf_top_k INTEGER DEFAULT 7,
+                mmr_lambda FLOAT DEFAULT 0.7,
+                mmr_top_n INTEGER DEFAULT 5,
+                max_llm_calls INTEGER DEFAULT 5,
+                max_tokens_per_call INTEGER DEFAULT 15000,
+                tokens_per_word FLOAT DEFAULT 0.75,
+                h1_h2_min_chunks INTEGER DEFAULT 2,
+                h3_min_chunks INTEGER DEFAULT 1,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+
+        # Create summary_chunks table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS summary_chunks (
+                id SERIAL PRIMARY KEY,
+                work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+                heading_chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+                content_chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+                word_count INTEGER NOT NULL,
+                dense_score FLOAT,
+                lexical_score FLOAT,
+                rrf_score FLOAT,
+                mmr_score FLOAT,
+                rank_position INTEGER NOT NULL,
+                prompt_index INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+
+        # Create summary_results table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS summary_results (
+                id SERIAL PRIMARY KEY,
+                work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+                chunk_id INTEGER UNIQUE NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+                summary_content TEXT NOT NULL,
+                prompt_index INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+
+        # Add columns for existing tables (idempotent - for existing databases)
+        conn.execute(text("""
+            ALTER TABLE summary_chunks ADD COLUMN IF NOT EXISTS prompt_index INTEGER
+        """))
+
+        # Create indexes
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_chunks_work_id ON summary_chunks(work_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_chunks_heading_chunk_id ON summary_chunks(heading_chunk_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_chunks_heading_rank ON summary_chunks(heading_chunk_id, rank_position)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_chunks_prompt_index ON summary_chunks(prompt_index)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_results_work_id ON summary_results(work_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_summary_results_chunk_id ON summary_results(chunk_id)"))
+
+        # Create trigger function for summarize_settings.updated_at
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_summarize_settings_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = NOW();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger for summarize_settings.updated_at
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_summarize_settings_updated_at ON summarize_settings"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_summarize_settings_updated_at
+                BEFORE UPDATE ON summarize_settings
+                FOR EACH ROW
+                EXECUTE FUNCTION update_summarize_settings_updated_at()
+        """))
+
+        # Create trigger function for summary_results.updated_at
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_summary_results_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = NOW();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger for summary_results.updated_at
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_summary_results_updated_at ON summary_results"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_summary_results_updated_at
+                BEFORE UPDATE ON summary_results
+                FOR EACH ROW
+                EXECUTE FUNCTION update_summary_results_updated_at()
+        """))
+
+        conn.commit()
+
+    # Transfer ownership to app user
+    transfer_function_ownership(
+        function_names=[
+            "update_summarize_settings_updated_at",
+            "update_summary_results_updated_at"
+        ],
+        sequence_names=[
+            "summarize_settings_id_seq",
+            "summary_chunks_id_seq",
+            "summary_results_id_seq"
+        ],
+        verbose=verbose
+    )
+
+    if verbose:
+        print("Summarization tables created successfully")

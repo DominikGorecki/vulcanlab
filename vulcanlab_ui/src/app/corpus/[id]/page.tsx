@@ -1,10 +1,12 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { StickyDetailHeader, PageErrorState, PageLoadingState } from "@/components";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { usePageData } from "@/hooks/use-page-data";
+import { Button } from "@/components/ui/button";
+import { ListTree } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -17,6 +19,7 @@ interface WorkContentResponse {
 
 export default function CorpusWorkViewerPage() {
   const params = useParams();
+  const router = useRouter();
   const workId = params.id as string;
 
   const fetchData = useCallback(async () => {
@@ -50,8 +53,19 @@ export default function CorpusWorkViewerPage() {
         backUrl="/corpus"
         backLabel="Back to Corpus"
         actions={
-          <div className="text-sm text-muted-foreground mr-4 px-2 py-1 rounded bg-muted/50">
-            {data?.filename}
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-muted-foreground px-2 py-1 rounded bg-muted/50 hidden md:block">
+              {data?.filename}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() => router.push(`/summaries/workflow/${workId}`)}
+            >
+              <ListTree size={16} />
+              Summarize
+            </Button>
           </div>
         }
       />

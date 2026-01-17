@@ -355,27 +355,74 @@ def create_timestamp_trigger(conn, table_name: str, column_name: str = "updated_
     # ... implementation
 ```
 
-### 5.2 Migration Patterns
-> **Standard**: Database migrations follow a dual-track approach.
+### 5.2 Schema Changes & Migration Patterns
+> **Standard**: All schema changes are made in `init_db.py` modules. The init script is idempotent and safe to run on existing databases.
 
-**Dual-Track Migration System:**
-1. **Migrations** (`migrations/*.sql`): Applied to existing databases via manual execution
-2. **init_db.py modules**: Replicate migration changes for fresh database installs
+#### Single-Source-of-Truth Approach
 
-**Migration File Naming**: `NNN_description.sql` (e.g., `028_add_research_tables.sql`)
+**The `init_db.py` script is the ONLY place where schema is defined.** It handles both fresh installs AND existing database updates through idempotent SQL patterns.
 
-**Migration Rules:**
--   Use `IF NOT EXISTS` / `IF EXISTS` for idempotency
--   Include verification queries at the end
--   No rollback logic (forward-only migrations)
--   Complex migrations with Python logic: create `NNN_backfill_*.py` alongside SQL
+**Key Principle**: `init_db.py` must NEVER be destructive. All statements must use idempotent patterns:
+-   `CREATE TABLE IF NOT EXISTS`
+-   `CREATE INDEX IF NOT EXISTS`
+-   `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+-   `CREATE OR REPLACE FUNCTION`
+-   `DROP TRIGGER IF EXISTS` followed by `CREATE TRIGGER`
 
-**Keeping init_db.py in Sync:**
-When creating a new migration:
-1. Create the SQL migration file in `migrations/`
-2. Add corresponding function in the appropriate `schema/` or `seeding/` module
-3. Call the new function from `init_database()` in proper order
-4. Transfer ownership of functions/sequences to app_user
+#### When Schema Changes Are Needed
+
+When adding new tables, columns, indexes, or other schema elements:
+
+1. **Update the appropriate module** in `src/vulcanlab/data/schema/` or `src/vulcanlab/data/seeding/`
+2. **Update the SQLAlchemy model** in `src/vulcanlab/data/models/` if applicable
+3. **Notify the user**: After making schema changes, inform the user to run:
+   ```bash
+   python -m vulcanlab.data.init_db -v
+   ```
+
+> **AI Assistant Rule**: When implementing features that require database schema changes, ALWAYS notify the user at the end of implementation that they need to run `python -m vulcanlab.data.init_db -v` to apply the changes.
+
+#### Adding New Columns to Existing Tables
+
+Use `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` pattern in the schema module:
+
+```python
+# In specialized_tables.py or appropriate schema module
+conn.execute(text("""
+    ALTER TABLE my_table ADD COLUMN IF NOT EXISTS new_column INTEGER
+"""))
+conn.execute(text("""
+    CREATE INDEX IF NOT EXISTS idx_my_table_new_column ON my_table(new_column)
+"""))
+```
+
+#### When Migration Scripts ARE Needed
+
+Migration scripts (`migrations/*.sql` or `migrations/*.py`) are **only required for data backfills** - operations that need to transform or populate existing data based on business logic.
+
+**Examples requiring migration scripts:**
+-   Populating a new column with computed values from existing data
+-   Transforming data formats (e.g., splitting a column into multiple columns)
+-   One-time data cleanup or corrections
+
+**Migration File Naming**: `NNN_backfill_description.sql` or `NNN_backfill_description.py`
+
+**Example backfill migration:**
+```sql
+-- migrations/033_backfill_word_counts.sql
+-- Backfill word_count for existing chunks that have NULL values
+UPDATE chunks
+SET word_count = array_length(regexp_split_to_array(content, '\s+'), 1)
+WHERE word_count IS NULL;
+```
+
+#### Summary: Schema Change Checklist
+
+1. ✅ Update schema module (`schema/*.py`) with idempotent SQL
+2. ✅ Update SQLAlchemy model (`models/*.py`) if applicable
+3. ✅ If data backfill needed, create `migrations/NNN_backfill_*.sql` or `.py`
+4. ✅ Notify user to run: `python -m vulcanlab.data.init_db -v`
+5. ✅ If backfill exists, notify user to also run the backfill script
 
 ---
 

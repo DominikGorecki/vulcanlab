@@ -11,6 +11,7 @@ import { CheckCircleIcon, Loader2Icon, AlertCircle, XCircle, CheckCircle2, Star 
 import { TemplatesTabContent } from "@/components/settings/templates-tab";
 import { RagConfigTab } from "@/components/settings/rag-config-tab";
 import { ConversionTab } from "@/components/settings/conversion-tab";
+import { SummarizeTab } from "@/components/settings/summarize-tab";
 import { usePageData } from "@/hooks";
 import { PageHeader, PageLoadingState, PageErrorState, FormField } from "@/components";
 import { useForm } from "react-hook-form";
@@ -70,7 +71,7 @@ function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const defaultTab = tabParam && ["init", "models", "database", "paths", "conversion", "templates", "rag"].includes(tabParam)
+  const defaultTab = tabParam && ["init", "models", "database", "paths", "conversion", "templates", "rag", "summarize"].includes(tabParam)
     ? tabParam
     : "init";
 
@@ -272,6 +273,7 @@ function SettingsContent() {
           <TabsTrigger value="conversion">Conversion</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="rag">RAG Settings</TabsTrigger>
+          <TabsTrigger value="summarize">Summarize</TabsTrigger>
         </TabsList>
 
         {/* Init/Status Tab */}
@@ -468,6 +470,7 @@ function SettingsContent() {
         <TabsContent value="conversion" className="mt-4"><ConversionTab /></TabsContent>
         <TabsContent value="templates" className="mt-4"><TemplatesTabContent /></TabsContent>
         <TabsContent value="rag" className="mt-4"><RagConfigTab /></TabsContent>
+        <TabsContent value="summarize" className="mt-4"><SummarizeTab /></TabsContent>
       </Tabs>
     </div>
   );

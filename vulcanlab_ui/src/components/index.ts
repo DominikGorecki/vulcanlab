@@ -49,3 +49,6 @@ export type { ConfirmDialogProps, ConfirmDialogVariant } from './confirm-dialog'
 export { NewCollectionModal } from './collections/NewCollectionModal'
 export { AddToCollectionModal } from './collections/AddToCollectionModal'
 export { MetadataCard } from './collections/MetadataCard'
+
+// Content Rendering Components
+export { MarkdownRenderer } from './markdown-renderer'
