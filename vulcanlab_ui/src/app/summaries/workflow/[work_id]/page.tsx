@@ -271,21 +271,31 @@ export default function SummarizationWorkflowPage() {
 
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Heading Preview</h3>
-                <div className="max-h-[300px] overflow-y-auto border rounded-md divide-y">
-                  {prepareData.headings.map((h) => (
-                    <div key={h.chunk_id} className="p-3 flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground font-mono text-xs">L{h.level}</span>
-                        <span className="font-medium truncate max-w-[400px]">{h.title}</span>
+                {prepareData.headings.length === 0 ? (
+                  <div className="p-4 border rounded-md bg-muted/30 text-center text-muted-foreground">
+                    No headings found that qualify for summarization based on current settings.
+                  </div>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto border rounded-md divide-y">
+                    {prepareData.headings.map((h) => (
+                      <div key={h.chunk_id} className="p-3 flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground font-mono text-xs">L{h.level}</span>
+                          <span className="font-medium truncate max-w-[400px]">{h.title}</span>
+                        </div>
+                        <span className="text-muted-foreground text-xs">{h.content_word_count} words</span>
                       </div>
-                      <span className="text-muted-foreground text-xs">{h.content_word_count} words</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={handleGeneratePrompts} className="w-full sm:w-auto">
+              <Button
+                onClick={handleGeneratePrompts}
+                className="w-full sm:w-auto"
+                disabled={prepareData.headings.length === 0}
+              >
                 Generate Prompts
               </Button>
             </CardFooter>

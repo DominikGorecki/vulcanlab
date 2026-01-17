@@ -141,6 +141,7 @@ def create_embeddings(
         return OpenAIEmbeddings(
             model="text-embedding-3-small",
             api_key=settings.openai_api_key,
+            dimensions=768,  # Match database vector(768) column
         )
     elif settings.provider == LLMProvider.GEMINI:
         # Lazy import - only load langchain_google_genai when needed
@@ -269,6 +270,7 @@ def create_embeddings_for_provider(
         return OpenAIEmbeddings(
             model="text-embedding-3-small",
             api_key=settings.openai_api_key,
+            dimensions=768,  # Match database vector(768) column
         )
     elif provider == LLMProvider.GEMINI:
         # Lazy import - only load langchain_google_genai when needed
