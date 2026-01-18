@@ -99,19 +99,20 @@ async def prepare_summarization(
                     detail="No headings found that qualify for summarization based on current settings."
                 )
 
-            # 4. Rank chunks and store in summary_chunks
-            # Delete old rankings first
-            session.execute(delete(SummaryChunk).where(SummaryChunk.work_id == work_id))
-            
+            # 4. Check if summary_chunks already exist for this work
+            existing_chunks = session.execute(
+                select(SummaryChunk).where(SummaryChunk.work_id == work_id).limit(1)
+            ).scalar() is not None
+
             headings_with_chunks = []
             heading_previews = []
-            
+
             for h in headings:
                 ranked_chunks = rank_content_chunks(h, session, settings)
                 hc_container = HeadingWithChunks(heading=h, ranked_chunks=ranked_chunks)
                 hc_container.total_tokens = calculate_heading_with_chunks_tokens(hc_container, settings.tokens_per_word)
                 headings_with_chunks.append(hc_container)
-                
+
                 heading_previews.append(HeadingPreview(
                     chunk_id=h.chunk_id,
                     level=h.level,
@@ -119,21 +120,23 @@ async def prepare_summarization(
                     start_line=h.start_line,
                     content_word_count=h.content_word_count
                 ))
-                
-                # Save to summary_chunks
-                for rc in ranked_chunks:
-                    sc = SummaryChunk(
-                        work_id=work_id,
-                        heading_chunk_id=h.chunk_id,
-                        content_chunk_id=rc.chunk_id,
-                        word_count=rc.word_count,
-                        dense_score=rc.dense_score,
-                        lexical_score=rc.lexical_score,
-                        rrf_score=rc.rrf_score,
-                        mmr_score=rc.mmr_score,
-                        rank_position=rc.rank_position
-                    )
-                    session.add(sc)
+
+                # Only save to summary_chunks if none exist yet
+                # (preserves prompt_index from previous generate-prompts calls)
+                if not existing_chunks:
+                    for rc in ranked_chunks:
+                        sc = SummaryChunk(
+                            work_id=work_id,
+                            heading_chunk_id=h.chunk_id,
+                            content_chunk_id=rc.chunk_id,
+                            word_count=rc.word_count,
+                            dense_score=rc.dense_score,
+                            lexical_score=rc.lexical_score,
+                            rrf_score=rc.rrf_score,
+                            mmr_score=rc.mmr_score,
+                            rank_position=rc.rank_position
+                        )
+                        session.add(sc)
             
             # 5. Check for existing summaries
             has_existing = session.execute(

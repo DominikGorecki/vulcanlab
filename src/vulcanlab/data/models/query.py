@@ -26,9 +26,9 @@ class Query(Base):
         hyde_answer: Hypothetical document embedding answer.
         intent: Query intent (DEFINITION, MECHANISM, COMPARISON, APPLICATION, STUDY_DETAIL, CRITIQUE).
         entities: Extracted entities (JSON array of names, theories, keywords).
-        embedding_original: Vector embedding for original query (768 dimensions).
+        embedding_original: Vector embedding for original query (1536 dimensions).
         embeddings_mqe: JSON array of MQE query embeddings.
-        embedding_hyde: Vector embedding for HyDE answer.
+        embedding_hyde: Vector embedding for HyDE answer (1536 dimensions).
         vector_status: Vectorization status (no_vec, to_vec, vec, vec_err).
         retrieved_context: JSON array of retrieved chunks with metadata and scores.
         clean_retrieval_context: JSON array of consolidated chunks after grouping.
@@ -45,10 +45,10 @@ class Query(Base):
     intent: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     entities: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
-    # Embeddings (768 dimensions for text-embedding-004)
-    embedding_original: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)
+    # Embeddings (1536 dimensions for text-embedding-005)
+    embedding_original: Mapped[Optional[list]] = mapped_column(Vector(1536), nullable=True)
     embeddings_mqe: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # Array of embeddings
-    embedding_hyde: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)
+    embedding_hyde: Mapped[Optional[list]] = mapped_column(Vector(1536), nullable=True)
 
     vector_status: Mapped[str] = mapped_column(
         String(10),

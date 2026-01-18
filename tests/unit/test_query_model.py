@@ -96,7 +96,7 @@ class TestQueryVectorFields:
 
     def test_embedding_original_can_be_set(self):
         """Test that embedding_original can be set to a list."""
-        embedding = [0.1] * 768
+        embedding = [0.1] * 1536
         query = Query(
             original_query="Test query",
             vector_status="vec",
@@ -104,11 +104,11 @@ class TestQueryVectorFields:
         )
 
         assert query.embedding_original == embedding
-        assert len(query.embedding_original) == 768
+        assert len(query.embedding_original) == 1536
 
     def test_embedding_hyde_can_be_set(self):
         """Test that embedding_hyde can be set to a list."""
-        embedding = [0.2] * 768
+        embedding = [0.2] * 1536
         query = Query(
             original_query="Test query",
             vector_status="vec",
@@ -116,7 +116,7 @@ class TestQueryVectorFields:
         )
 
         assert query.embedding_hyde == embedding
-        assert len(query.embedding_hyde) == 768
+        assert len(query.embedding_hyde) == 1536
 
     def test_vector_status_values(self):
         """Test different vector_status values."""
@@ -162,9 +162,9 @@ class TestQueryJSONFields:
     def test_embeddings_mqe_as_list_of_lists(self):
         """Test embeddings_mqe field as list of embeddings."""
         embeddings_mqe = [
-            [0.1] * 768,
-            [0.2] * 768,
-            [0.3] * 768
+            [0.1] * 1536,
+            [0.2] * 1536,
+            [0.3] * 1536
         ]
         query = Query(
             original_query="Test query",
@@ -175,7 +175,7 @@ class TestQueryJSONFields:
         assert query.embeddings_mqe == embeddings_mqe
         assert isinstance(query.embeddings_mqe, list)
         assert len(query.embeddings_mqe) == 3
-        assert len(query.embeddings_mqe[0]) == 768
+        assert len(query.embeddings_mqe[0]) == 1536
 
     def test_retrieved_context_as_list_of_dicts(self):
         """Test retrieved_context field as list of dicts."""
@@ -246,12 +246,12 @@ class TestQueryCRUD:
             # Update fields
             query.vector_status = "vec"
             query.intent = "DEFINITION"
-            query.embedding_original = [0.1] * 768
+            query.embedding_original = [0.1] * 1536
             session.commit()
 
             assert query.vector_status == "vec"
             assert query.intent == "DEFINITION"
-            assert query.embedding_original == [0.1] * 768
+            assert query.embedding_original == [0.1] * 1536
             session.commit.assert_called_once()
 
     @patch('vulcanlab.data.database.get_session')

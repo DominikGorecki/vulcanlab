@@ -829,3 +829,50 @@ Here is another sentence that contains enough words to pass validation. And one 
         sentences5 = _get_sentences(text5)
         assert len(sentences5) == 0, "Short sentences should be filtered out"
 
+
+class TestChunkDenseLexicalUseCreation:
+    """Tests that dense_lexical_use is set correctly during chunking."""
+
+    @patch('vulcanlab.chunking.content_chunking.compute_file_hash')
+    @patch('vulcanlab.chunking.content_chunking.get_session')
+    def test_chunk_creation_sets_dense_lexical_use(self, mock_get_session, mock_compute_hash):
+        """Test that chunks created by chunk_content have dense_lexical_use=True."""
+        from vulcanlab.data.models import Chunk
+
+        mock_session = MagicMock()
+        mock_work = MagicMock()
+        mock_work.id = 1
+        mock_work.title = "Test Work"
+        mock_work.files = {"sanitized": {"path": "test.md", "hash": "test_hash"}}
+        mock_work.processing_status = {}
+
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_work
+        mock_get_session.return_value.__enter__.return_value = mock_session
+        mock_compute_hash.return_value = "test_hash"
+
+        content = "# Heading\n\nThis is a test paragraph with enough words to be a chunk."
+
+        with TemporaryDirectory() as tmpdir:
+            sanitized_path = Path(tmpdir) / "test.md"
+            sanitized_path.write_text(content, encoding='utf-8')
+            mock_work.files["sanitized"]["path"] = str(sanitized_path)
+
+            mock_heading_chunk = MagicMock()
+            mock_heading_chunk.id = 100
+            mock_heading_chunk.start_line = 1
+            mock_session.query.return_value.filter.return_value.all.return_value = [mock_heading_chunk]
+
+            added_chunks = []
+            def track_add(chunk):
+                if isinstance(chunk, Chunk):
+                    added_chunks.append(chunk)
+            mock_session.add = track_add
+
+            chunk_content(work_id=1, verbose=False)
+
+            # Check that created chunks have dense_lexical_use=True
+            assert len(added_chunks) > 0
+            for chunk in added_chunks:
+                if "chunk" in chunk.level:
+                    assert chunk.dense_lexical_use is True
+

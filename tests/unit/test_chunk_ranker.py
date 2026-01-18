@@ -29,6 +29,8 @@ def test_fuse_rrf_basic():
     class MockChunk:
         def __init__(self, content):
             self.content = content
+            self.start_line = 1
+            self.end_line = 10
             
     chunk_data_map = {
         1: MockChunk("content one"),
@@ -117,6 +119,13 @@ def test_rank_content_chunks(mock_lexical, mock_dense, mock_embeddings):
     results = rank_content_chunks(heading, session, settings)
     
     assert len(results) == 2
+    
+    # Verify filtering used dense_lexical_use
+    # The first call to execute is for the initial chunk retrieval
+    call_args = session.execute.call_args_list[0][0][0]
+    sql_query = str(call_args)
+    assert "dense_lexical_use" in sql_query
+    
     assert results[0].chunk_id == 102
     assert results[0].rank_position == 1
     assert results[1].chunk_id == 101

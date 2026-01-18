@@ -222,6 +222,7 @@ class VectorizeAllRequest(BaseModel):
     
     limit: int | None = Field(None, description="Maximum number of chunks to vectorize (None for all)")
     work_id: int | None = Field(None, description="Work ID to filter by (None for all works)")
+    batch_size: int | None = Field(None, description="Number of chunks to process in each batch")
 
 
 class VectorizeAllResponse(BaseModel):

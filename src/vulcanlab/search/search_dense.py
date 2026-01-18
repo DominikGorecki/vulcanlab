@@ -135,6 +135,8 @@ def search_dense(
 
     if headings_only:
         where_conditions.append("c.level IN ('H1', 'H2', 'H3', 'H4', 'H5')")
+    else:
+        where_conditions.append("c.dense_lexical_use = TRUE")
 
     where_clause = " AND ".join(where_conditions)
 
