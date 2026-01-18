@@ -12,6 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AlertCircle, CheckCircle2, Loader2Icon, Zap } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -24,6 +31,15 @@ export default function VectorizationPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showWarningModal, setShowWarningModal] = useState(false);
+  const [customAmount, setCustomAmount] = useState<number>(100);
+
+  // Custom amount options: 100 to 1000 (every 100), then 1000 to 3000 (every 500 or 100?)
+  // User asked for "increment in 100s to vectorize a custom amount like 100, 200, ... 1000..3000"
+  // Let's do 100 increments up to 1000, then 500 increments up to 3000 to keep the list manageable,
+  // or just 100s all the way if they prefer. Let's do 100s up to 1000, then 1500, 2000, 2500, 3000.
+  const customAmountOptions = [
+    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2500, 3000,
+  ];
 
   // Fetch eligible chunks count
   const fetchCount = async () => {
@@ -147,7 +163,44 @@ export default function VectorizationPage() {
                   <p className="text-sm font-medium">Pending Chunks</p>
                   <p className="text-2xl font-bold">{count.toLocaleString()}</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={customAmount.toString()}
+                      onValueChange={(value) => setCustomAmount(parseInt(value))}
+                      disabled={count === 0 || vectorizing}
+                    >
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="Amount" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {customAmountOptions.map((amount) => (
+                          <SelectItem key={amount} value={amount.toString()}>
+                            {amount}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={() => handleVectorize(customAmount)}
+                      disabled={count === 0 || vectorizing}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {vectorizing ? (
+                        <>
+                          <Loader2Icon className="h-4 w-4 animate-spin" />
+                          Vectorizing...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="h-4 w-4" />
+                          Vectorize {customAmount}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="w-px h-8 bg-border mx-1" />
                   <Button
                     onClick={handleVectorize500}
                     disabled={count === 0 || vectorizing}

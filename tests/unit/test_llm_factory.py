@@ -409,14 +409,26 @@ class TestCreateEmbeddings:
         """Test creating OpenAI embeddings."""
         mock_embeddings_instance = MagicMock()
         mock_embeddings_class.return_value = mock_embeddings_instance
-        
+
         result = create_embeddings(mock_settings_openai)
-        
+
         assert result == mock_embeddings_instance
         mock_embeddings_class.assert_called_once_with(
             model="text-embedding-3-small",
             api_key="sk-test123",
+            dimensions=1536,
         )
+
+    @patch("langchain_openai.OpenAIEmbeddings")
+    def test_create_embeddings_openai_uses_1536_dimensions(self, mock_embeddings_class, mock_settings_openai):
+        """Test that OpenAI embeddings use 1536 dimensions."""
+        mock_embeddings_instance = MagicMock()
+        mock_embeddings_class.return_value = mock_embeddings_instance
+
+        create_embeddings(mock_settings_openai)
+
+        call_kwargs = mock_embeddings_class.call_args[1]
+        assert call_kwargs["dimensions"] == 1536
 
     @patch("langchain_openai.OpenAIEmbeddings")
     @patch("vulcanlab.ai.llm_factory.LLMSettings")
@@ -426,17 +438,18 @@ class TestCreateEmbeddings:
         mock_default_settings.provider = LLMProvider.OPENAI
         mock_default_settings.openai_api_key = "sk-default"
         mock_settings_class.return_value = mock_default_settings
-        
+
         mock_embeddings_instance = MagicMock()
         mock_embeddings_class.return_value = mock_embeddings_instance
-        
+
         result = create_embeddings(settings=None)
-        
+
         assert result == mock_embeddings_instance
         mock_settings_class.assert_called_once()
         mock_embeddings_class.assert_called_once_with(
             model="text-embedding-3-small",
             api_key="sk-default",
+            dimensions=1536,
         )
 
     @patch("langchain_google_genai.GoogleGenerativeAIEmbeddings")
@@ -444,14 +457,37 @@ class TestCreateEmbeddings:
         """Test creating Gemini embeddings."""
         mock_embeddings_instance = MagicMock()
         mock_embeddings_class.return_value = mock_embeddings_instance
-        
+
         result = create_embeddings(mock_settings_gemini)
-        
+
         assert result == mock_embeddings_instance
         mock_embeddings_class.assert_called_once_with(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             google_api_key="AIza-test456",
+            output_dimensionality=1536,
         )
+
+    @patch("langchain_google_genai.GoogleGenerativeAIEmbeddings")
+    def test_create_embeddings_gemini_uses_correct_model(self, mock_embeddings_class, mock_settings_gemini):
+        """Test that Gemini embeddings use gemini-embedding-001 model."""
+        mock_embeddings_instance = MagicMock()
+        mock_embeddings_class.return_value = mock_embeddings_instance
+
+        create_embeddings(mock_settings_gemini)
+
+        call_kwargs = mock_embeddings_class.call_args[1]
+        assert call_kwargs["model"] == "models/gemini-embedding-001"
+
+    @patch("langchain_google_genai.GoogleGenerativeAIEmbeddings")
+    def test_create_embeddings_gemini_uses_1536_dimensions(self, mock_embeddings_class, mock_settings_gemini):
+        """Test that Gemini embeddings use output_dimensionality=1536."""
+        mock_embeddings_instance = MagicMock()
+        mock_embeddings_class.return_value = mock_embeddings_instance
+
+        create_embeddings(mock_settings_gemini)
+
+        call_kwargs = mock_embeddings_class.call_args[1]
+        assert call_kwargs["output_dimensionality"] == 1536
 
     @patch("langchain_google_genai.GoogleGenerativeAIEmbeddings")
     @patch("vulcanlab.ai.llm_factory.LLMSettings")
@@ -461,17 +497,18 @@ class TestCreateEmbeddings:
         mock_default_settings.provider = LLMProvider.GEMINI
         mock_default_settings.google_api_key = "AIza-default"
         mock_settings_class.return_value = mock_default_settings
-        
+
         mock_embeddings_instance = MagicMock()
         mock_embeddings_class.return_value = mock_embeddings_instance
-        
+
         result = create_embeddings(settings=None)
-        
+
         assert result == mock_embeddings_instance
         mock_settings_class.assert_called_once()
         mock_embeddings_class.assert_called_once_with(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             google_api_key="AIza-default",
+            output_dimensionality=1536,
         )
 
     def test_create_embeddings_unsupported_provider(self, mock_settings_openai):
@@ -987,16 +1024,17 @@ class TestErrorHandling:
         mock_settings = MagicMock(spec=LLMSettings)
         mock_settings.provider = LLMProvider.GEMINI
         mock_settings.google_api_key = ""
-        
+
         mock_embeddings_instance = MagicMock()
         mock_embeddings_class.return_value = mock_embeddings_instance
-        
+
         # Should not raise an error at factory level
         result = create_embeddings(mock_settings)
         assert result == mock_embeddings_instance
         mock_embeddings_class.assert_called_once_with(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             google_api_key="",
+            output_dimensionality=1536,
         )
 
     @patch("vulcanlab.ai.llm_factory.create_langchain_chat")

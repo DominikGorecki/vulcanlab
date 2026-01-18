@@ -860,7 +860,8 @@ def chunk_content(work_id: int, verbose: bool = False, min_chunk_words: int = MI
                 start_line=chunk_data['start_line'],
                 end_line=chunk_data['end_line'],
                 vector_status=chunk_data['vector_status'],
-                sentence_count=sentence_count
+                sentence_count=sentence_count,
+                dense_lexical_use=True
             )
 
             session.add(chunk)

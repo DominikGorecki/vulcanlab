@@ -204,7 +204,7 @@ def _dense_search(
     embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
 
     # Build WHERE clause conditionally
-    where_clauses = ["embedding IS NOT NULL"]
+    where_clauses = ["embedding IS NOT NULL", "dense_lexical_use = TRUE"]
     params = {"embedding": embedding_str, "limit": limit}
 
     if sentence_filter_enabled:
@@ -258,7 +258,8 @@ def _lexical_search(
     # Build WHERE clause conditionally
     where_clauses = [
         "content_tsvector @@ websearch_to_tsquery('english', :query)",
-        "vector_status = 'vec'"
+        "vector_status = 'vec'",
+        "dense_lexical_use = TRUE"
     ]
     params = {"query": query_text, "limit": limit}
 

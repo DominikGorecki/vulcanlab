@@ -1493,6 +1493,36 @@ class TestSentenceFiltering:
         params = call_args[0][1]
         assert params["min_sentence_count"] == 10
 
+
+class TestDenseLexicalUseFiltering:
+    """Test filtering by dense_lexical_use column."""
+
+    def test_dense_search_filters_by_dense_lexical_use(self):
+        """Test that _dense_search includes dense_lexical_use=TRUE in WHERE clause."""
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_session.execute.return_value = mock_result
+
+        _dense_search(mock_session, [0.1] * 768)
+
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "dense_lexical_use = TRUE" in sql_query
+
+    def test_lexical_search_filters_by_dense_lexical_use(self):
+        """Test that _lexical_search includes dense_lexical_use=TRUE in WHERE clause."""
+        mock_session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_session.execute.return_value = mock_result
+
+        _lexical_search(mock_session, "test query")
+
+        call_args = mock_session.execute.call_args
+        sql_query = str(call_args[0][0])
+        assert "dense_lexical_use = TRUE" in sql_query
+
     def test_sentence_filter_parameters_prevent_sql_injection(self):
         """Test that sentence filter uses parameterized queries."""
         mock_session = MagicMock()

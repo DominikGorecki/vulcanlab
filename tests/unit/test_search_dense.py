@@ -128,11 +128,11 @@ class TestSearchDense:
         # Mock search query
         mock_search_rows = [
             (1, "Content about memory systems...", "H2", 5, 10, 20,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.95),
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.95, "Chapter 1 > Section 1.1"),
             (2, "More about memory...", "H3", 5, 25, 35,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.87),
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.87, "Chapter 1 > Section 1.1"),
             (3, "Discussion of memory...", "sentence", 5, 40, 45,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.75),
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.75, "Chapter 1 > Section 1.1"),
         ]
         mock_search_result = Mock()
         mock_search_result.fetchall.return_value = mock_search_rows
@@ -185,9 +185,9 @@ class TestSearchDense:
         # Mock search query - only headings
         mock_search_rows = [
             (1, "Content about memory systems...", "H2", 5, 10, 20,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.95),
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.95, "Breadcrumb 1"),
             (2, "More about memory...", "H3", 5, 25, 35,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.87),
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.87, "Breadcrumb 2"),
         ]
         mock_search_result = Mock()
         mock_search_result.fetchall.return_value = mock_search_rows
@@ -236,7 +236,7 @@ class TestSearchDense:
 
         mock_search_rows = [
             (1, "Content with embedding...", "H2", 5, 10, 20,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.95),
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.95, "Breadcrumb"),
         ]
         mock_search_result = Mock()
         mock_search_result.fetchall.return_value = mock_search_rows
@@ -274,7 +274,7 @@ class TestSearchDense:
         # Mock page 2 results (items 21-40)
         mock_search_rows = [
             (21 + i, f"Content {i}...", "H2", 5, 10 + i * 10, 20 + i * 10,
-             "Book", "Author", 2020, 0.8 - i * 0.01)
+             "Book", "Author", 2020, 0.8 - i * 0.01, f"Breadcrumb {i}")
             for i in range(20)
         ]
         mock_search_result = Mock()
@@ -333,9 +333,9 @@ class TestSearchDense:
 
         mock_search_rows = [
             (1, "High similarity content", "H2", 5, 10, 20,
-             "Book", "Author", 2020, 0.95),  # distance = 0.05
+             "Book", "Author", 2020, 0.95, "Breadcrumb 1"),  # distance = 0.05
             (2, "Lower similarity content", "H3", 5, 30, 40,
-             "Book", "Author", 2020, 0.65),  # distance = 0.35
+             "Book", "Author", 2020, 0.65, "Breadcrumb 2"),  # distance = 0.35
         ]
         mock_search_result = Mock()
         mock_search_result.fetchall.return_value = mock_search_rows
@@ -373,7 +373,7 @@ class TestSearchDense:
         mock_count_result.scalar.return_value = 10  # Limited by top_k=10
 
         mock_search_rows = [
-            (i, f"Content {i}", "H2", 5, 10, 20, "Book", "Author", 2020, 0.9 - i * 0.05)
+            (i, f"Content {i}", "H2", 5, 10, 20, "Book", "Author", 2020, 0.9 - i * 0.05, f"Breadcrumb {i}")
             for i in range(10)
         ]
         mock_search_result = Mock()
@@ -392,3 +392,23 @@ class TestSearchDense:
         call_args = mock_session.execute.call_args_list[0][0]
         params = call_args[1]
         assert params["top_k"] == 10
+
+    @patch('vulcanlab.search.search_dense.generate_query_embedding')
+    @patch('vulcanlab.search.search_dense.build_breadcrumb')
+    def test_search_dense_filters_dense_lexical_use(
+        self,
+        mock_breadcrumb,
+        mock_generate_embedding,
+        mock_session,
+        mock_embedding
+    ):
+        """Dense search filters by dense_lexical_use=TRUE by default."""
+        mock_generate_embedding.return_value = mock_embedding
+        mock_session.execute.return_value = MagicMock()
+
+        search_dense("query", mock_session, headings_only=False)
+
+        # Check search query (second call to execute)
+        call_args = mock_session.execute.call_args_list[1][0]
+        sql_text = str(call_args[0])
+        assert "c.dense_lexical_use = TRUE" in sql_text

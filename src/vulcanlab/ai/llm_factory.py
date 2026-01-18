@@ -141,15 +141,23 @@ def create_embeddings(
         return OpenAIEmbeddings(
             model="text-embedding-3-small",
             api_key=settings.openai_api_key,
-            dimensions=768,  # Match database vector(768) column
+            dimensions=1536,  # Match database vector(1536) column
+            chunk_size=100,   # Match our DEFAULT_BATCH_SIZE
         )
     elif settings.provider == LLMProvider.GEMINI:
         # Lazy import - only load langchain_google_genai when needed
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        import langchain_google_genai.embeddings
+
+        # Increase internal token limit to allow larger batches
+        # Gemini API supports up to 100 texts or ~20k tokens.
+        # LangChain's default estimation is very conservative.
+        langchain_google_genai.embeddings._MAX_TOKENS_PER_BATCH = 100000
 
         return GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             google_api_key=settings.google_api_key,
+            output_dimensionality=1536,  # Match database vector(1536) column
         )
     else:
         raise ValueError(f"Unsupported provider: {settings.provider}")
@@ -270,15 +278,21 @@ def create_embeddings_for_provider(
         return OpenAIEmbeddings(
             model="text-embedding-3-small",
             api_key=settings.openai_api_key,
-            dimensions=768,  # Match database vector(768) column
+            dimensions=1536,  # Match database vector(1536) column
+            chunk_size=100,
         )
     elif provider == LLMProvider.GEMINI:
         # Lazy import - only load langchain_google_genai when needed
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        import langchain_google_genai.embeddings
+        
+        # Increase internal token limit to allow larger batches
+        langchain_google_genai.embeddings._MAX_TOKENS_PER_BATCH = 100000
 
         return GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             google_api_key=settings.google_api_key,
+            output_dimensionality=1536,  # Match database vector(1536) column
         )
     else:
         raise ValueError(f"Unsupported provider: {provider}")

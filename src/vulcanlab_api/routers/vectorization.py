@@ -198,13 +198,16 @@ async def get_eligible_count() -> EligibleChunksResponse:
 )
 async def vectorize_all_chunks(request: VectorizeAllRequest) -> VectorizeAllResponse:
     """Vectorize chunks (all or limited number)."""
-    from vulcanlab.vectorization.vect_chunks import vectorize_chunks
+    from vulcanlab.vectorization import vectorize_chunks, DEFAULT_BATCH_SIZE
     
     try:
+        # Use batch_size from request if provided, otherwise use default
+        batch_size = request.batch_size or DEFAULT_BATCH_SIZE
+        
         result = vectorize_chunks(
             work_id=request.work_id,  # None for all works
             limit=request.limit,
-            batch_size=20,
+            batch_size=batch_size,
             verbose=True
         )
         

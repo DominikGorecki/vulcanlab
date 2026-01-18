@@ -26,7 +26,7 @@ Core vectorization implementation for processing document chunks into vector emb
   - `work_id=None` counts across all works
   - Lightweight query (no ML libraries loaded)
 
-- `vectorize_chunks(work_id: int | None, limit: int | None, batch_size: int = 20, verbose: bool = False) -> VectorizationResult`
+- `vectorize_chunks(work_id: int | None, limit: int | None, batch_size: int = 100, verbose: bool = False) -> VectorizationResult`
   - Main vectorization function
   - Processes chunks in configurable batches
   - Updates `embedding` field with 768-dimensional vectors
@@ -38,7 +38,7 @@ Core vectorization implementation for processing document chunks into vector emb
 1. Validates work exists (if work_id specified)
 2. Queries eligible chunks ordered by ID
 3. Lazy-imports embeddings model from `vulcanlab.ai.llm_factory`
-4. Processes chunks in batches (default: 20 chunks/batch)
+4. Processes chunks in batches (default: 100 chunks/batch)
 5. Updates each chunk's embedding field
 6. Tracks success/failure per chunk
 7. Commits per-batch for partial retry capability
@@ -62,7 +62,7 @@ python -m vulcanlab.vectorization.vect_chunks_cli <work_id> [--limit N] [--batch
 **Arguments**:
 - `work_id` (int, required) - Database work ID to vectorize
 - `--limit` (int, optional) - Maximum chunks to process
-- `--batch-size` (int, default=20) - Chunks per API batch call
+- `--batch-size` (int, default=100) - Chunks per API batch call
 - `-v, --verbose` (flag) - Enable detailed progress output
 
 **Interactive Mode**:
@@ -170,7 +170,7 @@ def __getattr__(name):
 ```
 
 ### 2. Batch Processing
-**Implementation**: Configurable `batch_size` parameter (default: 20)
+**Implementation**: Configurable `batch_size` parameter (default: 100)
 
 **Benefit**:
 - Reduces API calls by processing multiple chunks per request
@@ -226,7 +226,7 @@ total_count = get_eligible_chunks_count()
 result = vectorize_chunks(
     work_id=1,
     limit=50,
-    batch_size=20,
+    batch_size=100,
     verbose=True
 )
 
@@ -278,7 +278,7 @@ curl -X POST http://localhost:8000/api/vec/vectorize \
   -d '{
     "work_id": 1,
     "limit": null,
-    "batch_size": 20,
+    "batch_size": 100,
     "verbose": false
   }'
 
@@ -288,7 +288,7 @@ curl -X POST http://localhost:8000/api/vec/vectorize \
   -d '{
     "work_id": 1,
     "limit": 50,
-    "batch_size": 20,
+    "batch_size": 100,
     "verbose": true
   }'
 ```
@@ -335,9 +335,9 @@ If entire batch fails:
 ## Performance Considerations
 
 ### Batch Size Tuning
-- **Small batches (10-20)**: Lower memory, more API calls, slower but safer
+- **Small batches (20-50)**: Lower memory, more API calls, slower but safer
 - **Large batches (50-100)**: Higher memory, fewer API calls, faster but higher failure impact
-- **Default (20)**: Balanced for most use cases
+- **Default (100)**: Optimized for most API providers supporting up to 100 per call
 
 ### Eligible Chunk Filtering
 Only chunks meeting ALL criteria are processed:

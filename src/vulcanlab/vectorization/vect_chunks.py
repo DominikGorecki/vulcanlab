@@ -24,6 +24,9 @@ from dataclasses import dataclass
 from vulcanlab.data.database import get_session
 from vulcanlab.data.models import Chunk, Work
 
+# Configuration
+DEFAULT_BATCH_SIZE = 100
+
 
 @dataclass
 class VectorizationResult:
@@ -61,7 +64,7 @@ def get_eligible_chunks_count(work_id: int | None = None) -> int:
 def vectorize_chunks(
     work_id: int | None = None,
     limit: int | None = None,
-    batch_size: int = 20,
+    batch_size: int = DEFAULT_BATCH_SIZE,
     verbose: bool = False
 ) -> VectorizationResult:
     """Vectorize chunks for a work (or all works) using embedding model.

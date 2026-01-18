@@ -23,7 +23,8 @@ class TestChunkCreation:
             content="Chapter 1 content",
             start_line=1,
             end_line=10,
-            vector_status="no_vec"
+            vector_status="no_vec",
+            dense_lexical_use=False
         )
 
         assert chunk.work_id == 1
@@ -32,9 +33,23 @@ class TestChunkCreation:
         assert chunk.start_line == 1
         assert chunk.end_line == 10
         assert chunk.vector_status == "no_vec"
+        assert chunk.dense_lexical_use is False
         assert chunk.parent_id is None
         assert chunk.embedding is None
         assert chunk.heading_breadcrumbs is None
+
+    def test_create_chunk_dense_lexical_use(self):
+        """Test creating a Chunk with dense_lexical_use=True."""
+        chunk = Chunk(
+            work_id=1,
+            level="chunk",
+            content="Content",
+            start_line=1,
+            end_line=10,
+            vector_status="no_vec",
+            dense_lexical_use=True
+        )
+        assert chunk.dense_lexical_use is True
 
     def test_create_chunk_with_parent(self):
         """Test creating a Chunk with parent relationship."""
@@ -166,7 +181,7 @@ class TestChunkVectorField:
 
     def test_chunk_embedding_can_be_set(self):
         """Test that embedding can be set to a list."""
-        embedding_vector = [0.1] * 768
+        embedding_vector = [0.1] * 1536
         chunk = Chunk(
             work_id=1,
             level="H1",
@@ -178,7 +193,7 @@ class TestChunkVectorField:
         )
 
         assert chunk.embedding == embedding_vector
-        assert len(chunk.embedding) == 768
+        assert len(chunk.embedding) == 1536
 
     def test_chunk_vector_status_values(self):
         """Test different vector_status values."""

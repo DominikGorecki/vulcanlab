@@ -3,11 +3,11 @@
     "admin_user": "postgres",
     "host": "127.0.0.1",
     "port": 5432,
-    "db_name": "comp_sci",
-    "app_user": "comp_sci_user"
+    "db_name": "psych_rag_test",
+    "app_user": "psych_rag_app_user_test"
   },
   "llm": {
-    "provider": "openai",
+    "provider": "gemini",
     "models": {
       "openai": {
         "light": "gpt-5.2",
@@ -26,10 +26,5 @@
   "logging": {
     "enabled": true,
     "log_dir": "logs"
-  },
-  "conversion": {
-    "token_threshold": 35000,
-    "advanced_mode_enabled": false,
-    "use_full_model": false
   }
 }
