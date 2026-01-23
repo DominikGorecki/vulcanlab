@@ -14,6 +14,7 @@ import argparse
 import sys
 
 from vulcanlab.vectorization.vect_chunks import (
+    DEFAULT_BATCH_SIZE,
     get_eligible_chunks_count,
     vectorize_chunks,
 )
@@ -43,8 +44,8 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=20,
-        help="Number of chunks per API batch (default: 20)"
+        default=DEFAULT_BATCH_SIZE,
+        help=f"Number of chunks per API batch (default: {DEFAULT_BATCH_SIZE})"
     )
 
     args = parser.parse_args()

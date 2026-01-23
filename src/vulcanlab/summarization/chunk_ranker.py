@@ -276,7 +276,7 @@ def rank_content_chunks(
     stmt = (
         select(Chunk)
         .where(Chunk.parent_id == heading.chunk_id)
-        .where(Chunk.level.contains("-chunk"))
+        .where(Chunk.dense_lexical_use == True)
     )
     content_chunks = session.execute(stmt).scalars().all()
     

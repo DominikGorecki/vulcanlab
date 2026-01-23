@@ -65,9 +65,9 @@ class TestSearchLexical:
         # Mock search query
         mock_rows = [
             (1, "Memory systems in the brain...", "H2", 5, 100, 120,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.85),
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.85, "Chapter 1 > Introduction"),
             (2, "Attention and perception...", "H3", 5, 150, 170,
-             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.72)
+             "Cognitive Psychology", "Eysenck & Keane", 2015, 0.72, "Chapter 1 > Introduction")
         ]
         mock_session.execute.return_value.fetchall.return_value = mock_rows
 
@@ -125,7 +125,7 @@ class TestSearchLexical:
         # Mock results: only H2 chunk
         mock_rows = [
             (1, "Test content", "H2", 5, 100, 120,
-             "Test Work", "Author", 2020, 0.90)
+             "Test Work", "Author", 2020, 0.90, "Breadcrumb")
         ]
         mock_session.execute.return_value.fetchall.return_value = mock_rows
 
@@ -184,7 +184,7 @@ class TestSearchLexical:
         # Mock results with work metadata
         mock_rows = [
             (1, "Content", "H1", 5, 1, 10,
-             "Test Work Title", "Test Author", 2023, 0.95)
+             "Test Work Title", "Test Author", 2023, 0.95, "Breadcrumb")
         ]
         mock_session.execute.return_value.fetchall.return_value = mock_rows
 
@@ -207,7 +207,7 @@ class TestSearchLexical:
         long_content = " ".join(["word"] * 150)
         mock_rows = [
             (1, long_content, "H1", 5, 1, 10,
-             "Work", "Author", 2020, 0.80)
+             "Work", "Author", 2020, 0.80, "Breadcrumb")
         ]
         mock_session.execute.return_value.fetchall.return_value = mock_rows
 
@@ -219,3 +219,15 @@ class TestSearchLexical:
         # Should have exactly 100 words (plus ellipsis)
         preview_words = preview.replace("...", "").split()
         assert len(preview_words) == 100
+
+    def test_search_lexical_filters_dense_lexical_use(self):
+        """Lexical search filters by dense_lexical_use=TRUE by default."""
+        mock_session = MagicMock()
+        mock_session.execute.return_value = MagicMock()
+
+        search_lexical("query", mock_session, headings_only=False)
+
+        # Check search query (second call to execute)
+        call_args = mock_session.execute.call_args_list[1][0]
+        sql_text = str(call_args[0])
+        assert "c.dense_lexical_use = TRUE" in sql_text

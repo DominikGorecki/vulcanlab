@@ -79,6 +79,7 @@ class TestInitDatabase:
     @patch("vulcanlab.data.init_db.create_prompt_meta_table")
     @patch("vulcanlab.data.init_db.create_fulltext_search")
     @patch("vulcanlab.data.init_db.create_vector_indexes")
+    @patch("vulcanlab.data.init_db.ensure_vector_dimensions")
     @patch("vulcanlab.data.init_db.create_tables")
     @patch("vulcanlab.data.init_db.enable_pgvector_extension")
     @patch("vulcanlab.data.init_db.create_database_and_user")
@@ -87,6 +88,7 @@ class TestInitDatabase:
         mock_create_db,
         mock_enable_pgvector,
         mock_create_tables,
+        mock_ensure_vector_dimensions,
         mock_create_vector_indexes,
         mock_create_fulltext_search,
         mock_create_prompt_meta_table,
@@ -99,6 +101,7 @@ class TestInitDatabase:
         mock_create_db.assert_called_once_with(verbose=True)
         mock_enable_pgvector.assert_called_once_with(verbose=True)
         mock_create_tables.assert_called_once_with(verbose=True)
+        mock_ensure_vector_dimensions.assert_called_once_with(verbose=True)
         mock_create_vector_indexes.assert_called_once_with(verbose=True)
         mock_create_fulltext_search.assert_called_once_with(verbose=True)
         mock_create_prompt_meta_table.assert_called_once_with(verbose=True)

@@ -54,9 +54,12 @@ class TestSummarizeRouter:
             [RankedChunk(chunk_id=11, content="C1", word_count=100, start_line=2, end_line=10, rank_position=1)],
             [RankedChunk(chunk_id=21, content="C2", word_count=100, start_line=102, end_line=110, rank_position=1)],
         ]
-        
-        # Mock SummaryResult check
-        mock_session.execute.return_value.scalar.side_effect = [1, None] # 1 for chunk check, None for existing summaries
+
+        # Mock execute calls:
+        # 1. Chunk existence check (returns truthy)
+        # 2. SummaryChunk existence check (returns None = no existing chunks, so create new)
+        # 3. SummaryResult existence check (returns None = no existing summaries)
+        mock_session.execute.return_value.scalar.side_effect = [1, None, None]
 
         # Make request
         response = client.post("/api/v1/summarize/works/1/prepare")

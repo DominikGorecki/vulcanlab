@@ -8,6 +8,7 @@ and specialized feature tables.
 from .enums import create_enums
 from .tables import create_tables
 from .indexes import (
+    ensure_vector_dimensions,
     create_vector_indexes,
     create_fulltext_search,
     create_history_indexes,
@@ -33,6 +34,7 @@ __all__ = [
     # Tables
     "create_tables",
     # Indexes
+    "ensure_vector_dimensions",
     "create_vector_indexes",
     "create_fulltext_search",
     "create_history_indexes",

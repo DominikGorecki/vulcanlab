@@ -8,7 +8,7 @@ sections (H1-H5, sentences, chunks) with their vector embeddings.
 from typing import Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import String, Text, Integer, ForeignKey
+from sqlalchemy import String, Text, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -25,7 +25,7 @@ class Chunk(Base):
         level: Hierarchy level (H1, H2, H3, H4, H5, sentence, chunk).
         content: The actual text content of the chunk (without breadcrumb prefix).
         heading_breadcrumbs: Breadcrumb trail of section headings (e.g., "H1 > H2 > H3").
-        embedding: Vector embedding (768 dimensions).
+        embedding: Vector embedding (1536 dimensions).
         start_line: Line number where chunk begins in markdown.
         end_line: Line number where chunk ends in markdown.
         vector_status: Vectorization status (no_vec, to_vec, vec, vec_err).
@@ -53,7 +53,7 @@ class Chunk(Base):
         String(500),
         nullable=True
     )
-    embedding: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)
+    embedding: Mapped[Optional[list]] = mapped_column(Vector(1536), nullable=True)
     start_line: Mapped[int] = mapped_column(Integer, nullable=False)
     end_line: Mapped[int] = mapped_column(Integer, nullable=False)
     vector_status: Mapped[str] = mapped_column(
@@ -65,6 +65,12 @@ class Chunk(Base):
     sentence_count: Mapped[Optional[int]] = mapped_column(
         Integer,
         nullable=True,
+        index=True
+    )
+    dense_lexical_use: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
         index=True
     )
 

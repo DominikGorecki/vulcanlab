@@ -114,7 +114,7 @@ The Vectorization page manages the process of generating embeddings for document
    - Loads embedding model (lazy import):
      - Calls `create_embeddings()` from `vulcanLab.ai.llm_factory`
      - Uses configured embedding model (OpenAI, Gemini, etc.)
-   - Processes chunks in batches (default batch_size=20):
+   - Processes chunks in batches (default batch_size=100):
      - Extracts chunk content texts
      - Calls `embeddings_model.embed_documents(batch_texts)` to get embeddings
      - For each chunk in batch:
@@ -152,7 +152,7 @@ The Vectorization page manages the process of generating embeddings for document
   - Queries chunks with `vector_status='to_vec'`, `parent_id IS NOT NULL`, `embedding IS NULL`
   - Optionally filters by `work_id`
   - Returns integer count
-- `vectorize_chunks(work_id=None, limit=None, batch_size=20, verbose=False)`: Vectorize chunks
+- `vectorize_chunks(work_id=None, limit=None, batch_size=100, verbose=False)`: Vectorize chunks
   - Gets eligible chunks from database
   - Loads embedding model (lazy import)
   - Processes chunks in batches
@@ -232,7 +232,7 @@ Only content chunks are vectorized (not heading chunks):
 
 ### Batch Processing
 
-- Chunks processed in batches (default: 20 chunks per batch)
+- Chunks processed in batches (default: 100 chunks per batch)
 - Batch size configurable via `batch_size` parameter
 - Each batch:
   1. Extract chunk content texts
@@ -261,5 +261,5 @@ Vectorization uses embedding model configuration from `vulcanLab.config`:
 - **Model Provider**: OpenAI, Gemini, or other configured provider
 - **API Keys**: Loaded from environment variables or config
 - **Model Name**: Specific embedding model name (e.g., "text-embedding-3-small")
-- **Batch Size**: Default 20 chunks per batch (configurable)
+- **Batch Size**: Default 100 chunks per batch (configurable)
 

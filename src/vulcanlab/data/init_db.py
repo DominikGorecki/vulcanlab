@@ -51,6 +51,7 @@ from .schema import (
     create_tables,
     create_io_files_triggers,
     create_experiments_triggers,
+    ensure_vector_dimensions,
     create_vector_indexes,
     create_fulltext_search,
     create_history_indexes,
@@ -83,7 +84,8 @@ def init_database(verbose: bool = False) -> None:
     create_io_files_triggers(verbose=verbose)
     create_experiments_triggers(verbose=verbose)
 
-    # Phase 4: Indexes
+    # Phase 4: Vector dimension check and indexes
+    ensure_vector_dimensions(verbose=verbose)
     create_vector_indexes(verbose=verbose)
     create_fulltext_search(verbose=verbose)
     create_history_indexes(verbose=verbose)
