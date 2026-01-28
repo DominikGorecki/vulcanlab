@@ -20,7 +20,7 @@ export interface StickyDetailHeaderProps {
   /**
    * Optional subtitle or additional information
    */
-  subtitle?: string
+  subtitle?: React.ReactNode
   /**
    * Optional custom label for the back button (defaults to "Back")
    */
@@ -98,7 +98,7 @@ export function StickyDetailHeader({
               {title}
             </h1>
             {subtitle && (
-              <p className="text-sm text-muted-foreground">{subtitle}</p>
+              <div className="text-sm text-muted-foreground">{subtitle}</div>
             )}
           </div>
         </div>

@@ -123,3 +123,17 @@ templates:
     template_type: summarize
     is_active: true
     content_file: summarize_sections.txt
+
+  - function_tag: answer_breakdown
+    version: 1
+    title: "Answer Breakdown - Multi-Section Expansion"
+    template_type: expansion
+    is_active: true
+    content_file: answer_breakdown.txt
+
+  - function_tag: expansion_section_generation
+    version: 1
+    title: "Expansion Section Generation - Subsection with Source References"
+    template_type: expansion
+    is_active: true
+    content_file: expansion_section_generation.txt

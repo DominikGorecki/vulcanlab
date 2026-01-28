@@ -41,6 +41,8 @@ const FUNCTION_LABELS: Record<string, string> = {
   heading_hierarchy: "Heading Hierarchy Corrections",
   toc_extraction: "Manual ToC Extraction",
   summarize_sections: "Section Summarization",
+  answer_breakdown: "Answer Breakdown",
+  expansion_section_generation: "Expansion Section Generation",
 };
 
 export default function TemplateEditorPage() {

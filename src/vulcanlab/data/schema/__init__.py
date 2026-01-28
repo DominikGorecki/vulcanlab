@@ -26,6 +26,7 @@ from .specialized_tables import (
     create_collections_table,
     create_research_tables,
     create_summarization_tables,
+    create_expansion_tables,
 )
 
 __all__ = [
@@ -50,4 +51,5 @@ __all__ = [
     "create_collections_table",
     "create_research_tables",
     "create_summarization_tables",
+    "create_expansion_tables",
 ]

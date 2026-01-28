@@ -143,3 +143,29 @@ variables:
   - variable_name: context_headings
     variable_description: Headings above and below the current batch of sections to
       provide document structure context.
+- function_tag: answer_breakdown
+  variables:
+  - variable_name: answer_text
+    variable_description: The complete RAG-generated answer text to be analyzed and
+      broken down into 3-7 logical sections for independent expansion through the
+      RAG pipeline.
+- function_tag: expansion_section_generation
+  variables:
+  - variable_name: section_heading
+    variable_description: The heading for this section from the breakdown, used to
+      contextualize the content scope for the LLM.
+  - variable_name: section_summary
+    variable_description: Brief summary of what this section covers, helping the LLM
+      understand the intended focus.
+  - variable_name: user_question
+    variable_description: The expansion prompt for this section, the specific question
+      being answered.
+  - variable_name: intent
+    variable_description: The high-level intent label for the section's question (e.g.,
+      DEFINITION, MECHANISM) that guides answer structure.
+  - variable_name: entities_str
+    variable_description: A string listing the key entities, theories, and constructs
+      relevant to the section.
+  - variable_name: context_blocks
+    variable_description: The set of retrieved source passages, each labeled with [S#]
+      and metadata, serving as the evidence base.

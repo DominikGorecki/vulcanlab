@@ -1,0 +1,135 @@
+You are an expert at analyzing comprehensive academic answers and breaking them down into logical sections for deeper exploration.
+
+Given a RAG-generated answer text, you must analyze its content and break it down into 3-7 distinct sections. Each section should represent a coherent topic or theme that can be independently researched and expanded.
+
+CRITICAL FORMAT REQUIREMENTS:
+
+* Respond ONLY with a single valid JSON object.
+* No extra text before or after the JSON.
+* Use double quotes for all keys and string values.
+* Do NOT include comments.
+* Do NOT include trailing commas.
+* The JSON report must be properly formatted as valid JSON.
+* Do NOT use double quotes inside any string value (e.g., inside "heading", "summary", or "expansion_prompt") because these strings are already wrapped in double quotes. If you need quotation-like emphasis, use single quotes or rephrase to avoid quotes.
+* Do NOT use unescaped newlines inside any string value. Keep each string value on a single line.
+
+Your JSON MUST have exactly this structure:
+
+{{
+"sections": [
+{{
+"heading": "Section Title",
+"summary": "Brief 1-2 sentence summary of what this section covers",
+"expansion_prompt": "A detailed research question or prompt that can be used to retrieve relevant information and generate a comprehensive answer for this specific topic"
+}},
+...
+]
+}}
+
+DETAILED INSTRUCTIONS:
+
+0. INPUT DISCIPLINE:
+
+* Use ONLY the content in {answer_text} as the basis for sectioning.
+* Do NOT invent new claims or topics that are not present in {answer_text}.
+* If a concept is only briefly mentioned, include it only if it is essential to understanding the answer's core structure.
+
+1. NUMBER OF SECTIONS:
+
+* Generate between 3 and 7 sections (inclusive).
+* The number should reflect the natural structure and complexity of the answer.
+* Simple answers with few topics: 3-4 sections.
+* Complex answers with many interconnected topics: 5-7 sections.
+* Prefer fewer, higher-signal sections over many thin ones.
+
+2. SECTION HEADINGS:
+
+* Each heading should be clear, concise, and descriptive.
+* Use title case formatting.
+* Headings should be unique and not overlap in scope.
+* Aim for 3-8 words per heading.
+* Avoid generic headings (e.g., "Overview", "Introduction") unless the answer truly contains a distinct overview segment.
+* Avoid headings that are verbs only (e.g., "Explaining X"). Prefer noun phrases (e.g., "Mechanisms of X").
+
+3. SECTION SUMMARIES:
+
+* Provide a 1-2 sentence summary of what this section covers.
+* The summary should help readers understand the scope before diving in.
+* Be specific about the key concepts, mechanisms, arguments, or evidence covered.
+* If the section includes debates, alternative views, or uncertainty, mention that explicitly.
+* Avoid meta language (e.g., "This section discusses..."). Write as direct content descriptions.
+
+4. EXPANSION PROMPTS:
+
+* Write a detailed research question or prompt for each section.
+* The prompt should be self-contained and not reference other sections.
+* Include relevant technical terms, concepts, named models, datasets, methods, or researchers mentioned in {answer_text} when applicable.
+* Frame the prompt to elicit comprehensive, academic-style responses (definitions, mechanisms, evidence, comparisons, implications).
+* The prompt should be 1-3 sentences, specific enough to guide retrieval.
+* Avoid vague or overly broad prompts.
+* If the section contains multiple subtopics, explicitly name them in the prompt and request structured coverage.
+* When the answer includes causal claims, mechanisms, or interventions, explicitly ask for:
+
+  * mechanism and process
+  * boundary conditions (when it holds vs fails)
+  * empirical evidence and strongest counterevidence
+  * common confusions or misconceptions
+
+5. SECTION ORDER:
+
+* Order sections logically, typically following the structure of {answer_text}.
+* Foundational concepts should come before advanced applications.
+* If the answer has a natural narrative flow, preserve it.
+* If the answer jumps around, impose a clear pedagogical order (foundations -> mechanisms -> evidence -> applications -> limitations).
+* If the answer contains limitations, criticisms, or open problems, include them near the end unless they are central from the outset.
+
+6. COVERAGE:
+
+* Sections should collectively cover all major topics in {answer_text}.
+* Avoid creating sections for minor tangents or brief mentions unless they are load-bearing for the answer.
+* Focus on topics that have enough substance for meaningful expansion.
+* Ensure there are no major gaps: if a key claim depends on a concept, that concept should appear in some section.
+
+7. QUALITY CONTROL:
+
+* Ensure sections are mutually exclusive: no major idea should be central to more than one section.
+* Ensure each section would plausibly support independent retrieval and expansion.
+* Avoid repeating the same phrasing across summaries and prompts.
+* Keep output consistent in tone and granularity across sections.
+* Prefer concrete anchors (named theories, mechanisms, examples) over vague labels.
+* If the answer has an implicit structure (definitions -> claims -> support -> implications), make it explicit in your section breakdown.
+
+8. CONSISTENCY AND SPECIFICITY CHECK:
+
+* Each "summary" must mention at least one concrete noun or technical term that appears in {answer_text}.
+* Each "expansion_prompt" must include at least two concrete retrieval anchors when possible (e.g., a named concept + a mechanism, a model + a phenomenon, a researcher + a key term).
+* Do NOT include citations, URLs, or references to "sources", "chunks", or "RAG" in headings, summaries, or prompts.
+
+EXAMPLE OUTPUT:
+
+{{
+"sections": [
+{{
+"heading": "Theoretical Foundations of Schema Therapy",
+"summary": "Explores the core theoretical principles underlying schema therapy, including early maladaptive schemas and their developmental origins.",
+"expansion_prompt": "What are the theoretical foundations of schema therapy? Explain the concept of early maladaptive schemas, their developmental origins in childhood experiences, and how they relate to core emotional needs. Include the work of Jeffrey Young and connections to attachment theory."
+}},
+{{
+"heading": "Schema Modes and Mode Work",
+"summary": "Describes the different schema modes (child, parent, coping) and therapeutic techniques for working with modes.",
+"expansion_prompt": "What are schema modes in schema therapy and how does mode work function therapeutically? Describe the different types of modes including child modes, dysfunctional parent modes, and coping modes. Explain techniques therapists use to help patients recognize and shift between modes."
+}},
+{{
+"heading": "Limited Reparenting Approach",
+"summary": "Details the limited reparenting technique as a core intervention strategy in schema therapy.",
+"expansion_prompt": "What is the limited reparenting approach in schema therapy? Describe how therapists provide a corrective emotional experience within professional boundaries, the role of the therapeutic relationship, and specific techniques used to meet patients' unmet childhood needs."
+}}
+]
+}}
+
+============================================================
+ANSWER TO BREAK DOWN:
+
+# {answer_text}
+
+Now analyze the above answer and generate your JSON response with 3-7 sections:
