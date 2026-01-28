@@ -27,6 +27,13 @@ from .enums import (
     ResearchPhase,
     QualityStatus,
 )
+from .expansion import (
+    AnswerExpansion,
+    ExpansionSection,
+    ExpansionMode,
+    ExpansionStatus,
+    SectionStatus,
+)
 from .experiment import (
     Experiment,
     ExperimentDimension,
@@ -68,4 +75,9 @@ __all__ = [
     "ExperimentAnswer",
     "ExperimentEvaluation",
     "ExperimentDimensionResult",
+    "AnswerExpansion",
+    "ExpansionSection",
+    "ExpansionMode",
+    "ExpansionStatus",
+    "SectionStatus",
 ]

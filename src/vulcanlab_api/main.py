@@ -31,6 +31,7 @@ from vulcanlab_api.routers import (
     conversion_settings,
     corpus,
     eval,
+    expansions,
     init,
     markdown,
     rag,
@@ -137,6 +138,10 @@ app = FastAPI(
             "name": "Summarization",
             "description": "Document summarization operations. Prepare and generate prompts for summarizing long documents.",
         },
+        {
+            "name": "Expansions",
+            "description": "Answer expansion operations. Break down RAG answers into multi-section reports with independent RAG pipelines.",
+        },
     ],
     # Additional metadata
     contact={
@@ -178,6 +183,7 @@ app.include_router(eval.router, prefix="/api/v1/eval", tags=["Eval"])
 app.include_router(collections.router, prefix="/api/v1/collections", tags=["Collections"])
 app.include_router(research_sessions.router, prefix="/api/v1", tags=["Research Sessions"])
 app.include_router(summarize.router, prefix="/api/v1/summarize", tags=["Summarization"])
+app.include_router(expansions.router, prefix="/api/v1/expansions", tags=["Expansions"])
 
 
 @app.get("/", include_in_schema=False)

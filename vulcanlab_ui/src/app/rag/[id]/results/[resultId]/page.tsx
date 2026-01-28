@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, FolderPlus } from "lucide-react";
+import { PlayCircle, FolderPlus, Expand, Eye } from "lucide-react";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { TextStats } from "@/components/text-stats";
-import {
-  PageLoadingState,
-  PageErrorState,
-  StickyDetailHeader,
-  AddToCollectionModal,
-} from "@/components";
+import { PageLoadingState } from "@/components/page-loading-state";
+import { PageErrorState } from "@/components/page-error-state";
+import { StickyDetailHeader } from "@/components/sticky-detail-header";
+import { AddToCollectionModal } from "@/components/collections/AddToCollectionModal";
+import { CreateExpansionModal } from "@/components/expansion";
 import { usePageData } from "@/hooks/use-page-data";
 import { useAddToCollection } from "@/hooks/use-add-to-collection";
 
@@ -30,9 +29,15 @@ interface QueryDetail {
   original_query: string;
 }
 
+interface ExpansionInfo {
+  id: number;
+  status: string;
+}
+
 interface PageData {
   query: QueryDetail;
   result: ResultItem;
+  expansion: ExpansionInfo | null;
 }
 
 export default function ResultDetailPage() {
@@ -40,6 +45,8 @@ export default function ResultDetailPage() {
   const router = useRouter();
   const queryId = params.id as string;
   const resultId = params.resultId as string;
+
+  const [showExpansionModal, setShowExpansionModal] = useState(false);
 
   const fetchPageData = useCallback(async () => {
     // Fetch query details
@@ -56,9 +63,21 @@ export default function ResultDetailPage() {
     }
     const resultData: ResultItem = await resultResponse.json();
 
+    // Check if expansion exists for this result
+    let expansionData: ExpansionInfo | null = null;
+    try {
+      const expansionResponse = await fetch(`${API_BASE_URL}/api/v1/results/${resultId}/expansion`);
+      if (expansionResponse.ok) {
+        expansionData = await expansionResponse.json();
+      }
+    } catch {
+      // No expansion exists, continue with null
+    }
+
     return {
       query: queryData,
       result: resultData,
+      expansion: expansionData,
     };
   }, [queryId, resultId]);
 
@@ -110,6 +129,29 @@ export default function ResultDetailPage() {
             {/* Stats */}
             <TextStats text={data.result.response_text} />
 
+            {/* Expand Answer / View Expansion */}
+            {data.expansion ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/expansions/${data.expansion!.id}`)}
+                className="gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                View Expansion
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExpansionModal(true)}
+                className="gap-2"
+              >
+                <Expand className="h-4 w-4" />
+                Expand Answer
+              </Button>
+            )}
+
             {/* Add to Collection */}
             <Button
               variant="outline"
@@ -135,8 +177,8 @@ export default function ResultDetailPage() {
 
       {/* Content */}
       <div className="p-6 flex flex-col">
-        <MarkdownEditor 
-          content={data.result.response_text} 
+        <MarkdownEditor
+          content={data.result.response_text}
           readOnly={true}
           viewMode="both"
           scrollMode="page"
@@ -149,6 +191,13 @@ export default function ResultDetailPage() {
         onClose={closeAddToCollection}
         itemType={itemType}
         itemLink={itemLink}
+      />
+
+      <CreateExpansionModal
+        isOpen={showExpansionModal}
+        onClose={() => setShowExpansionModal(false)}
+        resultId={parseInt(resultId)}
+        onSuccess={refetch}
       />
     </div>
   );

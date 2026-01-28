@@ -649,3 +649,144 @@ def create_summarization_tables(verbose: bool = False) -> None:
 
     if verbose:
         print("Summarization tables created successfully")
+
+
+def create_expansion_tables(verbose: bool = False) -> None:
+    """
+    Create answer_expansions and expansion_sections tables for the expand answer feature.
+
+    These tables support breaking down RAG answers into multiple sections,
+    processing each through the full RAG pipeline independently, and
+    combining them into a comprehensive report.
+
+    Args:
+        verbose: If True, print progress information.
+    """
+    if verbose:
+        print("Creating expansion tables...")
+
+    with engine.connect() as conn:
+        # Create answer_expansions table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS answer_expansions (
+                id SERIAL PRIMARY KEY,
+                result_id INTEGER NOT NULL REFERENCES results(id) ON DELETE CASCADE,
+                query_id INTEGER NOT NULL REFERENCES queries(id) ON DELETE CASCADE,
+                mode VARCHAR(20) NOT NULL,
+                status VARCHAR(30) NOT NULL DEFAULT 'created',
+                combined_report TEXT,
+                expansion_metadata JSONB,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                CONSTRAINT uq_answer_expansions_result_id UNIQUE (result_id),
+                CONSTRAINT chk_answer_expansions_mode CHECK (mode IN ('automatic', 'manual')),
+                CONSTRAINT chk_answer_expansions_status CHECK (status IN ('created', 'breakdown_pending', 'breakdown_complete', 'sections_in_progress', 'combining', 'completed', 'failed'))
+            )
+        """))
+
+        # Create expansion_sections table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS expansion_sections (
+                id SERIAL PRIMARY KEY,
+                expansion_id INTEGER NOT NULL REFERENCES answer_expansions(id) ON DELETE CASCADE,
+                "order" INTEGER NOT NULL,
+                heading VARCHAR(500) NOT NULL,
+                summary TEXT NOT NULL,
+                expansion_prompt TEXT NOT NULL,
+                expanded_queries JSONB,
+                hyde_answer TEXT,
+                intent VARCHAR(200),
+                entities JSONB,
+                retrieved_context JSONB,
+                clean_retrieval_context JSONB,
+                augmented_prompt TEXT,
+                response_text TEXT,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                error_message TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                CONSTRAINT chk_expansion_sections_status CHECK (status IN ('pending', 'expanding', 'ready', 'generating', 'completed', 'failed'))
+            )
+        """))
+
+        # Create indexes for answer_expansions
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_answer_expansions_result_id
+            ON answer_expansions(result_id)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_answer_expansions_status
+            ON answer_expansions(status)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_answer_expansions_query_id
+            ON answer_expansions(query_id)
+        """))
+
+        # Create indexes for expansion_sections
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_expansion_sections_expansion_id
+            ON expansion_sections(expansion_id)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_expansion_sections_status
+            ON expansion_sections(status)
+        """))
+
+        # Create trigger function for answer_expansions.updated_at
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_answer_expansions_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger for answer_expansions.updated_at
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_answer_expansions_updated_at ON answer_expansions"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_answer_expansions_updated_at
+                BEFORE UPDATE ON answer_expansions
+                FOR EACH ROW
+                EXECUTE FUNCTION update_answer_expansions_updated_at()
+        """))
+
+        # Create trigger function for expansion_sections.updated_at
+        conn.execute(text("""
+            CREATE OR REPLACE FUNCTION update_expansion_sections_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+
+        # Create trigger for expansion_sections.updated_at
+        conn.execute(text("DROP TRIGGER IF EXISTS trigger_update_expansion_sections_updated_at ON expansion_sections"))
+        conn.execute(text("""
+            CREATE TRIGGER trigger_update_expansion_sections_updated_at
+                BEFORE UPDATE ON expansion_sections
+                FOR EACH ROW
+                EXECUTE FUNCTION update_expansion_sections_updated_at()
+        """))
+
+        conn.commit()
+
+    # Transfer ownership to app user
+    transfer_function_ownership(
+        function_names=[
+            "update_answer_expansions_updated_at",
+            "update_expansion_sections_updated_at"
+        ],
+        sequence_names=[
+            "answer_expansions_id_seq",
+            "expansion_sections_id_seq"
+        ],
+        verbose=verbose
+    )
+
+    if verbose:
+        print("Expansion tables created successfully")

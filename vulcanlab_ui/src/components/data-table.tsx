@@ -128,8 +128,11 @@ export function DataTable<TData>({
   emptyState,
   className,
 }: DataTableProps<TData>) {
+  // Ensure data is always an array for the useTable hook
+  const safeData = Array.isArray(data) ? data : []
+
   const { sortedData, sortKey, sortDirection, handleSort } = useTable(
-    data,
+    safeData,
     null,
     'asc'
   )
@@ -140,7 +143,7 @@ export function DataTable<TData>({
   }
 
   // Show empty state
-  if (data.length === 0) {
+  if (safeData.length === 0) {
     return (
       <EmptyState
         title={emptyState?.title || 'No data'}
